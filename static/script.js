@@ -1,5 +1,3 @@
-let currentAudio = null;
-
 const state = {
   sourceFiles: {},
   eparsFiles: {},
@@ -8,27 +6,103 @@ const state = {
   selectedEparDir: null
 };
 
-function togglePlay(fullpath, btn) {
+// --- Audio player ---
+let currentAudio = null;
+let playerFilename = '';
+let playerFullpath = '';
+
+const playerBar = document.getElementById('player-bar');
+const playerStop = document.getElementById('player-stop');
+const playerFilenameEl = document.getElementById('player-filename');
+const playerProgress = document.getElementById('player-progress');
+const playerProgressFill = document.getElementById('player-progress-fill');
+const playerTime = document.getElementById('player-time');
+const playerSeekBwd = document.getElementById('player-seek-bwd');
+const playerSeekFwd = document.getElementById('player-seek-fwd');
+const playerStep = document.getElementById('player-step');
+
+function formatTime(s) {
+  if (!isFinite(s) || s < 0) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function updatePlayerUI() {
+  if (!currentAudio || !currentAudio.duration) return;
+  const pct = (currentAudio.currentTime / currentAudio.duration) * 100;
+  playerProgressFill.style.width = pct + '%';
+  playerTime.textContent = `${formatTime(currentAudio.currentTime)} / ${formatTime(currentAudio.duration)}`;
+}
+
+function stopPlayer() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+  playerBar.classList.add('hidden');
+  document.querySelectorAll('.play-btn.playing').forEach(b => {
+    b.classList.remove('playing');
+    b.textContent = '▶';
+  });
+}
+
+function showPlayer(filename, fullpath) {
+  playerFilename = filename;
+  playerFullpath = fullpath;
+  playerFilenameEl.textContent = filename.length > 30 ? filename.slice(0, 27) + '...' : filename;
+  playerTime.textContent = '0:00 / 0:00';
+  playerProgressFill.style.width = '0%';
+  playerBar.classList.remove('hidden');
+}
+
+function togglePlay(filename, fullpath, btn) {
   if (currentAudio && !currentAudio.paused) {
+    if (fullpath === playerFullpath) {
+      stopPlayer();
+      return;
+    }
     currentAudio.pause();
     currentAudio = null;
     document.querySelectorAll('.play-btn.playing').forEach(b => {
       b.classList.remove('playing');
       b.textContent = '▶';
     });
-    return;
   }
   const audio = new Audio('/audio?path=' + encodeURIComponent(fullpath));
+  let started = false;
+
+  audio.ontimeupdate = () => {
+    if (!started && audio.duration) {
+      started = true;
+    }
+    updatePlayerUI();
+  };
+
+  audio.onloadedmetadata = () => {
+    updatePlayerUI();
+  };
+
   audio.onended = () => {
-    currentAudio = null;
-    btn.classList.remove('playing');
-    btn.textContent = '▶';
+    if (currentAudio === audio) {
+      document.querySelectorAll('.play-btn.playing').forEach(b => {
+        b.classList.remove('playing');
+        b.textContent = '▶';
+      });
+      currentAudio = null;
+      playerBar.classList.add('hidden');
+    }
   };
+
   audio.onerror = () => {
-    currentAudio = null;
     btn.classList.remove('playing');
     btn.textContent = '▶';
+    if (currentAudio === audio) {
+      currentAudio = null;
+      playerBar.classList.add('hidden');
+    }
   };
+
   audio.play().then(() => {
     currentAudio = audio;
     document.querySelectorAll('.play-btn.playing').forEach(b => {
@@ -37,11 +111,40 @@ function togglePlay(fullpath, btn) {
     });
     btn.classList.add('playing');
     btn.textContent = '⏹';
+    showPlayer(filename, fullpath);
   }).catch(() => {
     btn.classList.remove('playing');
     btn.textContent = '▶';
+    playerBar.classList.add('hidden');
   });
 }
+
+playerStop.onclick = stopPlayer;
+
+playerProgress.onclick = (e) => {
+  if (!currentAudio || !currentAudio.duration) return;
+  const rect = playerProgress.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  currentAudio.currentTime = pct * currentAudio.duration;
+  updatePlayerUI();
+};
+
+function seekWithSteps(delta) {
+  if (!currentAudio || !currentAudio.duration) return;
+  const step = parseInt(playerStep.value) || 20;
+  currentAudio.currentTime = Math.max(0, Math.min(currentAudio.duration, currentAudio.currentTime + delta * step));
+  updatePlayerUI();
+}
+
+playerSeekBwd.onclick = () => seekWithSteps(-1);
+playerSeekFwd.onclick = () => seekWithSteps(1);
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (!currentAudio || currentAudio.paused) return;
+  if (e.key === 'ArrowLeft') { seekWithSteps(-1); e.preventDefault(); }
+  if (e.key === 'ArrowRight') { seekWithSteps(1); e.preventDefault(); }
+});
 
 async function api(url, opts = {}) {
   const res = await fetch(url, {
@@ -198,7 +301,7 @@ function makeFileEl(filename, relPath, status, fullpath) {
   playBtn.title = 'Écouter';
   playBtn.onclick = (e) => {
     e.stopPropagation();
-    togglePlay(fullpath, playBtn);
+    togglePlay(filename, fullpath, playBtn);
   };
 
   const label = document.createElement('span');

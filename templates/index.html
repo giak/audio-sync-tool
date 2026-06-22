@@ -52,6 +52,20 @@
     </div>
   </div>
 
+  <div id="player-bar" class="hidden">
+    <span id="player-stop">⏹</span>
+    <span id="player-filename"></span>
+    <span id="player-seek-bwd">⏪</span>
+    <div id="player-progress">
+      <div id="player-progress-fill"></div>
+    </div>
+    <span id="player-time">0:00 / 0:00</span>
+    <span id="player-seek-fwd">⏩</span>
+    <label id="player-step-label">
+      <input type="number" id="player-step" value="20" min="1" max="120">s
+    </label>
+  </div>
+
   <div id="status-bar">
     <span id="status-text">Prêt. Configure les dossiers puis clique Scan.</span>
     <span id="selected-info" class="hidden"></span>

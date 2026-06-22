@@ -45,6 +45,18 @@ header h1 { font-size: 18px; color: #cba6f7; }
 .file.selected { background: #45475a; outline: 1px solid #89b4fa; }
 .file.destination-hover { background: #313244; outline: 1px solid #a6e3a1; }
 
+#player-bar { background: #181825; padding: 6px 16px; border-top: 1px solid #313244; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+#player-stop { cursor: pointer; color: #f38ba8; font-size: 16px; }
+#player-stop:hover { color: #fab387; }
+#player-filename { color: #89b4fa; min-width: 80px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#player-seek-bwd, #player-seek-fwd { cursor: pointer; color: #a6e3a1; font-size: 14px; padding: 2px 4px; border-radius: 3px; user-select: none; }
+#player-seek-bwd:hover, #player-seek-fwd:hover { background: #313244; }
+#player-progress { flex: 1; height: 6px; background: #313244; border-radius: 3px; cursor: pointer; min-width: 60px; }
+#player-progress-fill { height: 100%; width: 0%; background: #89b4fa; border-radius: 3px; transition: width 0.1s; }
+#player-time { color: #a6adc8; font-family: monospace; font-size: 12px; min-width: 80px; text-align: center; }
+#player-step-label { display: flex; align-items: center; gap: 2px; color: #585b70; font-size: 11px; }
+#player-step { width: 36px; padding: 2px 4px; background: #313244; color: #cdd6f4; border: 1px solid #45475a; border-radius: 3px; font-size: 11px; text-align: center; }
+
 #status-bar { background: #181825; padding: 8px 20px; font-size: 13px; border-top: 1px solid #313244; display: flex; justify-content: space-between; }
 #selected-info { color: #89b4fa; }
 
