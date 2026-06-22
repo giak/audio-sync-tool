@@ -3,7 +3,9 @@ const state = {
   eparsFiles: {},
   journal: [],
   selectedFile: null,
-  selectedEparDir: null
+  selectedEparDir: null,
+  focusedPanel: null,
+  focusedIndex: -1
 };
 
 // --- Audio player ---
@@ -139,12 +141,88 @@ function seekWithSteps(delta) {
 playerSeekBwd.onclick = () => seekWithSteps(-1);
 playerSeekFwd.onclick = () => seekWithSteps(1);
 
+// --- Keyboard navigation ---
+function getFocusedPanel() {
+  if (state.focusedPanel === 'source') return document.getElementById('source-container');
+  return document.getElementById('epars-container');
+}
+
+function focusFileRow(container, idx) {
+  const rows = container.querySelectorAll('.file-row');
+  if (idx < 0) idx = 0;
+  if (idx >= rows.length) idx = rows.length - 1;
+  state.focusedIndex = idx;
+  container.querySelectorAll('.file-row.focused').forEach(r => r.classList.remove('focused'));
+  if (rows[idx]) {
+    rows[idx].classList.add('focused');
+    rows[idx].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function getPlayBtn(row) {
+  return row.querySelector('.play-btn');
+}
+
+document.getElementById('panel-left').onclick = () => {
+  state.focusedPanel = 'epars';
+  const rows = getFocusedPanel().querySelectorAll('.file-row');
+  if (state.focusedIndex < 0 && rows.length > 0) focusFileRow(getFocusedPanel(), 0);
+};
+
+document.getElementById('panel-right').onclick = () => {
+  state.focusedPanel = 'source';
+  const rows = getFocusedPanel().querySelectorAll('.file-row');
+  if (state.focusedIndex < 0 && rows.length > 0) focusFileRow(getFocusedPanel(), 0);
+};
+
+// On re-render, restore focus
+function revalidateFocus() {
+  if (!state.focusedPanel) return;
+  const container = getFocusedPanel();
+  const rows = container.querySelectorAll('.file-row');
+  if (rows.length === 0) { state.focusedIndex = -1; return; }
+  if (state.focusedIndex >= rows.length) state.focusedIndex = rows.length - 1;
+  if (state.focusedIndex >= 0) focusFileRow(container, state.focusedIndex);
+}
+
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (!currentAudio || currentAudio.paused) return;
-  if (e.key === 'ArrowLeft') { seekWithSteps(-1); e.preventDefault(); }
-  if (e.key === 'ArrowRight') { seekWithSteps(1); e.preventDefault(); }
+
+  // Audio seek (only when playing)
+  if (currentAudio && !currentAudio.paused) {
+    if (e.key === 'ArrowLeft') { seekWithSteps(-1); e.preventDefault(); return; }
+    if (e.key === 'ArrowRight') { seekWithSteps(1); e.preventDefault(); return; }
+  }
+
+  // File list navigation (when not playing, or always)
+  if (!state.focusedPanel) state.focusedPanel = 'epars';
+  const container = getFocusedPanel();
+  const rows = container.querySelectorAll('.file-row');
+  if (rows.length === 0) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const next = Math.min(state.focusedIndex + 1, rows.length - 1);
+    if (state.focusedIndex < 0) focusFileRow(container, 0);
+    else focusFileRow(container, next);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (state.focusedIndex < 0) focusFileRow(container, rows.length - 1);
+    else focusFileRow(container, Math.max(0, state.focusedIndex - 1));
+  } else if (e.key === 'Enter') {
+    if (state.focusedIndex < 0) return;
+    const row = rows[state.focusedIndex];
+    const btn = getPlayBtn(row);
+    if (btn) btn.click();
+  }
 });
+
+// Patch renderAll to revalidate focus after re-render
+const origRenderAll = renderAll;
+renderAll = function() {
+  origRenderAll();
+  setTimeout(revalidateFocus, 0);
+};
 
 async function api(url, opts = {}) {
   const res = await fetch(url, {
