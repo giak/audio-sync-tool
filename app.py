@@ -90,7 +90,10 @@ def copy_file():
 
     dst = os.path.join(dst_dir, filename)
     os.makedirs(dst_dir, exist_ok=True)
-    shutil.copy2(src, dst)
+    try:
+        shutil.copy2(src, dst)
+    except (OSError, shutil.SameFileError) as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
     journal = load_json(JOURNAL_PATH, [])
     journal.append({
