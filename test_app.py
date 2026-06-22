@@ -2,14 +2,13 @@ import json
 import os
 import tempfile
 import pytest
-from app import app, CONFIG_PATH, JOURNAL_PATH
+from app import app
 
 
 @pytest.fixture(autouse=True)
-def clean_state():
-    for p in [CONFIG_PATH, JOURNAL_PATH]:
-        if os.path.exists(p):
-            os.remove(p)
+def clean_state(monkeypatch, tmp_path):
+    monkeypatch.setattr('app.CONFIG_PATH', str(tmp_path / 'config.json'))
+    monkeypatch.setattr('app.JOURNAL_PATH', str(tmp_path / 'journal.json'))
 
 
 @pytest.fixture
