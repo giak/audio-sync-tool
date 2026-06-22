@@ -5,7 +5,9 @@ const state = {
   selectedFile: null,
   selectedEparDir: null,
   focusedPanel: null,
-  focusedIndex: -1
+  focusedIndex: -1,
+  eparsFileHint: null,
+  sourceDirHint: null
 };
 
 // --- Audio player ---
@@ -252,6 +254,61 @@ document.addEventListener('keydown', (e) => {
     } else if (type === 'dir' && state.focusedPanel === 'source') {
       el.click();
     }
+  } else if (e.key === 'F5') {
+    e.preventDefault();
+    const leftFocus = document.querySelector('#epars-container .focused .file');
+    const rightFocus = document.querySelector('#source-container .focused.directory');
+    if (!leftFocus) {
+      document.getElementById('status-text').textContent =
+        'Met d\'abord en surbrillance un fichier à gauche (↑↓).';
+      return;
+    }
+    if (!rightFocus) {
+      document.getElementById('status-text').textContent =
+        'Met d\'abord en surbrillance un dossier à droite (Tab puis ↑↓).';
+      return;
+    }
+    if (!leftFocus.dataset.epardir) {
+      document.getElementById('status-text').textContent =
+        'Ce fichier n\'a pas de dossier source valide.';
+      return;
+    }
+    const filename = leftFocus.dataset.filename;
+    const eparDir = leftFocus.dataset.epardir;
+    const relPath = state.eparsFiles[eparDir]?.[filename];
+    if (!relPath) {
+      document.getElementById('status-text').textContent =
+        'Fichier introuvable dans les données scannées.';
+      return;
+    }
+    const fullSrc = eparDir + '/' + relPath;
+    const destDir = rightFocus.dataset.dirpath;
+    document.getElementById('dialog-msg').textContent =
+      `Copier "${filename}" vers "${destDir}" ?`;
+    document.getElementById('confirm-dialog').classList.remove('hidden');
+    document.getElementById('dialog-confirm').onclick = async () => {
+      document.getElementById('confirm-dialog').classList.add('hidden');
+      const res = await api('/copy', {
+        method: 'POST',
+        body: JSON.stringify({
+          source_path: fullSrc,
+          dest_dir: destDir,
+          filename: filename
+        })
+      });
+      if (res.ok) {
+        state.journal = await api('/journal');
+        renderAll();
+        document.getElementById('status-text').textContent =
+          `✓ ${filename} copié vers ${destDir}`;
+      } else {
+        document.getElementById('status-text').textContent =
+          `✗ Erreur : ${res.error}`;
+      }
+    };
+    document.getElementById('dialog-cancel').onclick = () => {
+      document.getElementById('confirm-dialog').classList.add('hidden');
+    };
   }
 });
 
@@ -452,9 +509,10 @@ function renderEpars() {
       const status = computeStatus(filename);
       const row = makeFileEl(filename, relPath, status, fullpath);
 
+      const label2 = row.querySelector('.file');
+      label2.dataset.epardir = dirPath;
       if (status === 'nouveau') {
-        const label = row.querySelector('.file');
-        label.onclick = () => selectFile(label, filename, dirPath);
+        label2.onclick = () => selectFile(label2, filename, dirPath);
       }
 
       fileList.appendChild(row);
