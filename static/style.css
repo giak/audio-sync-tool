@@ -24,7 +24,12 @@ header h1 { font-size: 18px; color: #cba6f7; }
 .directory::before { content: '📁  '; }
 .children { padding-left: 16px; }
 
-.file { padding: 2px 0 2px 16px; font-size: 13px; cursor: default; border-radius: 3px; }
+.file-row { display: flex; align-items: center; gap: 4px; padding: 1px 0; }
+.play-btn { font-size: 10px; cursor: pointer; color: #585b70; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; }
+.play-btn:hover { color: #a6e3a1; background: #313244; }
+.play-btn.playing { color: #a6e3a1; }
+
+.file { padding: 2px 0 2px 4px; font-size: 13px; cursor: default; border-radius: 3px; flex-grow: 1; }
 .file:hover { background: #313244; }
 .file.nouveau { color: #89b4fa; cursor: pointer; }
 .file.nouveau::after { content: ' ●'; color: #89b4fa; font-size: 10px; }

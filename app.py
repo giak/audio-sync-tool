@@ -2,7 +2,7 @@ import os
 import json
 import shutil
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_file, abort
 
 app = Flask(__name__)
 
@@ -111,6 +111,26 @@ def copy_file():
 @app.route('/journal')
 def journal():
     return jsonify(load_json(JOURNAL_PATH, []))
+
+
+AUDIO_EXT_MAP = {
+    '.mp3': 'audio/mpeg',
+    '.flac': 'audio/flac',
+    '.wav': 'audio/wav',
+    '.ogg': 'audio/ogg',
+    '.m4a': 'audio/mp4',
+    '.wma': 'audio/x-ms-wma',
+}
+
+
+@app.route('/audio')
+def serve_audio():
+    path = request.args.get('path', '')
+    if not path or not os.path.exists(path):
+        abort(404)
+    ext = os.path.splitext(path)[1].lower()
+    mimetype = AUDIO_EXT_MAP.get(ext, 'application/octet-stream')
+    return send_file(path, mimetype=mimetype)
 
 
 if __name__ == '__main__':

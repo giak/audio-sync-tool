@@ -1,3 +1,5 @@
+let currentAudio = null;
+
 const state = {
   sourceFiles: {},
   eparsFiles: {},
@@ -5,6 +7,41 @@ const state = {
   selectedFile: null,
   selectedEparDir: null
 };
+
+function togglePlay(fullpath, btn) {
+  if (currentAudio && !currentAudio.paused) {
+    currentAudio.pause();
+    currentAudio = null;
+    document.querySelectorAll('.play-btn.playing').forEach(b => {
+      b.classList.remove('playing');
+      b.textContent = '▶';
+    });
+    return;
+  }
+  const audio = new Audio('/audio?path=' + encodeURIComponent(fullpath));
+  audio.onended = () => {
+    currentAudio = null;
+    btn.classList.remove('playing');
+    btn.textContent = '▶';
+  };
+  audio.onerror = () => {
+    currentAudio = null;
+    btn.classList.remove('playing');
+    btn.textContent = '▶';
+  };
+  audio.play().then(() => {
+    currentAudio = audio;
+    document.querySelectorAll('.play-btn.playing').forEach(b => {
+      b.classList.remove('playing');
+      b.textContent = '▶';
+    });
+    btn.classList.add('playing');
+    btn.textContent = '⏹';
+  }).catch(() => {
+    btn.classList.remove('playing');
+    btn.textContent = '▶';
+  });
+}
 
 async function api(url, opts = {}) {
   const res = await fetch(url, {
@@ -87,6 +124,30 @@ function renderAll() {
   renderJournal();
 }
 
+function makeFileEl(filename, relPath, status, fullpath) {
+  const row = document.createElement('div');
+  row.className = 'file-row';
+
+  const playBtn = document.createElement('span');
+  playBtn.className = 'play-btn';
+  playBtn.textContent = '▶';
+  playBtn.title = 'Écouter';
+  playBtn.onclick = (e) => {
+    e.stopPropagation();
+    togglePlay(fullpath, playBtn);
+  };
+
+  const label = document.createElement('span');
+  label.className = `file ${status}`;
+  label.textContent = filename;
+  label.dataset.filename = filename;
+  label.dataset.fullpath = fullpath;
+
+  row.appendChild(playBtn);
+  row.appendChild(label);
+  return row;
+}
+
 function renderEpars() {
   const container = document.getElementById('epars-container');
   container.innerHTML = '';
@@ -104,19 +165,16 @@ function renderEpars() {
 
     const sorted = Object.entries(files).sort((a, b) => a[0].localeCompare(b[0]));
     for (const [filename, relPath] of sorted) {
-      const div = document.createElement('div');
+      const fullpath = dirPath + '/' + relPath;
       const status = computeStatus(filename);
-      div.className = `file ${status}`;
-      div.textContent = filename;
-      div.dataset.filename = filename;
-      div.dataset.fullpath = dirPath + '/' + relPath;
-      div.dataset.eparsDir = dirPath;
+      const row = makeFileEl(filename, relPath, status, fullpath);
 
       if (status === 'nouveau') {
-        div.onclick = () => selectFile(div, filename, dirPath);
+        const label = row.querySelector('.file');
+        label.onclick = () => selectFile(label, filename, dirPath);
       }
 
-      fileList.appendChild(div);
+      fileList.appendChild(row);
     }
   }
 }
@@ -125,19 +183,17 @@ function renderSource() {
   const container = document.getElementById('source-container');
   container.innerHTML = '';
   for (const [dirPath, files] of Object.entries(state.sourceFiles)) {
-    // Group files by directory
     const tree = {};
     for (const [filename, relPath] of Object.entries(files)) {
       const parts = relPath.split('/');
       if (parts.length === 1) {
-        (tree['__root__'] = tree['__root__'] || []).push(filename);
+        (tree['__root__'] = tree['__root__'] || []).push({filename, relPath});
       } else {
         let current = tree;
         for (let i = 0; i < parts.length - 1; i++) {
           current = current[parts[i]] = current[parts[i]] || {};
         }
-        current['__files__'] = current['__files__'] || [];
-        current['__files__'].push(filename);
+        (current['__files__'] = current['__files__'] || []).push({filename, relPath});
       }
     }
     renderTree(tree, container, dirPath);
@@ -160,13 +216,11 @@ function renderTree(node, container, basePath) {
     renderTree(node[dirName], childContainer, basePath + '/' + dirName);
   }
 
-  const rootFiles = node['__root__'] || [];
-  const subFiles = node['__files__'] || [];
-  for (const f of [...rootFiles, ...subFiles]) {
-    const div = document.createElement('div');
-    div.className = 'file doublon';
-    div.textContent = f;
-    container.appendChild(div);
+  const allFiles = [...(node['__root__'] || []), ...(node['__files__'] || [])];
+  for (const {filename, relPath} of allFiles) {
+    const fullpath = basePath + '/' + relPath;
+    const row = makeFileEl(filename, relPath, 'doublon', fullpath);
+    container.appendChild(row);
   }
 }
 
