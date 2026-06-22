@@ -19,12 +19,24 @@
 
   <div id="config-panel" class="hidden">
     <h3>Configuration</h3>
-    <label>Dossier source (source data) :
-      <input type="text" id="cfg-source" placeholder="/home/giak/Music/select/style/">
-    </label>
-    <label>Dossiers éparpillés (un par ligne) :
-      <textarea id="cfg-epars" rows="3" placeholder="/media/giak/music/--[ montage audio/"></textarea>
-    </label>
+    <div id="config-selector">
+      <label>Profil :
+        <select id="cfg-select"></select>
+      </label>
+      <button id="btn-add-config">+</button>
+      <button id="btn-del-config">−</button>
+    </div>
+    <div id="config-fields">
+      <label>Nom du profil :
+        <input type="text" id="cfg-name" placeholder="ex: montage-2024">
+      </label>
+      <label>Dossier source (source data) :
+        <input type="text" id="cfg-source" placeholder="/home/giak/Music/select/style/">
+      </label>
+      <label>Dossiers éparpillés (un par ligne) :
+        <textarea id="cfg-epars" rows="4" placeholder="/media/giak/music/--[ montage audio/"></textarea>
+      </label>
+    </div>
     <button id="btn-save-config">Sauvegarder</button>
     <p id="config-status"></p>
   </div>

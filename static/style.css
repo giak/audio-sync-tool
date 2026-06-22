@@ -9,7 +9,12 @@ header h1 { font-size: 18px; color: #cba6f7; }
 #toolbar button:hover { background: #45475a; }
 
 #config-panel { background: #181825; padding: 16px 20px; border-bottom: 1px solid #313244; }
-#config-panel label { display: block; margin-bottom: 10px; font-size: 13px; }
+#config-selector { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+#config-selector label { flex-grow: 1; font-size: 13px; }
+#config-selector select { width: 100%; margin-top: 4px; padding: 4px 8px; background: #313244; color: #cdd6f4; border: 1px solid #45475a; border-radius: 4px; font-size: 13px; }
+#config-selector button { background: #45475a; color: #cdd6f4; border: none; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 16px; line-height: 1; }
+#config-selector button:hover { background: #585b70; }
+#config-fields label { display: block; margin-bottom: 8px; font-size: 13px; }
 #config-panel input, #config-panel textarea { width: 100%; margin-top: 4px; padding: 6px 10px; background: #313244; color: #cdd6f4; border: 1px solid #45475a; border-radius: 4px; font-size: 13px; }
 #config-panel textarea { font-family: monospace; }
 #btn-save-config { background: #a6e3a1; color: #1e1e2e; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }

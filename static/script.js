@@ -52,24 +52,88 @@ async function api(url, opts = {}) {
 }
 
 // Config
+const configPanel = document.getElementById('config-panel');
+const cfgSelect = document.getElementById('cfg-select');
+const cfgName = document.getElementById('cfg-name');
+const cfgSource = document.getElementById('cfg-source');
+const cfgEpars = document.getElementById('cfg-epars');
+const cfgStatus = document.getElementById('config-status');
+
+let configData = { active: 0, configs: [] };
+
 document.getElementById('btn-config').onclick = () => {
-  document.getElementById('config-panel').classList.toggle('hidden');
+  configPanel.classList.toggle('hidden');
+};
+
+function renderConfigSelect() {
+  const prev = cfgSelect.value;
+  cfgSelect.innerHTML = '';
+  configData.configs.forEach((c, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = c.name || `config-${i}`;
+    cfgSelect.appendChild(opt);
+  });
+  cfgSelect.value = prev < configData.configs.length ? prev : '0';
+  loadActiveConfig();
+}
+
+function loadActiveConfig() {
+  const idx = parseInt(cfgSelect.value) || 0;
+  const c = configData.configs[idx];
+  if (c) {
+    cfgName.value = c.name || '';
+    cfgSource.value = c.source_data || '';
+    cfgEpars.value = (c.epars_dirs || []).join('\n');
+  }
+}
+
+cfgSelect.onchange = loadActiveConfig;
+
+document.getElementById('btn-add-config').onclick = () => {
+  configData.configs.push({ name: 'nouveau', source_data: '', epars_dirs: [] });
+  configData.active = configData.configs.length - 1;
+  renderConfigSelect();
+  cfgSelect.value = configData.active;
+  loadActiveConfig();
+  cfgName.focus();
+};
+
+document.getElementById('btn-del-config').onclick = () => {
+  if (configData.configs.length <= 1) {
+    cfgStatus.textContent = '⚠️ Impossible de supprimer le dernier profil';
+    return;
+  }
+  const idx = parseInt(cfgSelect.value);
+  configData.configs.splice(idx, 1);
+  configData.active = Math.min(idx, configData.configs.length - 1);
+  renderConfigSelect();
 };
 
 document.getElementById('btn-save-config').onclick = async () => {
-  const source = document.getElementById('cfg-source').value.trim();
-  const epars = document.getElementById('cfg-epars').value.split('\n').map(s => s.trim()).filter(Boolean);
+  const idx = parseInt(cfgSelect.value) || 0;
+  configData.configs[idx] = {
+    name: cfgName.value.trim() || `config-${idx}`,
+    source_data: cfgSource.value.trim(),
+    epars_dirs: cfgEpars.value.split('\n').map(s => s.trim()).filter(Boolean)
+  };
+  configData.active = idx;
   await api('/config', {
     method: 'POST',
-    body: JSON.stringify({ source_data: source, epars_dirs: epars })
+    body: JSON.stringify(configData)
   });
-  document.getElementById('config-status').textContent = '✓ Configuration sauvegardée';
+  cfgStatus.textContent = '✓ Profil sauvegardé';
+  renderConfigSelect();
 };
 
 async function loadConfig() {
-  const cfg = await api('/config');
-  if (cfg.source_data) document.getElementById('cfg-source').value = cfg.source_data;
-  if (cfg.epars_dirs) document.getElementById('cfg-epars').value = cfg.epars_dirs.join('\n');
+  configData = await api('/config');
+  if (configData.configs && configData.configs.length > 0) {
+    renderConfigSelect();
+  } else {
+    configData = { active: 0, configs: [{ name: 'default', source_data: '', epars_dirs: [] }] };
+    renderConfigSelect();
+  }
 }
 
 // Scan
@@ -279,3 +343,11 @@ async function selectDestination(el) {
 
 // Init
 loadConfig();
+
+// Auto-scan if config already has paths
+setTimeout(async () => {
+  const active = configData.configs[configData.active];
+  if (active && (active.source_data || (active.epars_dirs && active.epars_dirs.length > 0))) {
+    document.getElementById('btn-scan').click();
+  }
+}, 300);

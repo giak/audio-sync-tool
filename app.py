@@ -30,12 +30,13 @@ MUSIC_EXTENSIONS = ('.mp3', '.flac', '.wav', '.ogg', '.m4a', '.wma')
 
 @app.route('/config', methods=['GET', 'POST'])
 def config():
+    cfg = load_json(CONFIG_PATH, {'active': 0, 'configs': []})
     if request.method == 'POST':
         if request.json is None:
             return jsonify({'ok': False, 'error': 'Request body must be JSON'}), 400
         save_json(CONFIG_PATH, request.json)
         return jsonify({'ok': True})
-    return jsonify(load_json(CONFIG_PATH, {}))
+    return jsonify(cfg)
 
 
 @app.route('/')
@@ -56,11 +57,20 @@ def index_files(directory):
     return index
 
 
+def get_active_config():
+    cfg = load_json(CONFIG_PATH, {'active': 0, 'configs': []})
+    configs = cfg.get('configs', [])
+    idx = cfg.get('active', 0)
+    if configs and 0 <= idx < len(configs):
+        return configs[idx]
+    return {'source_data': '', 'epars_dirs': []}
+
+
 @app.route('/scan')
 def scan():
-    cfg = load_json(CONFIG_PATH, {})
-    source_dir = cfg.get('source_data', '')
-    epars_dirs = cfg.get('epars_dirs', [])
+    active = get_active_config()
+    source_dir = active.get('source_data', '')
+    epars_dirs = active.get('epars_dirs', [])
 
     result = {
         'source': {},

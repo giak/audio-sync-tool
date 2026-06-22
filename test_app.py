@@ -19,17 +19,24 @@ def client():
         yield c
 
 
+def make_cfg(source_data='', epars_dirs=None):
+    return {
+        'active': 0,
+        'configs': [{'name': 'test', 'source_data': source_data, 'epars_dirs': epars_dirs or []}]
+    }
+
+
 def test_config_default(client):
     rv = client.get('/config')
     assert rv.status_code == 200
-    assert rv.json == {}
+    assert rv.json == {'active': 0, 'configs': []}
 
 
 def test_config_save_and_read(client):
-    payload = {
-        'source_data': '/home/giak/Music/select/style/',
-        'epars_dirs': ['/media/giak/music/--[ montage audio/']
-    }
+    payload = make_cfg(
+        source_data='/home/giak/Music/select/style/',
+        epars_dirs=['/media/giak/music/--[ montage audio/']
+    )
     rv = client.post('/config', json=payload)
     assert rv.status_code == 200
     assert rv.json == {'ok': True}
@@ -47,7 +54,7 @@ def test_scan_finds_mp3_and_flac(client):
         open(os.path.join(src, 'track.flac'), 'w').close()
         open(os.path.join(src, 'notes.txt'), 'w').close()
 
-        client.post('/config', json={'source_data': src, 'epars_dirs': []})
+        client.post('/config', json=make_cfg(source_data=src))
         rv = client.get('/scan')
         assert rv.status_code == 200
         data = rv.json
@@ -62,7 +69,7 @@ def test_scan_epars_dirs(client):
         os.makedirs(ep)
         open(os.path.join(ep, 'lost.mp3'), 'w').close()
 
-        client.post('/config', json={'source_data': '', 'epars_dirs': [ep]})
+        client.post('/config', json=make_cfg(epars_dirs=[ep]))
         rv = client.get('/scan')
         data = rv.json
         assert 'lost.mp3' in data['epars'][ep]
