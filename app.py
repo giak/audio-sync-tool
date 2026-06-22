@@ -31,6 +31,8 @@ MUSIC_EXTENSIONS = ('.mp3', '.flac', '.wav', '.ogg', '.m4a', '.wma')
 @app.route('/config', methods=['GET', 'POST'])
 def config():
     if request.method == 'POST':
+        if request.json is None:
+            return jsonify({'ok': False, 'error': 'Request body must be JSON'}), 400
         save_json(CONFIG_PATH, request.json)
         return jsonify({'ok': True})
     return jsonify(load_json(CONFIG_PATH, {}))
@@ -74,6 +76,11 @@ def scan():
 @app.route('/copy', methods=['POST'])
 def copy_file():
     data = request.json
+    if data is None:
+        return jsonify({'ok': False, 'error': 'Request body must be JSON'}), 400
+    for key in ('source_path', 'dest_dir', 'filename'):
+        if key not in data:
+            return jsonify({'ok': False, 'error': f'Missing required key: {key}'}), 400
     src = data['source_path']
     dst_dir = data['dest_dir']
     filename = data['filename']
@@ -104,4 +111,4 @@ def journal():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=8765)
