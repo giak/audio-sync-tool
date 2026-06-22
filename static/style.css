@@ -46,6 +46,7 @@ header h1 { font-size: 18px; color: #cba6f7; }
 .file.selected { background: #45475a; outline: 1px solid #89b4fa; }
 .file.destination-hover { background: #313244; outline: 1px solid #a6e3a1; }
 .file-row.focused .file { background: #45475a; outline: 1px solid #f5c2e7; }
+.year { margin-left: auto; font-size: 11px; color: #585b70; padding-right: 4px; font-family: monospace; }
 
 #player-bar { background: #181825; padding: 6px 16px; border-top: 1px solid #313244; display: flex; align-items: center; gap: 10px; font-size: 13px; }
 #player-stop { cursor: pointer; color: #f38ba8; font-size: 16px; }

@@ -4,6 +4,12 @@ import shutil
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, send_file, abort
 
+try:
+    from mutagen import File as MutagenFile
+    HAS_MUTAGEN = True
+except ImportError:
+    HAS_MUTAGEN = False
+
 app = Flask(__name__)
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
@@ -26,6 +32,30 @@ def save_json(path, data):
 
 
 MUSIC_EXTENSIONS = ('.mp3', '.flac', '.wav', '.ogg', '.m4a', '.wma')
+
+
+def get_year(path):
+    if not HAS_MUTAGEN:
+        return None
+    try:
+        audio = MutagenFile(path, easy=False)
+        if audio is None:
+            return None
+        # MP3 — ID3 frames via audio.tags
+        if hasattr(audio, 'tags') and audio.tags:
+            for tag in ('TDRC', 'TYER', 'TORY'):
+                val = audio.tags.get(tag)
+                if val:
+                    return str(val)[:4]
+        # FLAC / Vorbis — direct tag access
+        if hasattr(audio, 'get'):
+            for tag in ('DATE', 'YEAR'):
+                val = audio.get(tag)
+                if val and val[0]:
+                    return str(val[0])[:4]
+    except Exception:
+        pass
+    return None
 
 
 @app.route('/config', methods=['GET', 'POST'])
@@ -53,7 +83,8 @@ def index_files(directory):
             if f.lower().endswith(MUSIC_EXTENSIONS):
                 rel = os.path.relpath(root, directory)
                 rel_path = os.path.join(rel, f) if rel != '.' else f
-                index[f] = rel_path
+                year = get_year(os.path.join(root, f))
+                index[f] = {'path': rel_path, 'year': year}
     return index
 
 

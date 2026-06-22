@@ -275,7 +275,7 @@ document.addEventListener('keydown', (e) => {
     }
     const filename = leftFocus.dataset.filename;
     const eparDir = leftFocus.dataset.epardir;
-    const relPath = state.eparsFiles[eparDir]?.[filename];
+    const relPath = state.eparsFiles[eparDir]?.[filename]?.path;
     if (!relPath) {
       document.getElementById('status-text').textContent =
         'Fichier introuvable dans les données scannées.';
@@ -464,7 +464,7 @@ function renderAll() {
   renderJournal();
 }
 
-function makeFileEl(filename, relPath, status, fullpath) {
+function makeFileEl(filename, relPath, status, fullpath, year) {
   const row = document.createElement('div');
   row.className = 'file-row';
 
@@ -485,6 +485,14 @@ function makeFileEl(filename, relPath, status, fullpath) {
 
   row.appendChild(playBtn);
   row.appendChild(label);
+
+  if (year) {
+    const yearSpan = document.createElement('span');
+    yearSpan.className = 'year';
+    yearSpan.textContent = year;
+    row.appendChild(yearSpan);
+  }
+
   return row;
 }
 
@@ -504,10 +512,11 @@ function renderEpars() {
     container.appendChild(fileList);
 
     const sorted = Object.entries(files).sort((a, b) => a[0].localeCompare(b[0]));
-    for (const [filename, relPath] of sorted) {
+    for (const [filename, data] of sorted) {
+      const relPath = data.path;
       const fullpath = dirPath + '/' + relPath;
       const status = computeStatus(filename);
-      const row = makeFileEl(filename, relPath, status, fullpath);
+      const row = makeFileEl(filename, relPath, status, fullpath, data.year);
 
       const label2 = row.querySelector('.file');
       label2.dataset.epardir = dirPath;
@@ -525,16 +534,17 @@ function renderSource() {
   container.innerHTML = '';
   for (const [dirPath, files] of Object.entries(state.sourceFiles)) {
     const tree = {};
-    for (const [filename, relPath] of Object.entries(files)) {
+    for (const [filename, data] of Object.entries(files)) {
+      const relPath = data.path;
       const parts = relPath.split('/');
       if (parts.length === 1) {
-        (tree['__root__'] = tree['__root__'] || []).push({filename, relPath});
+        (tree['__root__'] = tree['__root__'] || []).push({filename, relPath, year: data.year});
       } else {
         let current = tree;
         for (let i = 0; i < parts.length - 1; i++) {
           current = current[parts[i]] = current[parts[i]] || {};
         }
-        (current['__files__'] = current['__files__'] || []).push({filename, relPath});
+        (current['__files__'] = current['__files__'] || []).push({filename, relPath, year: data.year});
       }
     }
     renderTree(tree, container, dirPath);
@@ -558,9 +568,9 @@ function renderTree(node, container, basePath) {
   }
 
   const allFiles = [...(node['__root__'] || []), ...(node['__files__'] || [])];
-  for (const {filename, relPath} of allFiles) {
+  for (const {filename, relPath, year} of allFiles) {
     const fullpath = basePath + '/' + relPath;
-    const row = makeFileEl(filename, relPath, 'doublon', fullpath);
+    const row = makeFileEl(filename, relPath, 'doublon', fullpath, year);
     container.appendChild(row);
   }
 }
@@ -581,7 +591,7 @@ async function selectDestination(el) {
     return;
   }
   const destDir = el.dataset.dirpath;
-  const srcPath = state.eparsFiles[state.selectedEparDir][state.selectedFile];
+  const srcPath = state.eparsFiles[state.selectedEparDir][state.selectedFile].path;
 
   const fullSrc = state.selectedEparDir + '/' + srcPath;
 
