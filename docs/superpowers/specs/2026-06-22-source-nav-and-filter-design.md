@@ -18,7 +18,8 @@ avec les dossiers dans la navigation clavier, rendant le parcours long.
 
 - Changements **purement frontend** (script.js, style.css)
 - Uniquement le panneau **Source Data** (droit)
-- Le panneau Éparpillé (gauche) reste inchangé
+- Le panneau Éparpillé (gauche) reste inchangé — sauf ajout d'un compteur
+  total dans l'en-tête
 
 ---
 
@@ -232,7 +233,46 @@ renderFilteredSource()
 
 ---
 
-## 7. Style.css — ajouts
+## 7. Compteurs
+
+### Compteur par dossier (Source Data)
+
+- Chaque dossier dans le panneau Source Data affiche le nombre de fichiers
+  musicaux qu'il contient **directement** (pas récursif dans les
+  sous-dossiers)
+- Affiché à droite du nom du dossier, en gris monospace : `Rock  (230)`
+- Le compteur est visible **que le dossier soit replié ou déplié**
+- Mise à jour automatique après un scan
+
+### Compteurs totaux dans les en-têtes
+
+- En-tête **Éparpillé** (panneau gauche) : `📂 Éparpillé  (1 245)`
+  — total de tous les fichiers dans tous les dossiers éparpillés
+- En-tête **Source Data** (panneau droit) : `📂 Source Data  (8 420)`
+  — total de tous les fichiers dans la source data
+- Les compteurs sont séparés du titre par un espace et en gris
+- Mise à jour automatique après un scan ou un copie
+
+### Pendant le filtre
+
+- Quand un filtre est actif, le compteur de l'en-tête Source Data passe en
+  `Source Data  (142 / 8 420)` pour indiquer le nombre de fichiers dans les
+  dossiers visibles
+- En complément du compteur de résultats
+  `3 dossiers trouvés`
+
+### Implémentation
+
+- Le comptage se fait pendant le rendu : chaque appel à `renderSource()`
+  calcule les totaux par dossier et les totaux globaux
+- Les compteurs sont stockés dans un objet temporaire (pas dans le state)
+  et insérés dans le DOM via un `span.dir-count`
+- Les totaux des en-têtes sont mis à jour dans `renderAll()` après chaque
+  rendu de panneau
+
+---
+
+## 8. Style.css — ajouts
 
 ```css
 /* Barre de recherche */
@@ -247,11 +287,17 @@ renderFilteredSource()
 /* Dossier replié/déplié */
 .directory.collapsed::before { content: '▶ '; font-size: 10px; color: #585b70; }
 .directory.expanded::before { content: '▼ '; font-size: 10px; color: #585b70; }
+
+/* Compteur de fichiers dans un dossier */
+.dir-count { font-size: 11px; color: #585b70; margin-left: 8px; font-family: monospace; }
+
+/* Compteurs totaux dans les en-têtes de panneaux */
+.panel-header-count { font-size: 12px; color: #585b70; font-weight: normal; margin-left: 8px; }
 ```
 
 ---
 
-## 8. Non-fonctionnel
+## 9. Non-fonctionnel
 
 - Aucune dépendance externe additionnelle
 - Performance : arbre < 5000 dossiers, filtrage instantané sans debounce
@@ -262,7 +308,7 @@ renderFilteredSource()
 
 ---
 
-## 9. Tests
+## 10. Tests
 
 - `renderSource()` ne produit que des `.directory` au premier niveau
 - Entrée sur un dossier → les enfants apparaissent dans le DOM
@@ -274,3 +320,6 @@ renderFilteredSource()
 - Échap → filtre effacé, vue repliée restaurée
 - Click sur un dossier → ne déclenche pas de copie
 - F5 → copie toujours fonctionnelle
+- Chaque dossier Source Data affiche `(n)` avec le nombre de fichiers directs
+- En-tête Éparpillé affiche le total des fichiers éparpillés
+- En-tête Source Data affiche le total des fichiers source
