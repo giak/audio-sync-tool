@@ -234,10 +234,23 @@ document.addEventListener('keydown', (e) => {
     if (type === 'file') {
       const btn = el.querySelector('.play-btn');
       if (btn) btn.click();
-    } else if (type === 'dir') {
-      if (state.focusedPanel === 'source') {
-        el.click();
+    } else if (type === 'dir' && state.focusedPanel === 'source') {
+      el.click();
+    }
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    if (state.focusedIndex < 0) return;
+    const el = items[state.focusedIndex];
+    const type = getItemType(el);
+    if (type === 'file') {
+      if (state.focusedPanel === 'epars') {
+        const label = el.querySelector('.file.nouveau');
+        if (label) { label.click(); return; }
       }
+      const btn = el.querySelector('.play-btn');
+      if (btn) btn.click();
+    } else if (type === 'dir' && state.focusedPanel === 'source') {
+      el.click();
     }
   }
 });
