@@ -83,7 +83,7 @@ def copy_file():
             return jsonify({'ok': False, 'error': f'Missing required key: {key}'}), 400
     src = data['source_path']
     dst_dir = data['dest_dir']
-    filename = data['filename']
+    filename = os.path.basename(data['filename'])
 
     if not os.path.exists(src):
         return jsonify({'ok': False, 'error': 'Source file not found'}), 404
