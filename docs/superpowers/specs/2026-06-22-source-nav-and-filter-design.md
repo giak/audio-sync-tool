@@ -52,8 +52,8 @@ avec les dossiers dans la navigation clavier, rendant le parcours long.
 
 ### États visuels
 
-- Dossier replié : `▶ NomDuDossier`
-- Dossier déplié : `▼ NomDuDossier`
+- Dossier replié : `📁 NomDuDossier`
+- Dossier déplié : `📂 NomDuDossier`
 - `color: #f5c2e7` (inchangé)
 - Au focus clavier : outline rose `#f5c2e7` (inchangé)
 - Au hover : background `#313244`
