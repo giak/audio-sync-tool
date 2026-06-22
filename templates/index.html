@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audio Sync Tool</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Audio Sync Tool</h1>
+    <div id="toolbar">
+      <button id="btn-config">⚙️ Config</button>
+      <button id="btn-scan">🔄 Scan</button>
+      <button id="btn-journal">📋 Journal</button>
+    </div>
+  </header>
+
+  <div id="config-panel" class="hidden">
+    <h3>Configuration</h3>
+    <label>Dossier source (source data) :
+      <input type="text" id="cfg-source" placeholder="/home/giak/Music/select/style/">
+    </label>
+    <label>Dossiers éparpillés (un par ligne) :
+      <textarea id="cfg-epars" rows="3" placeholder="/media/giak/music/--[ montage audio/"></textarea>
+    </label>
+    <button id="btn-save-config">Sauvegarder</button>
+    <p id="config-status"></p>
+  </div>
+
+  <div id="main-panels">
+    <div id="panel-left" class="panel">
+      <h2>📂 Éparpillé</h2>
+      <div id="epars-container"></div>
+    </div>
+    <div id="panel-right" class="panel">
+      <h2>📂 Source Data</h2>
+      <div id="source-container"></div>
+    </div>
+  </div>
+
+  <div id="status-bar">
+    <span id="status-text">Prêt. Configure les dossiers puis clique Scan.</span>
+    <span id="selected-info" class="hidden"></span>
+  </div>
+
+  <div id="journal-panel" class="hidden">
+    <h3>Journal des opérations</h3>
+    <div id="journal-content"></div>
+  </div>
+</div>
+
+<div id="confirm-dialog" class="hidden">
+  <div id="dialog-content">
+    <p id="dialog-msg"></p>
+    <button id="dialog-confirm">Copier</button>
+    <button id="dialog-cancel">Annuler</button>
+  </div>
+</div>
+
+<script src="/static/script.js"></script>
+</body>
+</html>
