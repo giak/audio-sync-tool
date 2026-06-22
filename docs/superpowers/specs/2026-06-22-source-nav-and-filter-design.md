@@ -162,10 +162,10 @@ avec les dossiers dans la navigation clavier, rendant le parcours long.
 
 ### Icônes d'expansion
 
-- `▶` (U+25B6) pour dossier replié
-- `▼` (U+25BC) pour dossier déplié
-- Insérées via `::before` sur `.directory` (remplace l'emoji 📁 actuel)
-- Taille 10px, couleur `#585b70`
+- Dossier replié : `📁` (inchangé, déjà utilisé par les dossiers)
+- Dossier déplié : `📂` (dossier ouvert)
+- Appliqué uniquement au panneau Source Data (`#source-container`),
+  le panneau Éparpillé garde `📁` en permanence
 
 ### Badge de résultat
 
@@ -284,9 +284,9 @@ renderFilteredSource()
 /* Compteur de résultat */
 #source-filter-count { font-size: 11px; color: #585b70; margin-bottom: 6px; }
 
-/* Dossier replié/déplié */
-.directory.collapsed::before { content: '▶ '; font-size: 10px; color: #585b70; }
-.directory.expanded::before { content: '▼ '; font-size: 10px; color: #585b70; }
+/* Dossier replié/déplié (Source Data) */
+#source-container .directory::before { content: '📁  '; }
+#source-container .directory.expanded::before { content: '📂  '; }
 
 /* Compteur de fichiers dans un dossier */
 .dir-count { font-size: 11px; color: #585b70; margin-left: 8px; font-family: monospace; }
