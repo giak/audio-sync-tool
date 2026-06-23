@@ -403,7 +403,8 @@ export function renderSource(): void {
         if (!current[key]) current[key] = {};
         current = current[key] as TreeNode;
       }
-      const entries = (current.__files__ = current.__files__ || []);
+      current.__files__ = current.__files__ || [];
+      const entries = current.__files__;
       entries.push({
         filename,
         relPath: data.path,
@@ -535,7 +536,8 @@ export function patchSourceFileAfterCopy(
   }
 
   // 3. Add file to the leaf node
-  const entries = (node.__files__ = node.__files__ || []);
+  node.__files__ = node.__files__ || [];
+  const entries = node.__files__;
   entries.push({
     filename,
     relPath: fileData.path,
@@ -801,7 +803,8 @@ export function renderPlaylistSource(): void {
         if (!current[key]) current[key] = {};
         current = current[key] as TreeNode;
       }
-      const entries = (current.__files__ = current.__files__ || []);
+      current.__files__ = current.__files__ || [];
+      const entries = current.__files__;
       entries.push({
         filename,
         relPath: data.path,
