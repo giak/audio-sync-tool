@@ -1,0 +1,103 @@
+// ─── Single source of truth for all app state ──────────────────────────────
+// State is wrapped in a Proxy that validates critical fields on write.
+// Invalid values are silently rejected (console.warn) to prevent corruption.
+
+interface SourceFileEntry {
+  path: string;
+  year: string | null;
+  duration: number | null;
+  codec: string | null;
+}
+
+interface FileIndex {
+  [filename: string]: SourceFileEntry;
+}
+
+interface PlaylistTrack {
+  filename: string;
+  fullPath: string;
+  relPath: string;
+  year: string | null;
+  duration: number | null;
+  codec: string | null;
+}
+
+interface SavedPlaylist {
+  name: string;
+  tracks: PlaylistTrack[];
+  exported?: string;
+  exportedDir?: string;
+}
+
+interface SourceNodeInfo {
+  node: Record<string, unknown>;
+  baseDir: string;
+}
+
+type ActiveModal = 'config' | 'legend' | 'journal' | 'dialog' | 'playlists' | null;
+type ActivePanel = 'epars' | 'source';
+type PlaylistFocusZone = 'source' | 'sidebar';
+
+interface AppState {
+  sourceFiles: Record<string, FileIndex>;
+  eparsFiles: Record<string, FileIndex>;
+  journal: Array<Record<string, unknown>>;
+  activeModal: ActiveModal;
+  activePanel: ActivePanel;
+  eparsFocusPath: string | null;
+  sourceFocusPath: string | null;
+  sourceExpanded: Set<string>;
+  sourceNodeMap: Map<string, SourceNodeInfo>;
+  sourceFilter: string;
+  filterActive: boolean;
+  audioSeekStep: number;
+  playlistMode: boolean;
+  playlists: SavedPlaylist[];
+  activePlaylistIndex: number | null;
+  pendingPlaylists: Record<string, PlaylistTrack[]>;
+  playlistFocus: PlaylistFocusZone;
+}
+
+const VALID_PANELS = new Set<ActivePanel>(['epars', 'source']);
+const VALID_MODALS = new Set<ActiveModal>([null, 'config', 'legend', 'journal', 'dialog', 'playlists']);
+const VALID_PLAYLIST_FOCUS = new Set<PlaylistFocusZone>(['source', 'sidebar']);
+
+const _state: AppState = {
+  sourceFiles: {},
+  eparsFiles: {},
+  journal: [],
+  activeModal: null,
+  activePanel: 'epars',
+  eparsFocusPath: null,
+  sourceFocusPath: null,
+  sourceExpanded: new Set(),
+  sourceNodeMap: new Map(),
+  sourceFilter: '',
+  filterActive: false,
+  audioSeekStep: 20,
+  playlistMode: false,
+  playlists: [],
+  activePlaylistIndex: null,
+  pendingPlaylists: {},
+  playlistFocus: 'source',
+};
+
+export const state = new Proxy<AppState>(_state, {
+  set(target: AppState, prop: string | symbol, value: unknown): boolean {
+    if (prop === 'activePanel' && !VALID_PANELS.has(value as ActivePanel)) {
+      console.warn(`state.activePanel invalide: ${value}`);
+      return true;
+    }
+    if (prop === 'activeModal' && !VALID_MODALS.has(value as ActiveModal)) {
+      console.warn(`state.activeModal invalide: ${value}`);
+      return true;
+    }
+    if (prop === 'playlistFocus' && !VALID_PLAYLIST_FOCUS.has(value as PlaylistFocusZone)) {
+      console.warn(`state.playlistFocus invalide: ${value}`);
+      return true;
+    }
+    (target as unknown as Record<string, unknown>)[prop as string] = value;
+    return true;
+  }
+});
+

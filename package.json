@@ -4,11 +4,16 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build": "esbuild static/state.ts static/utils.ts static/api.ts --outdir=static --format=esm 2>&1",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^1.6.1",
+    "esbuild": "^0.28.1",
     "jsdom": "^28.1.0",
+    "typescript": "^6.0.3",
     "vitest": "^1.6.0"
   }
 }
