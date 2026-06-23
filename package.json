@@ -5,8 +5,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "esbuild static/state.ts static/utils.ts static/api.ts --outdir=static --format=esm 2>&1",
-    "dev": "esbuild static/state.ts static/utils.ts static/api.ts --outdir=static --format=esm --watch 2>&1",
+    "build": "esbuild static/state.ts static/utils.ts static/api.ts static/render.ts static/focus.ts static/audio.ts static/ui.ts static/actions.ts static/playlist.ts --outdir=static --format=esm 2>&1",
+    "dev": "esbuild static/state.ts static/utils.ts static/api.ts static/render.ts static/focus.ts static/audio.ts static/ui.ts static/actions.ts static/playlist.ts --outdir=static --format=esm --watch 2>&1",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch"
   },
