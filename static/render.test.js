@@ -31,7 +31,7 @@ vi.mock('./focus.js', () => ({
   revalidateFocus: vi.fn(),
 }));
 
-import { patchSourceFileAfterCopy, patchEparsFileAfterCopy, toggleSourceDir, renderJournal } from './render.js';
+import { patchSourceFileAfterCopy, patchEparsFileAfterCopy, toggleSourceDir, renderJournal, renderEpars, renderSource } from './render.js';
 import { countAllEparsFiles } from './utils.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1010,5 +1010,162 @@ describe('renderJournal', () => {
     const content = document.getElementById('journal-content');
     // (e.timestamp || '') → '' when timestamp is absent
     expect(content.textContent).toContain('notime.mp3');
+  });
+});
+
+// ──────── renderEpars ────────────────────────────────────────────────────────
+describe('renderEpars', () => {
+  function setupRenderEparsDOM() {
+    document.body.innerHTML = `
+      <div id="epars-container"></div>
+      <span id="epars-header-count"></span>
+      <div id="epars-status-line"></div>
+    `;
+  }
+
+  beforeEach(() => {
+    setupRenderEparsDOM();
+    state.eparsFiles = {};
+    state.sourceFiles = {};
+    state.journal = [];
+    vi.clearAllMocks();
+  });
+
+  it('renders empty container when no epars files', () => {
+    renderEpars();
+    expect(document.getElementById('epars-container').children.length).toBe(0);
+    expect(document.getElementById('epars-header-count').textContent).toBe('');
+  });
+
+  it('renders a directory for each epars dir', () => {
+    state.eparsFiles['/media/usb'] = { 'a.mp3': { path: 'a.mp3' } };
+    renderEpars();
+
+    const dirs = document.querySelectorAll('#epars-container > .directory');
+    expect(dirs.length).toBe(1);
+    expect(dirs[0].textContent).toContain('usb');
+  });
+
+  it('renders file rows with status badges', () => {
+    state.eparsFiles['/media/usb'] = { 'track.mp3': { path: 'track.mp3', year: '2024', duration: 200, codec: 'MP3' } };
+    renderEpars();
+
+    const fileRows = document.querySelectorAll('.file-row');
+    expect(fileRows.length).toBe(1);
+    const fileSpan = fileRows[0].querySelector('.file');
+    expect(fileSpan.textContent).toBe('track.mp3');
+    expect(fileSpan.dataset.filename).toBe('track.mp3');
+    expect(fileSpan.dataset.epardir).toBe('/media/usb');
+  });
+
+  it('includes metadata spans when present', () => {
+    state.eparsFiles['/media/usb'] = { 'meta.mp3': { path: 'meta.mp3', year: '2021', duration: 195, codec: 'FLAC' } };
+    renderEpars();
+
+    const row = document.querySelector('.file-row');
+    expect(row.querySelector('.year')?.textContent).toBe('2021');
+    expect(row.querySelector('.codec')?.textContent).toBe('FLAC');
+    expect(row.querySelector('.duration')?.textContent).toBe('3:15');
+  });
+
+  it('renders status line with file counts', () => {
+    // computeStatus is mocked to always return 'doublon' (see vi.mock at top)
+    state.eparsFiles['/usb'] = { 'a.mp3': { path: 'a.mp3' } };
+    renderEpars();
+
+    const statusLine = document.getElementById('epars-status-line');
+    expect(statusLine.textContent).toContain('1 doublon');
+  });
+});
+
+// ──────── renderSource ───────────────────────────────────────────────────────
+describe('renderSource', () => {
+  function setupRenderSourceDOM() {
+    document.body.innerHTML = `
+      <div id="source-container"></div>
+      <span id="source-header-count"></span>
+      <span id="source-filter-count"></span>
+      <span id="epars-header-count"></span>
+      <span id="epars-status-line"></span>
+      <span id="epars-container"></span>
+    `;
+  }
+
+  beforeEach(() => {
+    setupRenderSourceDOM();
+    state.sourceFiles = {};
+    state.filterActive = false;
+    state.sourceFilter = '';
+    state.sourceExpanded.clear();
+    state.sourceNodeMap.clear();
+    vi.clearAllMocks();
+  });
+
+  it('renders empty container when no source files', () => {
+    renderSource();
+    expect(document.getElementById('source-container').children.length).toBe(0);
+  });
+
+  it('renders directories for source data tree', () => {
+    state.sourceFiles['/home/Music'] = { 'a.mp3': { path: 'Rock/a.mp3' } };
+    renderSource();
+
+    const dirs = document.querySelectorAll('#source-container > .directory');
+    expect(dirs.length).toBe(1);
+    expect(dirs[0].dataset.dirpath).toBe('/home/Music/Rock');
+  });
+
+  it('does not show files for collapsed directories', () => {
+    state.sourceFiles['/home/Music'] = { 'a.mp3': { path: 'Rock/a.mp3' } };
+    renderSource();
+
+    // Files are only visible when a directory is expanded
+    const fileRows = document.querySelectorAll('.file-row');
+    expect(fileRows.length).toBe(0);
+  });
+
+  it('shows count badge with total files per directory', () => {
+    state.sourceFiles['/home/Music'] = {
+      'a.mp3': { path: 'Rock/a.mp3' },
+      'b.mp3': { path: 'Rock/b.mp3' },
+    };
+    renderSource();
+
+    const badge = document.querySelector('.dir-count');
+    expect(badge?.textContent).toBe('(2)');
+  });
+
+  it('header count shows total file count', () => {
+    state.sourceFiles['/home/Music'] = {
+      'a.mp3': { path: 'Rock/a.mp3' },
+      'b.mp3': { path: 'Jazz/b.mp3' },
+    };
+    renderSource();
+
+    const header = document.getElementById('source-header-count');
+    expect(header.textContent).toBe('(2)');
+  });
+
+  it('registers directories in sourceNodeMap', () => {
+    state.sourceFiles['/home/Music'] = { 'a.mp3': { path: 'Rock/a.mp3' } };
+    renderSource();
+
+    expect(state.sourceNodeMap.has('/home/Music/Rock')).toBe(true);
+    const info = state.sourceNodeMap.get('/home/Music/Rock');
+    expect(info.baseDir).toBe('/home/Music');
+    expect(info.node.__files__).toBeDefined();
+    expect(info.node.__files__.length).toBe(1);
+  });
+
+  it('handles nested subdirectories', () => {
+    state.sourceFiles['/home/Music'] = { 'deep.mp3': { path: 'Rock/ACDC/deep.mp3' } };
+    renderSource();
+
+    // Only top-level dirs are rendered initially
+    const topDirs = document.querySelectorAll('#source-container > .directory');
+    expect(topDirs.length).toBe(1);
+    expect(topDirs[0].dataset.dirpath).toBe('/home/Music/Rock');
+    // ACDC is a child of Rock, not rendered until Rock is expanded
+    expect(topDirs[0].querySelector('.children')).toBeNull();
   });
 });

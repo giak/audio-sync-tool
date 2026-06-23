@@ -10,6 +10,7 @@ vi.mock('./api.js', () => ({
 vi.mock('./ui.js', () => ({
   openModal: vi.fn(),
   closeAllModals: vi.fn(),
+  showError: vi.fn(),
 }));
 
 vi.mock('./render.js', () => ({
@@ -25,9 +26,9 @@ vi.mock('./focus.js', () => ({
   revalidateFocus: vi.fn(),
 }));
 
-import { executeCopy, runScan, initApp, configData, renderConfigSelect } from './actions.js';
+import { executeCopy, runScan, initApp, configData } from './actions.js';
 import { api } from './api.js';
-import { openModal, closeAllModals } from './ui.js';
+import { openModal, closeAllModals, showError } from './ui.js';
 import { renderAll, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderSource } from './render.js';
 
 function setupCopyDOM({ hasLeftFocus = true, hasRightFocus = true, hasEparDir = true, hasRelPath = true } = {}) {
@@ -51,6 +52,11 @@ function setupCopyDOM({ hasLeftFocus = true, hasRightFocus = true, hasEparDir = 
     <span id="source-header-count"></span>
     <div id="epars-status-line"></div>
     <div id="source-filter-count"></div>
+    <button id="btn-scan"></button>
+    <div id="scan-progress" class="hidden">
+      <div id="scan-progress-bar"><div id="scan-progress-fill"></div></div>
+      <span id="scan-progress-text"></span>
+    </div>
   `;
 
   if (!hasLeftFocus) {
@@ -157,13 +163,14 @@ describe('executeCopy', () => {
   });
 
   it('shows error when copy fails', async () => {
-    vi.mocked(api).mockResolvedValueOnce({ ok: false, error: 'Permission denied' });
+    vi.mocked(api).mockRejectedValueOnce(new Error('Permission denied'));
 
     executeCopy();
     await document.getElementById('dialog-confirm').onclick();
 
-    expect(document.getElementById('status-text').textContent).toContain('✗ Erreur');
-    expect(document.getElementById('status-text').textContent).toContain('Permission denied');
+    expect(showError).toHaveBeenCalledWith(
+      expect.stringContaining('Permission denied')
+    );
   });
 
   it('cancel click closes dialog without copying', () => {
@@ -187,7 +194,7 @@ describe('runScan', () => {
     expect(state.sourceFiles['/src']).toBeDefined();
     expect(state.eparsFiles['/ep']).toBeDefined();
     expect(renderAll).toHaveBeenCalled();
-    expect(document.getElementById('status-text').textContent).toBe('Scan terminé.');
+    expect(document.getElementById('status-text').textContent).toContain('Scan terminé');
   });
 });
 

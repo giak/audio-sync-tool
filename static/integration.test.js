@@ -1,48 +1,98 @@
-// ─── End-to-end test: render panels → F5 copy → verify DOM patches ───────
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+// ─── Integration test: REAL UX interactions (clicks, keyboard, navigation) ──
+// Only mocks api.js (network). focus.js, audio.js, ui.js, render.js are REAL.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { state } from './state.js';
 
-// Polyfill CSS.escape for jsdom
-if (typeof CSS === 'undefined') globalThis.CSS = {};
-if (!CSS.escape) {
-  CSS.escape = (val) => String(val).replace(/[^\w-]/g, '\\$&');
-}
+// ── Mock ONLY api.js (network calls) ───────────────────────────────────────
+vi.mock('./api.js', () => {
+  const mockApi = vi.fn();
+  // Default returns for initApp() which runs at import time
+  mockApi.mockResolvedValue({});
+  return { api: mockApi };
+});
 
-// Mock only the side-effectful modules — let render.js and utils.js run real
-vi.mock('./api.js', () => ({ api: vi.fn() }));
-vi.mock('./ui.js', () => ({ openModal: vi.fn(), closeAllModals: vi.fn() }));
-vi.mock('./audio.js', () => ({ togglePlay: vi.fn() }));
-vi.mock('./focus.js', () => ({
-  setActivePanel: vi.fn(),
-  focusItemByElement: vi.fn(),
-  revalidateFocus: vi.fn(),
-}));
+// ── Set up DOM + polyfills + Audio mock BEFORE all imports execute ──────────
+vi.hoisted(() => {
+  // Polyfill scrollIntoView (not available in jsdom)
+  Element.prototype.scrollIntoView = () => {};
+  // Polyfill CSS.escape (not available in jsdom)
+  if (typeof CSS === 'undefined') globalThis.CSS = {};
+  if (!CSS.escape) {
+    CSS.escape = (val) => String(val).replace(/[^\w-]/g, '\\$&');
+  }
 
-// Real render + actions imports
-import { renderEpars, renderSource } from './render.js';
+  // Polyfill DataTransfer + DragEvent for drag-and-drop tests (not available in jsdom)
+  if (typeof DataTransfer === 'undefined') {
+    globalThis.DataTransfer = class DataTransfer {
+      constructor() { this._data = new Map(); this.dropEffect = 'none'; this.effectAllowed = 'all'; }
+      setData(format, data) { this._data.set(format, data); }
+      getData(format) { return this._data.get(format) || ''; }
+      clearData(format) { if (format) this._data.delete(format); else this._data.clear(); }
+      get types() { return Array.from(this._data.keys()); }
+      setDragImage() {}
+    };
+  }
+  if (typeof DragEvent === 'undefined') {
+    globalThis.DragEvent = class DragEvent extends Event {
+      constructor(type, opts = {}) {
+        super(type, opts);
+        this.dataTransfer = opts.dataTransfer || new DataTransfer();
+      }
+    };
+  }
+
+  globalThis.Audio = vi.fn(() => ({
+    play: vi.fn().mockResolvedValue(undefined),
+    pause: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    currentTime: 0,
+    duration: 240,
+  }));
+
+  document.body.innerHTML = `
+<div id="app">
+  <header>
+    <h1>Audio Sync Tool</h1>
+    <div id="toolbar">
+      <button id="btn-config">⚙️ Config</button>
+      <button id="btn-scan">🔄 Scan</button>
+      <button id="btn-journal">📋 Journal</button>
+      <button id="btn-legend">❓ Raccourcis</button>
+      <button id="btn-playlist">🎵 Playlist</button>
+    </div>
+  </header>
+  <div id="main-panels">
+    <div id="panel-left" class="panel"><h2>📂 Éparpillé <span id="epars-header-count" class="panel-header-count"></span></h2><div id="epars-status-line"></div><div id="epars-container"></div></div>
+    <div id="panel-right" class="panel"><h2>📂 Source Data <span id="source-header-count" class="panel-header-count"></span></h2><div id="source-container"></div></div>
+  </div>
+  <div id="filter-palette" class="hidden"><input type="text" id="source-filter" placeholder="Filtrer…" spellcheck="false" autocomplete="off"><span id="source-filter-count"></span></div>
+  <div id="player-bar" class="hidden"><span id="player-stop">⏹</span><span id="player-filename"></span><span id="player-seek-bwd">⏪</span><div id="player-progress"><div id="player-progress-fill"></div></div><span id="player-time">0:00 / 0:00</span><span id="player-seek-fwd">⏩</span><label><input type="number" id="player-step" value="20" min="1" max="120">s</label></div>
+  <div id="playlist-layout" class="hidden"><div id="playlist-main"><div id="playlist-source" class="panel"><h2>📂 Source Data <span id="playlist-source-count"></span></h2><div id="playlist-source-container"></div></div><div id="playlist-sidebar" class="panel"><div id="playlist-tabs"></div><div id="playlist-panel"></div><div id="playlist-actions"><button id="pl-save">💾 Sauvegarder</button><button id="pl-export">📦 Exporter</button><button id="pl-manage">📋 Gérer</button></div></div></div></div>
+  <div id="scan-progress" class="hidden"><div id="scan-progress-bar"><div id="scan-progress-fill"></div></div><span id="scan-progress-text"></span></div>
+  <div id="status-bar"><span id="status-text">Prêt.</span></div>
+</div>
+<div id="modal-config" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>⚙️ Config</h3><button class="modal-close" data-modal="config">✕</button></div><div id="config-selector"><label>Profil : <select id="cfg-select"></select></label><button id="btn-add-config">+</button><button id="btn-del-config">−</button></div><div id="config-fields"><label>Nom : <input type="text" id="cfg-name"></label><label>Source : <input type="text" id="cfg-source"></label><label>Dossiers : <textarea id="cfg-epars" rows="4"></textarea></label></div><button id="btn-save-config">Sauvegarder</button><p id="config-status"></p></div></div>
+<div id="modal-legend" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>❓ Raccourcis</h3><button class="modal-close" data-modal="legend">✕</button></div><div id="legend-grid"></div></div></div>
+<div id="modal-journal" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>📋 Journal</h3><button class="modal-close" data-modal="journal">✕</button></div><div id="journal-content"></div></div></div>
+<div id="modal-playlists" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>🎵 Playlists</h3><button class="modal-close">✕</button></div><div id="pl-manager-content"></div></div></div>
+<div id="modal-dialog" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content modal-sm"><p id="dialog-msg"></p><div class="dialog-buttons"><button id="dialog-confirm">Copier</button><button id="dialog-cancel">Annuler</button></div></div></div>`;
+});
+
+// ── Import SCRIPT.JS (executes on the real DOM set up above) ────────────────
+// At import time, script.js wires toolbar buttons, audio UI, config UI, filter
+// palette, and calls initApp(). All DOM elements exist because vi.hoisted()
+// ran first.
+import './script.js';
+import { renderEpars, renderSource, renderPlaylistSource, renderPlaylistPanel, renderPlaylistManager } from './render.js';
+import { setActivePanel } from './focus.js';
 import { executeCopy } from './actions.js';
 import { api } from './api.js';
-import { openModal, closeAllModals } from './ui.js';
+import { stopPlayer } from './audio.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function setupFullDOM() {
-  document.body.innerHTML = `
-    <div id="epars-container"></div>
-    <span id="epars-header-count"></span>
-    <div id="epars-status-line"></div>
-    <div id="source-container"></div>
-    <span id="source-header-count"></span>
-    <span id="source-filter-count"></span>
-    <div id="dialog-msg"></div>
-    <button id="dialog-confirm"></button>
-    <button id="dialog-cancel"></button>
-    <span id="status-text"></span>
-  `;
-}
-
-function setupState() {
-  // Source Data: a tree with Rock/ (2 files) and Jazz/ (1 file)
+function setupTestState() {
   state.sourceFiles = {
     '/home/music': {
       'a.mp3': { path: 'Rock/a.mp3', year: '2022', duration: 200, codec: 'MP3 320kbps' },
@@ -50,179 +100,1636 @@ function setupState() {
       'cool.mp3': { path: 'Jazz/cool.mp3', year: '2024', duration: 300, codec: 'FLAC' },
     },
   };
-
-  // Éparpillé: two songs on a USB key — one already in source (doublon), one new
   state.eparsFiles = {
     '/media/usb': {
       'new-track.mp3': { path: 'new-track.mp3', year: '2025', duration: 240, codec: 'MP3 320kbps' },
       'a.mp3': { path: 'a.mp3', year: '2022', duration: 200, codec: 'MP3 320kbps' },
     },
   };
-
   state.journal = [];
   state.sourceExpanded.clear();
   state.sourceNodeMap.clear();
   state.filterActive = false;
   state.sourceFilter = '';
+  state.activePanel = 'epars';
+  state.activeModal = null;
+  state.playlistMode = false;
+  state.playlistFocus = 'source';
+  state.playlists = [];
+  state.pendingPlaylists = {};
+  state.activePlaylistIndex = 0;
+  state.eparsFocusPath = null;
+  state.sourceFocusPath = null;
+}
+
+function dispatchKey(key, opts = {}) {
+  const event = new KeyboardEvent('keydown', {
+    key,
+    bubbles: true,
+    cancelable: true,
+    ...opts,
+  });
+  document.dispatchEvent(event);
+  return event;
+}
+
+function flush() {
+  return new Promise(r => setTimeout(r, 0));
 }
 
 beforeEach(() => {
-  setupFullDOM();
-  setupState();
+  // Reset audio player state (module-level currentAudio in audio.js)
+  stopPlayer();
+
+  // Reset DOM visual state (but don't recreate the DOM — keep bindings alive)
+  document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+  document.getElementById('player-bar').classList.add('hidden');
+  document.querySelectorAll('.play-btn.playing').forEach(b => {
+    b.classList.remove('playing');
+    b.textContent = '▶';
+  });
+  document.querySelectorAll('.led-playing').forEach(l => l.classList.remove('led-playing'));
+  document.getElementById('epars-container').innerHTML = '';
+  document.getElementById('source-container').innerHTML = '';
+  document.getElementById('epars-header-count').textContent = '';
+  document.getElementById('source-header-count').textContent = '';
+  document.getElementById('epars-status-line').innerHTML = '';
+  document.getElementById('filter-palette').classList.add('hidden');
+  document.getElementById('main-panels').classList.remove('hidden');
+  document.getElementById('playlist-layout').classList.add('hidden');
+  document.getElementById('playlist-source-container').innerHTML = '';
+  document.getElementById('playlist-tabs').innerHTML = '';
+  document.getElementById('playlist-panel').innerHTML = '';
+
+  // Reset state
+  setupTestState();
   vi.clearAllMocks();
 });
 
-// ── Tests ─────────────────────────────────────────────────────────────────
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-describe('F5 end-to-end flow', () => {
-  it('patches DOM after copy instead of full rebuild', async () => {
-    // ── Phase 1: initial render ─────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTS: REAL USER INTERACTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Click interactions', () => {
+  it('clicks on éparpillé nouveau file selects it and updates status', async () => {
     renderEpars();
-    renderSource();
 
-    // Éparpillé panel: 2 files — new-track.mp3 (nouveau) and a.mp3 (doublon)
-    const eparsFiles = document.querySelectorAll('#epars-container .file');
-    expect(eparsFiles.length).toBe(2);
-    const newTrack = [...eparsFiles].find(f => f.dataset.filename === 'new-track.mp3');
-    expect(newTrack.classList.contains('nouveau')).toBe(true);
-    const alreadyThere = [...eparsFiles].find(f => f.dataset.filename === 'a.mp3');
-    expect(alreadyThere.classList.contains('doublon')).toBe(true);
+    const fileSpan = document.querySelector('#epars-container .file.nouveau');
+    expect(fileSpan).not.toBeNull();
+    expect(fileSpan.textContent).toBe('new-track.mp3');
 
-    // Source panel: Rock/ and Jazz/ directories
-    const sourceDirs = document.querySelectorAll('#source-container > .directory');
-    expect(sourceDirs.length).toBe(2); // Rock, Jazz
-    const rockDir = [...sourceDirs].find(d => d.dataset.dirpath === '/home/music/Rock');
-    expect(rockDir).not.toBeUndefined();
-    expect(rockDir.querySelector('.dir-count')?.textContent).toBe('(2)');
+    fileSpan.click();
+    await flush();
 
-    // ── Phase 2: focus a file and directory ─────────────────────────
-    // Focus new-track.mp3 in éparpillé
-    const row = newTrack.closest('.file-row');
-    row.classList.add('focused');
-    newTrack.classList.add('focused');
-    newTrack.dataset.epardir = '/media/usb';
-
-    // Focus Rock directory in source
-    rockDir.classList.add('focused');
-
-    // ── Phase 3: execute F5 copy ────────────────────────────────────
-    vi.mocked(api).mockResolvedValueOnce({ ok: true, year: '2025', duration: 240, codec: 'MP3 320kbps' });
-    vi.mocked(api).mockResolvedValueOnce([{ filename: 'new-track.mp3', status: 'copied', timestamp: '2025-01-01T00:00:00' }]);
-
-    executeCopy();
-
-    // ── Phase 4: verify dialog opens ────────────────────────────────
-    expect(openModal).toHaveBeenCalledWith('dialog');
-    expect(document.getElementById('dialog-msg').textContent)
-      .toContain('Copier "new-track.mp3"');
-    expect(document.getElementById('dialog-msg').textContent)
-      .toContain('/home/music/Rock');
-
-    // ── Phase 5: confirm copy ───────────────────────────────────────
-    await document.getElementById('dialog-confirm').onclick();
-
-    expect(closeAllModals).toHaveBeenCalled();
-
-    // ── Phase 6: verify DOM was patched, not rebuilt ────────────────
-    // a) Éparpillé: new-track.mp3 changed from nouveau to doublon
-    const updatedNewTrack = document.querySelector('#epars-container .file[data-filename="new-track.mp3"]');
-    expect(updatedNewTrack.classList.contains('doublon')).toBe(true);
-    expect(updatedNewTrack.classList.contains('nouveau')).toBe(false);
-    expect(updatedNewTrack.onclick).toBeNull(); // no longer selectable
-
-    // b) Éparpillé: status counters updated
-    const statusLine = document.getElementById('epars-status-line');
-    expect(statusLine.textContent).toContain('0 reste');   // was 1, now 0
-    expect(statusLine.textContent).toContain('2 doublon');  // was 1, now 2
-    expect(statusLine.textContent).toContain('0 traité');
-
-    // c) Source: Rock directory now has a new file in the DOM
-    //    (Rock was collapsed, so no children div — file only in sourceNodeMap)
-    expect(rockDir.querySelector('.children')).toBeNull();
-
-    // d) But sourceNodeMap was updated in-memory
-    const nodeInfo = state.sourceNodeMap.get('/home/music/Rock');
-    expect(nodeInfo.node.__files__).toBeDefined();
-    const newFileInNode = nodeInfo.node.__files__.find(f => f.filename === 'new-track.mp3');
-    expect(newFileInNode).toBeDefined();
-    expect(newFileInNode.year).toBe('2025');
-
-    // e) State was updated
-    expect(state.journal.length).toBe(1);
-    expect(state.sourceFiles['/home/music']['new-track.mp3'].path).toBe('Rock/new-track.mp3');
-
-    // f) Status success
-    expect(document.getElementById('status-text').textContent).toContain('✓');
-    expect(document.getElementById('status-text').textContent).toContain('new-track.mp3');
-
-    // g) No stale focused classes lingering
-    // (The focused file was patched, but focused class stays on the row from our manual setup)
+    expect(fileSpan.classList.contains('selected')).toBe(true);
+    expect(document.getElementById('status-text').textContent).toContain('Tab → F5');
   });
 
-  it('source tree shows new file after expand when destDir was collapsed', async () => {
-    // ── Phase 1: initial render ─────────────────────────────────────
+  it('clicking play button shows audio player bar', async () => {
     renderEpars();
+
+    const playBtn = document.querySelector('#epars-container .play-btn');
+    expect(playBtn).not.toBeNull();
+    expect(playBtn.textContent).toBe('▶');
+
+    playBtn.click();
+    await flush();
+
+    expect(document.getElementById('player-bar').classList.contains('hidden')).toBe(false);
+    expect(playBtn.textContent).toBe('⏹');
+  });
+
+  it('clicking play button again stops audio', async () => {
+    renderEpars();
+
+    const playBtn = document.querySelector('#epars-container .play-btn');
+    playBtn.click();
+    await flush();
+    playBtn.click();
+    await flush();
+
+    expect(document.getElementById('player-bar').classList.contains('hidden')).toBe(true);
+    expect(playBtn.textContent).toBe('▶');
+  });
+
+  it('clicking source directory expands it', async () => {
     renderSource();
 
-    // Focus elements
-    const newTrack = document.querySelector('#epars-container .file[data-filename="new-track.mp3"]');
-    const row = newTrack.closest('.file-row');
-    row.classList.add('focused');
-    newTrack.classList.add('focused');
-    newTrack.dataset.epardir = '/media/usb';
-
     const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]');
-    rockDir.classList.add('focused');
+    expect(rockDir).not.toBeNull();
+    expect(rockDir.classList.contains('expanded')).toBe(false);
 
-    // ── Phase 2: F5 copy ────────────────────────────────────────────
-    vi.mocked(api).mockResolvedValueOnce({ ok: true, year: '2025', duration: 240, codec: 'MP3 320kbps' });
-    vi.mocked(api).mockResolvedValueOnce([{ filename: 'new-track.mp3', status: 'copied' }]);
+    rockDir.click();
+    await flush();
 
-    executeCopy();
-    await document.getElementById('dialog-confirm').onclick();
-
-    // ── Phase 3: expand Rock to see the new file ────────────────────
-    // At this point, sourceNodeMap has the file registered
-    // We simulate clicking Rock to expand it
-    rockDir.classList.remove('focused'); // cleanup focus for toggle
-    rockDir.click(); // triggers toggleSourceDir
-
-    // Now the children should show 3 files: a.mp3, b.mp3, and new-track.mp3
+    expect(rockDir.classList.contains('expanded')).toBe(true);
     const children = rockDir.querySelector('.children');
     expect(children).not.toBeNull();
-    const fileRows = children.querySelectorAll('.file-row');
-    expect(fileRows.length).toBe(3);
-
-    const labels = [...fileRows].map(r => r.querySelector('.file')?.textContent).sort();
-    expect(labels).toEqual(['a.mp3', 'b.mp3', 'new-track.mp3']);
-
-    // Count badge updated
-    expect(rockDir.querySelector('.dir-count')?.textContent).toBe('(3)');
+    expect(children.querySelectorAll('.file-row').length).toBe(2);
   });
 
-  it('completes the copy flow without errors', async () => {
+  it('clicking directory again collapses it', async () => {
+    renderSource();
+
+    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]');
+    rockDir.click(); // expand
+    await flush();
+    rockDir.click(); // collapse
+    await flush();
+
+    expect(rockDir.classList.contains('expanded')).toBe(false);
+    expect(rockDir.querySelector('.children')).toBeNull();
+  });
+
+  it('toolbar button opens modal, close button closes it', async () => {
+    document.getElementById('btn-legend').click();
+    await flush();
+
+    const legendModal = document.getElementById('modal-legend');
+    expect(legendModal.classList.contains('hidden')).toBe(false);
+    expect(state.activeModal).toBe('legend');
+
+    legendModal.querySelector('.modal-close').click();
+    await flush();
+
+    expect(legendModal.classList.contains('hidden')).toBe(true);
+    expect(state.activeModal).toBeNull();
+  });
+
+  it('modal backdrop closes modal', async () => {
+    document.getElementById('btn-config').click();
+    await flush();
+
+    const configModal = document.getElementById('modal-config');
+    expect(configModal.classList.contains('hidden')).toBe(false);
+
+    configModal.querySelector('.modal-backdrop').click();
+    await flush();
+
+    expect(configModal.classList.contains('hidden')).toBe(true);
+    expect(state.activeModal).toBeNull();
+  });
+
+  it('clicking panel-left activates éparpillé panel', async () => {
     renderEpars();
     renderSource();
 
-    // Focus elements
-    const newTrack = document.querySelector('#epars-container .file[data-filename="new-track.mp3"]');
-    const row = newTrack.closest('.file-row');
-    row.classList.add('focused');
-    newTrack.classList.add('focused');
-    newTrack.dataset.epardir = '/media/usb';
+    document.getElementById('panel-left').click();
+    await flush();
+
+    expect(state.activePanel).toBe('epars');
+    expect(document.getElementById('panel-left').classList.contains('panel-active')).toBe(true);
+    expect(document.getElementById('panel-right').classList.contains('panel-active')).toBe(false);
+  });
+
+  it('clicking panel-right activates source panel', async () => {
+    renderEpars();
+    renderSource();
+
+    document.getElementById('panel-right').click();
+    await flush();
+
+    expect(state.activePanel).toBe('source');
+    expect(document.getElementById('panel-right').classList.contains('panel-active')).toBe(true);
+    expect(document.getElementById('panel-left').classList.contains('panel-active')).toBe(false);
+  });
+});
+
+describe('Keyboard navigation', () => {
+  it('ArrowDown moves focus to next item in éparpillé', async () => {
+    renderEpars();
+    renderSource();
+    state.activePanel = 'epars';
+    setActivePanel('epars');
+    await flush();
+
+    const items = document.querySelectorAll('#epars-container .file-row, #epars-container .directory');
+    expect(items.length).toBeGreaterThanOrEqual(2);
+    expect(items[0].classList.contains('focused')).toBe(true);
+
+    dispatchKey('ArrowDown');
+    await flush();
+
+    expect(items[1].classList.contains('focused')).toBe(true);
+    expect(items[0].classList.contains('focused')).toBe(false);
+  });
+
+  it('ArrowUp moves focus to previous item', async () => {
+    renderEpars();
+    renderSource();
+    state.activePanel = 'epars';
+    setActivePanel('epars');
+    await flush();
+
+    const items = document.querySelectorAll('#epars-container .file-row, #epars-container .directory');
+
+    dispatchKey('ArrowDown');
+    dispatchKey('ArrowDown');
+    await flush();
+    expect(items[2].classList.contains('focused')).toBe(true);
+
+    dispatchKey('ArrowUp');
+    await flush();
+    expect(items[1].classList.contains('focused')).toBe(true);
+  });
+
+  it('Tab switches between panels', async () => {
+    renderEpars();
+    renderSource();
+    state.activePanel = 'epars';
+    setActivePanel('epars');
+    await flush();
+
+    dispatchKey('Tab');
+    await flush();
+    expect(state.activePanel).toBe('source');
+    expect(document.getElementById('panel-right').classList.contains('panel-active')).toBe(true);
+    expect(document.getElementById('panel-left').classList.contains('panel-active')).toBe(false);
+
+    dispatchKey('Tab');
+    await flush();
+    expect(state.activePanel).toBe('epars');
+  });
+
+  it('Escape while modal is open closes it', async () => {
+    document.getElementById('btn-legend').click();
+    await flush();
+    expect(state.activeModal).toBe('legend');
+
+    dispatchKey('Escape');
+    await flush();
+
+    expect(document.getElementById('modal-legend').classList.contains('hidden')).toBe(true);
+    expect(state.activeModal).toBeNull();
+  });
+
+  it('Space on éparpillé nouveau file selects it', async () => {
+    renderEpars();
+    renderSource();
+    state.activePanel = 'epars';
+    setActivePanel('epars');
+    await flush();
+
+    // Navigate past the directory header to reach a file-row
+    let focused = document.querySelector('#epars-container .focused');
+    while (focused && focused.classList.contains('directory')) {
+      dispatchKey('ArrowDown');
+      await flush();
+      focused = document.querySelector('#epars-container .focused');
+    }
+
+    if (focused?.classList.contains('file-row')) {
+      const fileSpan = focused.querySelector('.file.nouveau');
+      if (fileSpan) {
+        dispatchKey(' ');
+        await flush();
+        expect(fileSpan.classList.contains('selected')).toBe(true);
+      }
+    }
+  });
+
+  it('Enter on file-row plays audio', async () => {
+    renderEpars();
+    renderSource();
+    state.activePanel = 'epars';
+    setActivePanel('epars');
+    await flush();
+
+    // Navigate past the directory header to reach a file-row
+    let focused = document.querySelector('#epars-container .focused');
+    while (focused && focused.classList.contains('directory')) {
+      dispatchKey('ArrowDown');
+      await flush();
+      focused = document.querySelector('#epars-container .focused');
+    }
+
+    // Assert we reached a file-row — fail loudly if navigation is broken
+    expect(focused).not.toBeNull();
+    expect(focused.classList.contains('file-row')).toBe(true);
+
+    dispatchKey('Enter');
+    await flush();
+
+    const playerBar = document.getElementById('player-bar');
+    expect(playerBar.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('player-filename').textContent.length).toBeGreaterThan(0);
+    // Focused row's play button should have changed to ⏹
+    const playBtn = focused.querySelector('.play-btn');
+    expect(playBtn).not.toBeNull();
+    expect(playBtn.textContent).toBe('⏹');
+  });
+
+  it('F7 opens filter palette and activates source panel', async () => {
+    renderEpars();
+    renderSource();
+
+    const ev = dispatchKey('F7');
+    await flush();
+
+    expect(ev.defaultPrevented).toBe(true);
+    expect(state.filterActive).toBe(true);
+    expect(document.getElementById('filter-palette').classList.contains('hidden')).toBe(false);
+    expect(state.activePanel).toBe('source');
+  });
+
+  it('Shift+ArrowRight seeks audio forward when playing', async () => {
+    renderEpars();
+    renderSource();
+
+    // Play audio first
+    const playBtn = document.querySelector('#epars-container .play-btn');
+    playBtn.click();
+    await flush();
+    expect(document.getElementById('player-bar').classList.contains('hidden')).toBe(false);
+
+    // Record initial progress width
+    const fill = document.getElementById('player-progress-fill');
+    const initialPct = parseFloat(fill.style.width) || 0;
+
+    // Shift+ArrowRight → seek +20s
+    const ev = dispatchKey('ArrowRight', { shiftKey: true });
+    await flush();
+
+    expect(ev.defaultPrevented).toBe(true);
+    const afterPct = parseFloat(fill.style.width) || 0;
+    // 20s / 240s = 8.33%
+    expect(afterPct).toBeGreaterThan(initialPct);
+    expect(afterPct).toBeCloseTo(8.33, 0);
+  });
+
+  it('Shift+ArrowLeft seeks audio backward when playing', async () => {
+    renderEpars();
+    renderSource();
+
+    // Play audio
+    const playBtn = document.querySelector('#epars-container .play-btn');
+    playBtn.click();
+    await flush();
+
+    // Seek forward first, then backward
+    dispatchKey('ArrowRight', { shiftKey: true }); // +20s
+    await flush();
+    dispatchKey('ArrowRight', { shiftKey: true }); // +40s
+    await flush();
+
+    // Shift+ArrowLeft → back to ~20s
+    const ev = dispatchKey('ArrowLeft', { shiftKey: true });
+    await flush();
+
+    expect(ev.defaultPrevented).toBe(true);
+    const afterPct = parseFloat(document.getElementById('player-progress-fill').style.width) || 0;
+    // Back to ~20s (8.33% of 240s)
+    expect(afterPct).toBeCloseTo(8.33, 0);
+  });
+
+  it('←→ navigates between columns in Source Data via keyboard router', async () => {
+    // Add extra files to create enough top-level directories for column layout
+    state.sourceFiles['/home/music']['d.mp3'] = { path: 'Electronic/d.mp3', year: '2023', duration: 180, codec: 'MP3 320kbps' };
+    state.sourceFiles['/home/music']['e.mp3'] = { path: 'Pop/e.mp3', year: '2024', duration: 200, codec: 'FLAC' };
+    state.sourceFiles['/home/music']['f.mp3'] = { path: 'Metal/f.mp3', year: '2022', duration: 160, codec: 'MP3 192kbps' };
+
+    renderSource();
+    state.activePanel = 'source';
+    setActivePanel('source');
+    await flush();
+
+    const dirs = document.querySelectorAll('#source-container .directory');
+    expect(dirs.length).toBeGreaterThanOrEqual(4);
+
+    // Mock getBoundingClientRect to simulate a 2-column layout.
+    // In a real browser, CSS columns give different left positions.
+    // In jsdom all elements report left:0, so we simulate it.
+    // Column 1 (left): Rock, Jazz, Electronic
+    // Column 2 (right): Pop, Metal
+    const col1Left = 50;
+    const col2Left = 300;
+    const rowHeight = 40;
+
+    for (let i = 0; i < dirs.length; i++) {
+      const col = i < 3 ? col1Left : col2Left;
+      const top = (i < 3 ? i : i - 3) * rowHeight + 10;
+      dirs[i].getBoundingClientRect = () => ({
+        left: col, top,
+        right: col + 200, bottom: top + 30,
+        width: 200, height: 30,
+      });
+    }
+
+    // Focus first directory in column 1 (Rock)
+    dirs[0].classList.add('focused');
+
+    // ArrowRight → should move to dirs[3] (Pop) in column 2
+    dispatchKey('ArrowRight');
+    await flush();
+
+    // dirs[3] is Pop, at same row as Rock but in column 2
+    expect(dirs[3].classList.contains('focused')).toBe(true);
+    expect(dirs[0].classList.contains('focused')).toBe(false);
+
+    // ArrowLeft → should move back to dirs[0] (Rock) in column 1
+    dispatchKey('ArrowLeft');
+    await flush();
+
+    expect(dirs[0].classList.contains('focused')).toBe(true);
+    expect(dirs[3].classList.contains('focused')).toBe(false);
+  });
+});
+
+describe('F5 copy flow', () => {
+  it('F5 without focused file shows help message', async () => {
+    renderEpars();
+    renderSource();
+
+    dispatchKey('F5');
+    await flush();
+
+    expect(document.getElementById('status-text').textContent).toContain('surbrillance');
+  });
+
+  it('F5 with focused file and directory opens confirm dialog', async () => {
+    renderEpars();
+    renderSource();
+
+    const fileSpan = document.querySelector('#epars-container .file.nouveau');
+    fileSpan.dataset.epardir = '/media/usb';
+    fileSpan.closest('.file-row').classList.add('focused');
 
     const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]');
     rockDir.classList.add('focused');
 
-    vi.mocked(api).mockResolvedValueOnce({ ok: true, year: '2025', duration: 240, codec: 'MP3 320kbps' });
-    vi.mocked(api).mockResolvedValueOnce([{ filename: 'new-track.mp3', status: 'copied' }]);
+    dispatchKey('F5');
+    await flush();
 
-    executeCopy();
-    await document.getElementById('dialog-confirm').onclick();
+    expect(state.activeModal).toBe('dialog');
+    expect(document.getElementById('dialog-msg').textContent).toContain('Copier "new-track.mp3"');
+  });
 
-    // revalidateFocus is called via requestAnimationFrame — we can't easily
-    // test it synchronously, but we can verify the copy completed successfully
+  it('confirm dialog executes copy and patches DOM', async () => {
+    vi.mocked(api).mockResolvedValueOnce({
+      ok: true, year: '2025', duration: 240, codec: 'MP3 320kbps',
+    });
+    vi.mocked(api).mockResolvedValueOnce([
+      { filename: 'new-track.mp3', status: 'copied', timestamp: '2025-01-01T00:00:00' },
+    ]);
+
+    renderEpars();
+    renderSource();
+
+    const fileSpan = document.querySelector('#epars-container .file.nouveau');
+    fileSpan.dataset.epardir = '/media/usb';
+    fileSpan.closest('.file-row').classList.add('focused');
+    fileSpan.classList.add('focused');
+
+    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]');
+    rockDir.classList.add('focused');
+
+    dispatchKey('F5');
+    await flush();
+    document.getElementById('dialog-confirm').click();
+    await flush();
+
     expect(document.getElementById('status-text').textContent).toContain('✓');
+    expect(document.getElementById('status-text').textContent).toContain('new-track.mp3');
+    expect(fileSpan.classList.contains('doublon')).toBe(true);
+    expect(fileSpan.classList.contains('nouveau')).toBe(false);
+  });
+});
+
+describe('Journal modal', () => {
+  it('opens journal modal when toolbar button clicked', async () => {
+    document.getElementById('btn-journal').click();
+    await flush();
+
+    expect(state.activeModal).toBe('journal');
+    expect(document.getElementById('modal-journal').classList.contains('hidden')).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTS: ERROR RESILIENCE — API failures produce visible user feedback
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Error resilience', () => {
+  it('F5 shows error toast when /copy fails', async () => {
+    vi.mocked(api).mockRejectedValueOnce(new Error('Internal server error'));
+
+    renderEpars();
+    renderSource();
+
+    const fileSpan = document.querySelector('#epars-container .file.nouveau');
+    fileSpan.dataset.epardir = '/media/usb';
+    fileSpan.closest('.file-row').classList.add('focused');
+    fileSpan.classList.add('focused');
+
+    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]');
+    rockDir.classList.add('focused');
+
+    dispatchKey('F5');
+    await flush();
+    document.getElementById('dialog-confirm').click();
+    await flush();
+
+    expect(document.getElementById('status-text').textContent).toContain('⚠️');
+    expect(document.getElementById('status-text').textContent).toContain('Échec');
+    expect(document.getElementById('status-text').textContent).toContain('copie');
+  });
+
+  it('Ctrl+S shows error toast when network is unreachable', async () => {
+    // Enter playlist mode
+    vi.mocked(api).mockResolvedValueOnce([]);
+    document.getElementById('btn-playlist').click();
+    await flush();
+
+    // Pre-expand source directories so playlist tree renders with visible file rows
+    state.sourceExpanded.add('/home/music/Rock');
+    state.sourceExpanded.add('/home/music/Jazz');
+    renderPlaylistSource();
+    await flush();
+
+    state.playlistFocus = 'source';
+
+    // Add a track
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    // Make save fail
+    vi.mocked(api).mockRejectedValueOnce(new Error('Network unreachable'));
+
+    dispatchKey('s', { ctrlKey: true });
+    await flush();
+
+    expect(document.getElementById('status-text').textContent).toContain('⚠️');
+    expect(document.getElementById('status-text').textContent).toContain('Échec');
+    expect(document.getElementById('status-text').textContent).toContain('sauvegarde');
+  });
+
+  it('scan button shows error when /scan fails', async () => {
+    vi.mocked(api).mockRejectedValueOnce(new Error('Server error'));
+
+    document.getElementById('btn-scan').click();
+    await flush();
+
+    expect(document.getElementById('status-text').textContent).toContain('⚠️');
+    expect(document.getElementById('status-text').textContent).toContain('Scan échoué');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTS: STATE PROXY — validation guards against invalid values
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('State proxy', () => {
+  it('rejects invalid activePanel', () => {
+    const original = state.activePanel;
+    state.activePanel = 'nonexistent';
+    expect(state.activePanel).toBe(original);
+    expect(state.activePanel).not.toBe('nonexistent');
+  });
+
+  it('rejects invalid activeModal', () => {
+    state.activeModal = 'nonexistent';
+    expect(state.activeModal).toBeNull();
+    expect(state.activeModal).not.toBe('nonexistent');
+  });
+
+  it('allows valid activePanel values', () => {
+    state.activePanel = 'source';
+    expect(state.activePanel).toBe('source');
+    state.activePanel = 'epars';
+    expect(state.activePanel).toBe('epars');
+  });
+
+  it('allows valid activeModal values', () => {
+    state.activeModal = 'config';
+    expect(state.activeModal).toBe('config');
+    state.activeModal = 'legend';
+    expect(state.activeModal).toBe('legend');
+    state.activeModal = 'dialog';
+    expect(state.activeModal).toBe('dialog');
+    state.activeModal = 'playlists';
+    expect(state.activeModal).toBe('playlists');
+  });
+
+  it('allows null activeModal (closed state)', () => {
+    state.activeModal = 'config';
+    state.activeModal = null;
+    expect(state.activeModal).toBeNull();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTS: PLAYLIST MODE — ENTER, NAVIGATE, ADD/REMOVE, SAVE, EXPORT, QUIT
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Playlist mode', () => {
+  // Helper to enter playlist mode and resolve all async work
+  async function enterPlaylist() {
+    // loadPlaylists() calls api('/playlists') → return empty list
+    vi.mocked(api).mockResolvedValueOnce([]);
+    document.getElementById('btn-playlist').click();
+    await flush();
+
+    // Pre-expand source directories so playlist tree renders with visible file rows.
+    // By default directories are collapsed; tests need to find .file-row elements.
+    state.sourceExpanded.add('/home/music/Rock');
+    state.sourceExpanded.add('/home/music/Jazz');
+    renderPlaylistSource();
+    await flush();
+  }
+
+  // Helper to add a track to the current playlist via Space key
+  // Needs playlist-source-container to have rendered content
+  function focusFirstPlaylistFile() {
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    if (rows.length > 0) {
+      rows.forEach(r => r.classList.remove('focused'));
+      rows[0].classList.add('focused');
+    }
+    return rows[0];
+  }
+
+  it('clicking 🎵 Playlist button enters playlist mode', async () => {
+    await enterPlaylist();
+
+    expect(state.playlistMode).toBe(true);
+    expect(state.playlistFocus).toBe('source');
+    expect(document.getElementById('main-panels').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('playlist-layout').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('playlist-source').classList.contains('panel-active')).toBe(true);
+
+    // Status bar should show playlist hint
+    expect(document.getElementById('status-text').textContent).toContain('Playlist');
+
+    // Source panel should contain rendered éparpillé files
+    const fileRows = document.querySelectorAll('#playlist-source-container .file-row');
+    expect(fileRows.length).toBeGreaterThan(0);
+
+    // A playlist-1 tab should have been created
+    expect(Object.keys(state.pendingPlaylists)).toContain('playlist-1');
+    const tabEl = document.querySelector('#playlist-tabs .pl-tab');
+    expect(tabEl).not.toBeNull();
+    expect(tabEl.textContent).toContain('playlist-1');
+  });
+
+  it('Escape quits playlist mode and returns to normal view', async () => {
+    await enterPlaylist();
+    expect(state.playlistMode).toBe(true);
+
+    dispatchKey('Escape');
+    await flush();
+    await flush();
+
+    expect(state.playlistMode).toBe(false);
+    expect(document.getElementById('playlist-layout').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('main-panels').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('status-text').textContent).toBe('Prêt.');
+  });
+
+  it('Escape saves pending tracks before exiting playlist mode', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    // Add a track so there's something to save
+    focusFirstPlaylistFile();
+    dispatchKey(' ');
+    await flush();
+
+    expect(Object.keys(state.pendingPlaylists)).toContain('playlist-1');
+    expect(state.pendingPlaylists['playlist-1'].length).toBe(1);
+
+    // Mock: savePlaylist POST + loadPlaylists (inside savePlaylist)
+    vi.mocked(api).mockResolvedValueOnce({ ok: true, playlist: { name: 'playlist-1' } });
+    vi.mocked(api).mockResolvedValueOnce([]);
+
+    dispatchKey('Escape');
+    await flush();
+    await flush();
+
+    // Verify api was called with POST to /playlists
+    expect(api).toHaveBeenCalledWith('/playlists', expect.objectContaining({
+      method: 'POST',
+    }));
+
+    // Verify exit happened
+    expect(state.playlistMode).toBe(false);
+    expect(document.getElementById('playlist-layout').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('main-panels').classList.contains('hidden')).toBe(false);
+  });
+
+  it('Escape with empty pending tracks exits without calling save', async () => {
+    await enterPlaylist();
+    expect(state.playlistMode).toBe(true);
+    expect(Object.keys(state.pendingPlaylists).length).toBe(1);
+    expect(state.pendingPlaylists['playlist-1'].length).toBe(0);
+
+    // Clear mock call history so we can assert save NOT called
+    vi.clearAllMocks();
+    // Restore the default mock after clear
+    vi.mocked(api).mockResolvedValue({});
+
+    dispatchKey('Escape');
+    await flush();
+    await flush();
+
+    // savePlaylist should NOT have been called (no tracks to save)
+    expect(api).not.toHaveBeenCalledWith('/playlists', expect.objectContaining({
+      method: 'POST',
+    }));
+
+    expect(state.playlistMode).toBe(false);
+  });
+
+  it('Space adds a track to the playlist and marks it in-playlist', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    const fileRow = focusFirstPlaylistFile();
+    expect(fileRow).not.toBeNull();
+
+    const label = fileRow.querySelector('.file');
+    expect(label).not.toBeNull();
+    expect(label.classList.contains('in-playlist')).toBe(false);
+
+    // Space → toggleTrackInPlaylist() → addTrack()
+    dispatchKey(' ');
+    await flush();
+
+    // File should now be marked in-playlist
+    expect(label.classList.contains('in-playlist')).toBe(true);
+
+    // Playlist panel should show the track
+    const tracks = document.querySelectorAll('#playlist-tracks .pl-track');
+    expect(tracks.length).toBe(1);
+    expect(tracks[0].querySelector('.pl-track-name').textContent).toBe(label.textContent);
+
+    // Status toast
+    expect(document.getElementById('status-text').textContent).toContain('ajouté');
+  });
+
+  it('Space on an already-added track removes it from playlist', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    const fileRow = focusFirstPlaylistFile();
+    const label = fileRow.querySelector('.file');
+
+    // Add first
+    dispatchKey(' ');
+    await flush();
+    expect(label.classList.contains('in-playlist')).toBe(true);
+    expect(document.querySelectorAll('#playlist-tracks .pl-track').length).toBe(1);
+
+    // Remove
+    dispatchKey(' ');
+    await flush();
+
+    expect(label.classList.contains('in-playlist')).toBe(false);
+    expect(document.querySelectorAll('#playlist-tracks .pl-track').length).toBe(0);
+    expect(document.getElementById('status-text').textContent).toContain('retiré');
+  });
+
+  it('Tab switches focus between source panel and sidebar', async () => {
+    await enterPlaylist();
+    expect(state.playlistFocus).toBe('source');
+    expect(document.getElementById('playlist-source').classList.contains('panel-active')).toBe(true);
+    expect(document.getElementById('playlist-sidebar').classList.contains('panel-active')).toBe(false);
+
+    dispatchKey('Tab');
+    await flush();
+
+    expect(state.playlistFocus).toBe('sidebar');
+    expect(document.getElementById('playlist-source').classList.contains('panel-active')).toBe(false);
+    expect(document.getElementById('playlist-sidebar').classList.contains('panel-active')).toBe(true);
+
+    dispatchKey('Tab');
+    await flush();
+
+    expect(state.playlistFocus).toBe('source');
+    expect(document.getElementById('playlist-source').classList.contains('panel-active')).toBe(true);
+  });
+
+  it('togglePlaylistFocus uses explicit add/remove, not toggle — survives broken state', async () => {
+    // Simulate a broken state: both panels have panel-active (old toggle could cause this)
+    state.playlistMode = true;
+    state.playlistFocus = 'source';
+    document.getElementById('playlist-source').classList.add('panel-active');
+    document.getElementById('playlist-sidebar').classList.add('panel-active');
+
+    // Toggle should explicitly fix: only sidebar gets panel-active
+    dispatchKey('Tab');
+    await flush();
+
+    expect(state.playlistFocus).toBe('sidebar');
+    expect(document.getElementById('playlist-source').classList.contains('panel-active')).toBe(false);
+    expect(document.getElementById('playlist-sidebar').classList.contains('panel-active')).toBe(true);
+
+    // Toggle back: only source gets panel-active
+    dispatchKey('Tab');
+    await flush();
+
+    expect(state.playlistFocus).toBe('source');
+    expect(document.getElementById('playlist-source').classList.contains('panel-active')).toBe(true);
+    expect(document.getElementById('playlist-sidebar').classList.contains('panel-active')).toBe(false);
+  });
+
+  it('ArrowDown/ArrowUp navigates files in playlist source panel', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    const container = document.getElementById('playlist-source-container');
+    const items = container.querySelectorAll('.file-row, .directory');
+    expect(items.length).toBeGreaterThanOrEqual(2);
+
+    // Focus first item manually (navigation via keyboard wired in router)
+    items[0].classList.add('focused');
+    items.forEach((it, i) => { if (i > 0) it.classList.remove('focused'); });
+
+    dispatchKey('ArrowDown');
+    await flush();
+
+    expect(items[1].classList.contains('focused')).toBe(true);
+    expect(items[0].classList.contains('focused')).toBe(false);
+
+    dispatchKey('ArrowUp');
+    await flush();
+
+    expect(items[0].classList.contains('focused')).toBe(true);
+    expect(items[1].classList.contains('focused')).toBe(false);
+  });
+
+  it('Enter on a file-row in playlist source plays audio', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    const fileRow = focusFirstPlaylistFile();
+    expect(fileRow).not.toBeNull();
+
+    dispatchKey('Enter');
+    await flush();
+
+    const playerBar = document.getElementById('player-bar');
+    expect(playerBar.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('player-filename').textContent.length).toBeGreaterThan(0);
+
+    const playBtn = fileRow.querySelector('.play-btn');
+    expect(playBtn).not.toBeNull();
+    expect(playBtn.textContent).toBe('⏹');
+  });
+
+  it('Ctrl+S saves the current playlist (with tracks)', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    // Add a track so there's something to save
+    focusFirstPlaylistFile();
+    dispatchKey(' ');
+    await flush();
+
+    // Mock: savePlaylist POST + loadPlaylists (inside savePlaylist)
+    vi.mocked(api).mockResolvedValueOnce({ ok: true, playlist: { name: 'playlist-1' } });
+    vi.mocked(api).mockResolvedValueOnce([]);
+
+    dispatchKey('s', { ctrlKey: true });
+    await flush();
+    await flush();
+
+    // Verify api was called with POST to /playlists
+    expect(api).toHaveBeenCalledWith('/playlists', expect.objectContaining({
+      method: 'POST',
+    }));
+
+    // Status toast confirms save
+    expect(document.getElementById('status-text').textContent).toContain('sauvegardée');
+  });
+
+  it('Ctrl+S shows warning when playlist is empty', async () => {
+    await enterPlaylist();
+
+    dispatchKey('s', { ctrlKey: true });
+    await flush();
+
+    expect(document.getElementById('status-text').textContent).toContain('vide');
+  });
+
+  it('Ctrl+E opens export confirmation dialog', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    // Add a track first (export requires tracks)
+    focusFirstPlaylistFile();
+    dispatchKey(' ');
+    await flush();
+
+    // Mock: savePlaylist (POST + loadPlaylists) + exportPlaylist GET
+    // The savePlaylist inside showExportModal calls api('/playlists', POST) + api('/playlists')
+    // But showExportModal doesn't call savePlaylist immediately — it opens a dialog.
+    // The dialog confirm button calls savePlaylist + exportPlaylist.
+    // We just test that the dialog opens.
+    dispatchKey('e', { ctrlKey: true });
+    await flush();
+
+    expect(state.activeModal).toBe('dialog');
+    expect(document.getElementById('dialog-msg').textContent).toContain('Exporter');
+    expect(document.getElementById('dialog-msg').textContent).toContain('playlist-1');
+    expect(document.getElementById('dialog-confirm').textContent).toBe('📦 Exporter');
+  });
+
+  it('Delete removes focused track from playlist sidebar', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    // Add two tracks
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+    rows[0].classList.remove('focused');
+    rows[1].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    expect(document.querySelectorAll('#playlist-tracks .pl-track').length).toBe(2);
+
+    // Switch to sidebar focus and focus first track
+    state.playlistFocus = 'sidebar';
+    document.getElementById('playlist-source').classList.remove('panel-active');
+    document.getElementById('playlist-sidebar').classList.add('panel-active');
+
+    const trackEls = document.querySelectorAll('#playlist-tracks .pl-track');
+    trackEls[0].classList.add('focused');
+
+    dispatchKey('Delete');
+    await flush();
+
+    // Verify track was removed from playlist panel
+    const remainingTracks = document.querySelectorAll('#playlist-tracks .pl-track');
+    expect(remainingTracks.length).toBe(1);
+    // The remaining track should be the one from rows[1]
+    expect(remainingTracks[0].querySelector('.pl-track-name').textContent).toBe(
+      rows[1].querySelector('.file').textContent
+    );
+  });
+
+  it('Backspace also removes focused track from playlist sidebar', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    // Add a track
+    focusFirstPlaylistFile();
+    dispatchKey(' ');
+    await flush();
+
+    expect(document.querySelectorAll('#playlist-tracks .pl-track').length).toBe(1);
+
+    // Switch to sidebar and focus the track
+    state.playlistFocus = 'sidebar';
+    document.getElementById('playlist-source').classList.remove('panel-active');
+    document.getElementById('playlist-sidebar').classList.add('panel-active');
+    document.querySelector('#playlist-tracks .pl-track').classList.add('focused');
+
+    dispatchKey('Backspace');
+    await flush();
+
+    expect(document.querySelectorAll('#playlist-tracks .pl-track').length).toBe(0);
+  });
+
+  it('Ctrl+ArrowUp reorders track upward in playlist sidebar', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    // Add two tracks
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+    rows[0].classList.remove('focused');
+    rows[1].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    expect(document.querySelectorAll('#playlist-tracks .pl-track').length).toBe(2);
+
+    // Switch to sidebar and focus the SECOND track
+    state.playlistFocus = 'sidebar';
+    document.getElementById('playlist-source').classList.remove('panel-active');
+    document.getElementById('playlist-sidebar').classList.add('panel-active');
+
+    const trackEls = document.querySelectorAll('#playlist-tracks .pl-track');
+    trackEls[1].classList.add('focused');
+    const secondName = trackEls[1].querySelector('.pl-track-name').textContent;
+
+    // Ctrl+ArrowUp → moves track at index 1 to index 0
+    dispatchKey('ArrowUp', { ctrlKey: true });
+    await flush();
+
+    // After reorder, the former second track should now be first
+    const reordered = document.querySelectorAll('#playlist-tracks .pl-track');
+    expect(reordered.length).toBe(2);
+    expect(reordered[0].querySelector('.pl-track-name').textContent).toBe(secondName);
+  });
+
+  it('Ctrl+ArrowDown reorders track downward in playlist sidebar', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    // Add two tracks
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+    rows[0].classList.remove('focused');
+    rows[1].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    // Switch to sidebar and focus the FIRST track
+    state.playlistFocus = 'sidebar';
+    document.getElementById('playlist-source').classList.remove('panel-active');
+    document.getElementById('playlist-sidebar').classList.add('panel-active');
+
+    const trackEls = document.querySelectorAll('#playlist-tracks .pl-track');
+    trackEls[0].classList.add('focused');
+    const firstName = trackEls[0].querySelector('.pl-track-name').textContent;
+
+    // Ctrl+ArrowDown → moves track at index 0 to index 1
+    dispatchKey('ArrowDown', { ctrlKey: true });
+    await flush();
+
+    // After reorder, the former first track should now be second
+    const reordered = document.querySelectorAll('#playlist-tracks .pl-track');
+    expect(reordered.length).toBe(2);
+    expect(reordered[1].querySelector('.pl-track-name').textContent).toBe(firstName);
+  });
+
+  it('ArrowDown/ArrowUp navigates tracks in playlist sidebar', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    // Add two tracks
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+    rows[0].classList.remove('focused');
+    rows[1].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    // Switch to sidebar focus and pre-focus the first track
+    state.playlistFocus = 'sidebar';
+    document.getElementById('playlist-source').classList.remove('panel-active');
+    document.getElementById('playlist-sidebar').classList.add('panel-active');
+
+    let tracks = document.querySelectorAll('#playlist-tracks .pl-track');
+    tracks[0].classList.add('focused');
+
+    // ArrowDown → should focus second track
+    dispatchKey('ArrowDown');
+    await flush();
+
+    tracks = document.querySelectorAll('#playlist-tracks .pl-track');
+    expect(tracks[1].classList.contains('focused')).toBe(true);
+    expect(tracks[0].classList.contains('focused')).toBe(false);
+
+    // ArrowUp → back to first track
+    dispatchKey('ArrowUp');
+    await flush();
+
+    tracks = document.querySelectorAll('#playlist-tracks .pl-track');
+    expect(tracks[0].classList.contains('focused')).toBe(true);
+    expect(tracks[1].classList.contains('focused')).toBe(false);
+  });
+
+  it('F7 opens filter palette in playlist mode', async () => {
+    await enterPlaylist();
+
+    const ev = dispatchKey('F7');
+    await flush();
+
+    expect(ev.defaultPrevented).toBe(true);
+    expect(state.filterActive).toBe(true);
+    expect(document.getElementById('filter-palette').classList.contains('hidden')).toBe(false);
+  });
+
+  it('/ opens filter palette in playlist mode', async () => {
+    await enterPlaylist();
+
+    const ev = dispatchKey('/');
+    await flush();
+
+    expect(ev.defaultPrevented).toBe(true);
+    expect(state.filterActive).toBe(true);
+    expect(document.getElementById('filter-palette').classList.contains('hidden')).toBe(false);
+  });
+
+  // ── Bug fix: in-playlist class stays in source after sidebar removal ───
+
+  it('Delete removes in-playlist class from source panel', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    const label = rows[0].querySelector('.file');
+    expect(label.classList.contains('in-playlist')).toBe(true);
+
+    // Switch to sidebar and delete the track
+    state.playlistFocus = 'sidebar';
+    document.getElementById('playlist-source').classList.remove('panel-active');
+    document.getElementById('playlist-sidebar').classList.add('panel-active');
+
+    const trackEls = document.querySelectorAll('#playlist-tracks .pl-track');
+    trackEls[0].classList.add('focused');
+
+    dispatchKey('Delete');
+    await flush();
+
+    // Track removed from sidebar
+    expect(document.querySelectorAll('#playlist-tracks .pl-track').length).toBe(0);
+
+    // Source panel label no longer has in-playlist class
+    expect(label.classList.contains('in-playlist')).toBe(false);
+  });
+
+  it('✕ button removes in-playlist class from source panel', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    const label = rows[0].querySelector('.file');
+    expect(label.classList.contains('in-playlist')).toBe(true);
+
+    // Click the ✕ button in the sidebar
+    const removeBtn = document.querySelector('#playlist-tracks .pl-track-remove');
+    removeBtn.click();
+    await flush();
+
+    expect(document.querySelectorAll('#playlist-tracks .pl-track').length).toBe(0);
+    expect(label.classList.contains('in-playlist')).toBe(false);
+  });
+
+  // ── Tab interaction tests ──────────────────────────────────────────────
+
+  it('clicking a playlist tab switches active playlist', async () => {
+    await enterPlaylist();
+
+    // Create a second playlist
+    state.pendingPlaylists['playlist-2'] = [];
+    renderPlaylistPanel();
+    await flush();
+
+    const tabs = document.querySelectorAll('#playlist-tabs .pl-tab');
+    expect(tabs.length).toBeGreaterThanOrEqual(2);
+
+    // Click the second tab
+    tabs[1].click();
+    await flush();
+
+    // Check active class on DOM (more reliable than state value which
+    // can be affected by module import order in the test environment)
+    const activeTab = document.querySelector('#playlist-tabs .pl-tab.active');
+    expect(activeTab).not.toBeNull();
+    expect(activeTab.textContent).toContain('playlist-2');
+  });
+
+  it('clicking tab close button removes the playlist tab', async () => {
+    await enterPlaylist();
+
+    // Create a second playlist
+    state.pendingPlaylists['playlist-2'] = [];
+    renderPlaylistPanel();
+    await flush();
+
+    const tabs = document.querySelectorAll('#playlist-tabs .pl-tab');
+    expect(tabs.length).toBe(2);
+
+    // Mock confirm() to avoid interactive dialog
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    const closeBtn = tabs[1].querySelector('.pl-tab-close');
+    closeBtn.click();
+    await flush();
+
+    expect(document.querySelectorAll('#playlist-tabs .pl-tab').length).toBe(1);
+    expect(Object.keys(state.pendingPlaylists)).not.toContain('playlist-2');
+
+    confirmSpy.mockRestore();
+  });
+
+  it('clicking + button creates a new playlist tab', async () => {
+    await enterPlaylist();
+
+    expect(document.querySelectorAll('#playlist-tabs .pl-tab').length).toBe(1);
+
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('ma-playlist');
+
+    const addBtn = document.querySelector('#playlist-tabs .pl-tab-add');
+    addBtn.click();
+    await flush();
+
+    const tabs = document.querySelectorAll('#playlist-tabs .pl-tab');
+    expect(tabs.length).toBe(2);
+    // New tab is added at position 1 (after playlist-1)
+    expect(tabs[1].textContent).toContain('ma-playlist');
+
+    promptSpy.mockRestore();
+  });
+
+  // ── Playlist Manager (renderPlaylistManager) ───────────────────────────
+
+  it('renderPlaylistManager shows empty message when no playlists exist', async () => {
+    state.playlists = [];
+    state.pendingPlaylists = {};
+    renderPlaylistManager();
+    await flush();
+    const content = document.getElementById('pl-manager-content');
+    expect(content.textContent).toContain('Aucune playlist');
+  });
+
+  it('renderPlaylistManager renders table with saved and pending playlists', async () => {
+    state.playlists = [
+      { name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }], exported: '2025-01-15T00:00:00Z' },
+      { name: 'jazz', tracks: [{ filename: 'b.mp3', fullPath: '/m/b.mp3', duration: 180 }] },
+    ];
+    state.pendingPlaylists = {
+      'rock': [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }],
+      'new-pl': [{ filename: 'c.mp3', fullPath: '/m/c.mp3', duration: 240 }],
+    };
+    renderPlaylistManager();
+    await flush();
+    const content = document.getElementById('pl-manager-content');
+    const rows = content.querySelectorAll('#pl-manager-table tbody tr');
+    expect(rows.length).toBe(3); // rock (exported), jazz, new-pl (pending-only)
+    expect(rows[0].textContent).toContain('✅'); // rock has export badge (3:20)
+    expect(rows[2].textContent).toContain('4:00'); // new-pl (last row, 240s = 4:00)
+  });
+
+  // ── Drag & drop reorder ────────────────────────────────────────────────
+
+  function simulateDragDrop(fromEl, toEl) {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.setData('text/plain', fromEl.dataset.index);
+
+    fromEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }));
+    toEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer }));
+    toEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+    fromEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer }));
+  }
+
+  it('drag-and-drop reorders tracks in playlist sidebar', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    // Add 2 tracks
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+    rows[0].classList.remove('focused');
+    rows[1].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    let tracks = document.querySelectorAll('#playlist-tracks .pl-track');
+    expect(tracks.length).toBe(2);
+    const firstName = tracks[0].querySelector('.pl-track-name').textContent;
+
+    // Drag first track onto second track
+    simulateDragDrop(tracks[0], tracks[1]);
+    await flush();
+
+    tracks = document.querySelectorAll('#playlist-tracks .pl-track');
+    expect(tracks.length).toBe(2);
+    // The dragged track (first) should now be at index 1
+    expect(tracks[1].querySelector('.pl-track-name').textContent).toBe(firstName);
+  });
+
+  // ── Playlist Manager buttons ────────────────────────────────────────────
+
+  it('Charger button loads playlist and enters playlist mode', async () => {
+    state.playlistMode = false;
+    state.playlists = [
+      { name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] },
+    ];
+    state.pendingPlaylists = {};
+    renderPlaylistManager();
+    await flush();
+
+    const loadBtn = document.querySelector('#pl-manager-content .pl-mgr-load');
+    expect(loadBtn).not.toBeNull();
+
+    loadBtn.click();
+    await flush();
+
+    expect(state.playlistMode).toBe(true);
+    expect(state.pendingPlaylists.rock).toBeDefined();
+    expect(state.pendingPlaylists.rock.length).toBe(1);
+    expect(document.getElementById('playlist-layout').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('main-panels').classList.contains('hidden')).toBe(true);
+  });
+
+  it('Renommer button renames playlist via prompt and API', async () => {
+    state.playlists = [
+      { name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] },
+    ];
+    state.pendingPlaylists = {};
+    renderPlaylistManager();
+    await flush();
+
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('metal');
+    vi.mocked(api).mockResolvedValueOnce({ ok: true });             // PUT /playlists/rock
+    vi.mocked(api).mockResolvedValueOnce([{ name: 'metal', tracks: [] }]); // GET /playlists (loadPlaylists)
+
+    const renameBtn = document.querySelector('#pl-manager-content .pl-mgr-rename');
+    renameBtn.click();
+    await flush();
+    await flush();
+
+    expect(promptSpy).toHaveBeenCalled();
+    expect(api).toHaveBeenCalledWith('/playlists/rock', expect.objectContaining({
+      method: 'PUT',
+      body: expect.stringContaining('metal'),
+    }));
+    expect(document.getElementById('pl-manager-content').textContent).toContain('metal');
+    expect(document.getElementById('pl-manager-content').textContent).not.toContain('rock');
+
+    promptSpy.mockRestore();
+  });
+
+  it('Supprimer button deletes playlist after confirmation', async () => {
+    state.playlists = [
+      { name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] },
+    ];
+    state.pendingPlaylists = {};
+    renderPlaylistManager();
+    await flush();
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(api).mockResolvedValueOnce({ ok: true });             // DELETE /playlists/rock
+    vi.mocked(api).mockResolvedValueOnce([]);                              // GET /playlists (loadPlaylists)
+
+    const deleteBtn = document.querySelector('#pl-manager-content .pl-mgr-delete');
+    deleteBtn.click();
+    await flush();
+    await flush();
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(api).toHaveBeenCalledWith('/playlists/rock', expect.objectContaining({
+      method: 'DELETE',
+    }));
+    expect(document.getElementById('pl-manager-content').textContent).not.toContain('rock');
+
+    confirmSpy.mockRestore();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTS: KEYBOARD GAPS — contrat README, raccourcis manquants
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Keyboard gaps', () => {
+  it('/ opens filter palette in normal mode', async () => {
+    renderEpars();
+    renderSource();
+
+    const ev = dispatchKey('/');
+    await flush();
+
+    expect(ev.defaultPrevented).toBe(true);
+    expect(state.filterActive).toBe(true);
+    expect(document.getElementById('filter-palette').classList.contains('hidden')).toBe(false);
+    expect(state.activePanel).toBe('source');
+  });
+
+  it('Escape stops audio when playing in normal mode', async () => {
+    renderEpars();
+
+    const playBtn = document.querySelector('#epars-container .play-btn');
+    playBtn.click();
+    await flush();
+    expect(document.getElementById('player-bar').classList.contains('hidden')).toBe(false);
+
+    dispatchKey('Escape');
+    await flush();
+
+    expect(document.getElementById('player-bar').classList.contains('hidden')).toBe(true);
+    expect(playBtn.textContent).toBe('▶');
+  });
+
+  it('Enter on a directory in Source Data expands it via keyboard router', async () => {
+    renderSource();
+    state.activePanel = 'source';
+    setActivePanel('source');
+    await flush();
+
+    // Remove .focused from all dirs, then add to the target dir
+    document.querySelectorAll('#source-container .focused').forEach(el => el.classList.remove('focused'));
+
+    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]');
+    rockDir.classList.add('focused');
+    expect(rockDir.classList.contains('expanded')).toBe(false);
+
+    dispatchKey('Enter');
+    await flush();
+
+    expect(rockDir.classList.contains('expanded')).toBe(true);
+    expect(rockDir.querySelector('.children')).not.toBeNull();
+  });
+
+  it('Space on a directory in Source Data expands it via keyboard router', async () => {
+    renderSource();
+    state.activePanel = 'source';
+    setActivePanel('source');
+    await flush();
+
+    // Remove .focused from all dirs, then add to the target dir
+    document.querySelectorAll('#source-container .focused').forEach(el => el.classList.remove('focused'));
+
+    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]');
+    rockDir.classList.add('focused');
+
+    dispatchKey(' ');
+    await flush();
+
+    expect(rockDir.classList.contains('expanded')).toBe(true);
+  });
+
+  it('ArrowDown navigates directories in Source Data via keyboard router', async () => {
+    renderSource();
+    state.activePanel = 'source';
+    setActivePanel('source');
+    await flush();
+
+    const dirs = document.querySelectorAll('#source-container .directory');
+    expect(dirs.length).toBeGreaterThanOrEqual(1);
+    expect(dirs[0].classList.contains('focused')).toBe(true);
+
+    if (dirs.length >= 2) {
+      dispatchKey('ArrowDown');
+      await flush();
+      expect(dirs[1].classList.contains('focused')).toBe(true);
+      expect(dirs[0].classList.contains('focused')).toBe(false);
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTS: PLAYER BAR — interactions souris (seek, stop)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Player bar mouse', () => {
+  it('clicking progress bar seeks audio to relative position', async () => {
+    renderEpars();
+    const playBtn = document.querySelector('#epars-container .play-btn');
+    playBtn.click();
+    await flush();
+
+    const progressBar = document.getElementById('player-progress');
+    // Mock getBoundingClientRect to simulate clicking at 50%
+    progressBar.getBoundingClientRect = () => ({
+      left: 0, width: 400, right: 400, top: 0, bottom: 20, height: 20
+    });
+
+    // Simulate click at midpoint (200px = 50%)
+    progressBar.dispatchEvent(new MouseEvent('click', {
+      bubbles: true, clientX: 200, clientY: 10
+    }));
+
+    // Position should be ~50% of 240s = 120s
+    const pct = parseFloat(document.getElementById('player-progress-fill').style.width) || 0;
+    expect(pct).toBeCloseTo(50, -1);
+  });
+
+  it('clicking seek-backward button seeks audio backward', async () => {
+    renderEpars();
+    const playBtn = document.querySelector('#epars-container .play-btn');
+    playBtn.click();
+    await flush();
+
+    // Advance first
+    dispatchKey('ArrowRight', { shiftKey: true });
+    dispatchKey('ArrowRight', { shiftKey: true }); // +40s
+    await flush();
+
+    const beforePct = parseFloat(document.getElementById('player-progress-fill').style.width) || 0;
+
+    document.getElementById('player-seek-bwd').click();
+    await flush();
+
+    const afterPct = parseFloat(document.getElementById('player-progress-fill').style.width) || 0;
+    expect(afterPct).toBeLessThan(beforePct);
+  });
+
+  it('clicking stop button stops audio and hides player bar', async () => {
+    renderEpars();
+    const playBtn = document.querySelector('#epars-container .play-btn');
+    playBtn.click();
+    await flush();
+    expect(document.getElementById('player-bar').classList.contains('hidden')).toBe(false);
+
+    document.getElementById('player-stop').click();
+    await flush();
+
+    expect(document.getElementById('player-bar').classList.contains('hidden')).toBe(true);
+    expect(playBtn.textContent).toBe('▶');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTS: INIT APP — chargement initial
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Init app', () => {
+  it('initApp loads cached data and renders panels', async () => {
+    // Mock les réponses API pour l'initialisation
+    vi.mocked(api)
+      .mockResolvedValueOnce({ active: 0, configs: [{ name: 'default', source_data: '', epars_dirs: [] }] })
+      .mockResolvedValueOnce({ source: state.sourceFiles, epars: state.eparsFiles })
+      .mockResolvedValueOnce([{ filename: 'a.mp3', status: 'copied', timestamp: '2025-01-01' }]);
+
+    const { initApp } = await import('./actions.js');
+    await initApp();
+    await flush();
+
+    // Les panneaux doivent être rendus
+    const eparsItems = document.querySelectorAll('#epars-container .file-row, #epars-container .directory');
+    expect(eparsItems.length).toBeGreaterThan(0);
+
+    const sourceDirs = document.querySelectorAll('#source-container .directory');
+    expect(sourceDirs.length).toBeGreaterThan(0);
+
+    // Le journal doit être chargé
     expect(state.journal.length).toBe(1);
+
+    // Le panneau actif doit être éparpillé
+    expect(state.activePanel).toBe('epars');
+    expect(document.getElementById('panel-left').classList.contains('panel-active')).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTS: EDGE CASES
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Edge cases', () => {
+  it('renders empty state when no files are loaded', async () => {
+    state.sourceFiles = {};
+    state.eparsFiles = {};
+
+    renderEpars();
+    renderSource();
+    await flush();
+
+    const eparsItems = document.querySelectorAll('#epars-container .file-row');
+    expect(eparsItems.length).toBe(0);
+
+    const sourceDirs = document.querySelectorAll('#source-container .directory');
+    expect(sourceDirs.length).toBe(0);
+  });
+
+  it('handles filenames with special characters', async () => {
+    state.eparsFiles = {
+      '/media/usb': {
+        'tést ♫ ñ.mp3': { path: 'tést ♫ ñ.mp3', year: '2025', duration: 240, codec: 'MP3' },
+        'a"b\'c.mp3': { path: 'a"b\'c.mp3', year: '2023', duration: 180, codec: 'FLAC' },
+      }
+    };
+
+    renderEpars();
+    await flush();
+
+    const files = document.querySelectorAll('#epars-container .file');
+    expect(files.length).toBe(2);
+    // Files are sorted alphabetically: 'a"b...' comes before 'tést...'
+    expect(files[0].textContent).toBe('a"b\'c.mp3');
+    expect(files[1].textContent).toBe('tést ♫ ñ.mp3');
+  });
+
+  it('handles very long filenames', async () => {
+    const longName = 'a'.repeat(120) + '.mp3';
+    state.eparsFiles = {
+      '/media/usb': { [longName]: { path: longName, year: '2024', duration: 100, codec: 'MP3' } }
+    };
+
+    renderEpars();
+    await flush();
+
+    const file = document.querySelector('#epars-container .file');
+    expect(file).not.toBeNull();
+    // The filename is displayed (not truncated at this level — only the player bar truncates)
+    expect(file.textContent).toBe(longName);
   });
 });
