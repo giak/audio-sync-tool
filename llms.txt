@@ -1,0 +1,20 @@
+# Audio Sync Tool — LLM Index
+# 
+# Fichier lu par les agents IA (Claude Code, Cursor, etc.) avant toute opération.
+# Liste les documents à lire pour comprendre le projet.
+
+# Spécification produit (besoin, contraintes, raccourcis clavier)
+README.md
+
+# Guide de test UX — lecture OBLIGATOIRE avant d'écrire/modifier un test
+docs/TESTING-GUIDE.md
+
+# Design documents (ordre chronologique)
+docs/superpowers/specs/2026-06-22-audio-sync-tool-design.md
+docs/superpowers/specs/2026-06-22-scada-design.md
+docs/superpowers/specs/2026-06-22-source-nav-and-filter-design.md
+
+# Plan de consolidation — specs d'implémentation (Phases 1, 2, 3)
+docs/superpowers/specs/2026-06-23-phase1-resilience.md
+docs/superpowers/specs/2026-06-23-phase2-playlist-integrity.md
+docs/superpowers/specs/2026-06-23-phase3-contract-100.md
