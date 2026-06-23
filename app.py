@@ -16,6 +16,8 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
 CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
 JOURNAL_PATH = os.path.join(DATA_DIR, 'journal.json')
+CACHE_PATH = os.path.join(DATA_DIR, 'cache.json')
+PLAYLISTS_PATH = os.path.join(DATA_DIR, 'playlists.json')
 
 
 def load_json(path, default=None):
@@ -34,28 +36,45 @@ def save_json(path, data):
 MUSIC_EXTENSIONS = ('.mp3', '.flac', '.wav', '.ogg', '.m4a', '.wma')
 
 
-def get_year(path):
+def get_audio_meta(path):
+    """Return (year, duration_seconds, codec_str)."""
+    year = None
+    duration = None
+    codec = os.path.splitext(path)[1].lower()[1:].upper()
     if not HAS_MUTAGEN:
-        return None
+        return year, duration, codec
     try:
         audio = MutagenFile(path, easy=False)
         if audio is None:
-            return None
-        # MP3 — ID3 frames via audio.tags
+            return year, duration, codec
+        if hasattr(audio.info, 'length') and audio.info.length is not None:
+            duration = round(audio.info.length)
+        if hasattr(audio.info, 'bitrate') and audio.info.bitrate:
+            codec = f'{codec} {audio.info.bitrate // 1000}kbps'
+        # ID3 tags (MP3)
         if hasattr(audio, 'tags') and audio.tags:
             for tag in ('TDRC', 'TYER', 'TORY'):
                 val = audio.tags.get(tag)
                 if val:
-                    return str(val)[:4]
-        # FLAC / Vorbis — direct tag access
-        if hasattr(audio, 'get'):
+                    year = str(val)[:4]
+                    break
+        # FLAC / Vorbis
+        if year is None and hasattr(audio, 'get'):
             for tag in ('DATE', 'YEAR'):
                 val = audio.get(tag)
                 if val and val[0]:
-                    return str(val[0])[:4]
+                    year = str(val[0])[:4]
+                    break
     except Exception:
         pass
-    return None
+    return year, duration, codec
+
+
+def log_journal(entry):
+    """Append an entry to the journal."""
+    journal = load_json(JOURNAL_PATH, [])
+    journal.append(entry)
+    save_json(JOURNAL_PATH, journal)
 
 
 @app.route('/config', methods=['GET', 'POST'])
@@ -64,7 +83,27 @@ def config():
     if request.method == 'POST':
         if request.json is None:
             return jsonify({'ok': False, 'error': 'Request body must be JSON'}), 400
+
+        # Only invalidate cache if the active config's paths actually changed
+        old_active = get_active_config() if os.path.exists(CACHE_PATH) else None
         save_json(CONFIG_PATH, request.json)
+        new_active = get_active_config()
+        if old_active and (
+            old_active.get('source_data') != new_active.get('source_data') or
+            set(old_active.get('epars_dirs', [])) != set(new_active.get('epars_dirs', []))
+        ):
+            if os.path.exists(CACHE_PATH):
+                os.remove(CACHE_PATH)
+
+        active_cfg = request.json.get('configs', [{}])
+        idx = request.json.get('active', 0)
+        name = active_cfg[idx].get('name', '?') if idx < len(active_cfg) else '?'
+        log_journal({
+            'timestamp': datetime.now().isoformat(),
+            'action': 'Config sauvegardée',
+            'details': f'Profil : {name}',
+            'status': 'config'
+        })
         return jsonify({'ok': True})
     return jsonify(cfg)
 
@@ -83,8 +122,8 @@ def index_files(directory):
             if f.lower().endswith(MUSIC_EXTENSIONS):
                 rel = os.path.relpath(root, directory)
                 rel_path = os.path.join(rel, f) if rel != '.' else f
-                year = get_year(os.path.join(root, f))
-                index[f] = {'path': rel_path, 'year': year}
+                year, duration, codec = get_audio_meta(os.path.join(root, f))
+                index[f] = {'path': rel_path, 'year': year, 'duration': duration, 'codec': codec}
     return index
 
 
@@ -111,42 +150,80 @@ def scan():
         result['source'][source_dir] = index_files(source_dir)
     for d in epars_dirs:
         result['epars'][d] = index_files(d)
+    save_json(CACHE_PATH, result)
+
+    src_count = sum(len(v) for v in result['source'].values())
+    epars_count = sum(len(v) for v in result['epars'].values())
+    dirs_count = len(result['epars'])
+    log_journal({
+        'timestamp': datetime.now().isoformat(),
+        'action': 'Scan terminé',
+        'details': f'{src_count} fichiers source, {epars_count} fichiers épars ({dirs_count} dossier{"s" if dirs_count > 1 else ""})',
+        'status': 'scan'
+    })
+
     return jsonify(result)
+
+
+@app.route('/load')
+def load_cached():
+    return jsonify(load_json(CACHE_PATH, {'source': {}, 'epars': {}}))
 
 
 @app.route('/copy', methods=['POST'])
 def copy_file():
+    def _resp(ok, **kw):
+        """Build consistent response with metadata when available."""
+        src = kw.pop('_src', None)
+        if src and os.path.exists(src):
+            year, duration, codec = get_audio_meta(src)
+        else:
+            year = duration = codec = None
+        return jsonify({'ok': ok, 'year': year, 'duration': duration, 'codec': codec, **kw})
+
     data = request.json
     if data is None:
-        return jsonify({'ok': False, 'error': 'Request body must be JSON'}), 400
+        return _resp(False, error='Request body must be JSON'), 400
     for key in ('source_path', 'dest_dir', 'filename'):
         if key not in data:
-            return jsonify({'ok': False, 'error': f'Missing required key: {key}'}), 400
+            return _resp(False, error=f'Missing required key: {key}'), 400
     src = data['source_path']
     dst_dir = data['dest_dir']
     filename = os.path.basename(data['filename'])
 
     if not os.path.exists(src):
-        return jsonify({'ok': False, 'error': 'Source file not found'}), 404
+        return _resp(False, _src=src, error='Source file not found'), 404
 
     dst = os.path.join(dst_dir, filename)
     os.makedirs(dst_dir, exist_ok=True)
     try:
         shutil.copy2(src, dst)
     except (OSError, shutil.SameFileError) as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        return _resp(False, _src=src, error=str(e)), 500
 
-    journal = load_json(JOURNAL_PATH, [])
-    journal.append({
+    log_journal({
         'timestamp': datetime.now().isoformat(),
         'source': src,
         'destination': dst,
         'filename': filename,
         'status': 'copied'
     })
-    save_json(JOURNAL_PATH, journal)
 
-    return jsonify({'ok': True})
+    # Update cache so /load reflects the new file on refresh
+    cache = load_json(CACHE_PATH)
+    if cache:
+        year, duration, codec = get_audio_meta(dst)
+        for source_dir in list(cache.get('source', {}).keys()):
+            if dst_dir == source_dir or dst_dir.startswith(source_dir.rstrip('/') + '/'):
+                rel = os.path.relpath(dst_dir, source_dir) if dst_dir != source_dir else '.'
+                rel_path = os.path.join(rel, filename) if rel != '.' else filename
+                cache['source'][source_dir][filename] = {
+                    'path': rel_path, 'year': year, 'duration': duration, 'codec': codec
+                }
+                save_json(CACHE_PATH, cache)
+                break
+
+    return _resp(True, _src=dst)
 
 
 @app.route('/journal')
@@ -172,6 +249,153 @@ def serve_audio():
     ext = os.path.splitext(path)[1].lower()
     mimetype = AUDIO_EXT_MAP.get(ext, 'application/octet-stream')
     return send_file(path, mimetype=mimetype)
+
+
+# ── Playlist routes ────────────────────────────────────────────────────────
+
+
+@app.route('/playlists', methods=['GET', 'POST'])
+def playlists():
+    if request.method == 'POST':
+        data = request.json
+        if not data or 'name' not in data:
+            return jsonify({'ok': False, 'error': 'Missing required key: name'}), 400
+
+        playlists_data = load_json(PLAYLISTS_PATH, [])
+        name = data['name']
+        tracks = data.get('tracks', [])
+        now = datetime.now().isoformat()
+
+        total_duration = sum(t.get('duration', 0) for t in tracks)
+
+        playlist_obj = {
+            'name': name,
+            'created': now,
+            'updated': now,
+            'exported': None,
+            'exportedDir': None,
+            'tracks': tracks,
+            'trackCount': len(tracks),
+            'totalDuration': total_duration,
+        }
+
+        existing = next((p for p in playlists_data if p['name'] == name), None)
+        if existing:
+            existing.update(playlist_obj)
+            existing['created'] = existing.get('created', now)
+        else:
+            playlists_data.append(playlist_obj)
+
+        save_json(PLAYLISTS_PATH, playlists_data)
+        return jsonify({'ok': True, 'playlist': playlist_obj})
+
+    return jsonify(load_json(PLAYLISTS_PATH, []))
+
+
+@app.route('/playlists/export', methods=['POST'])
+def export_playlist():
+    data = request.json
+    if not data or 'name' not in data:
+        return jsonify({'ok': False, 'error': 'Missing required key: name'}), 400
+
+    name = data['name']
+    playlists_data = load_json(PLAYLISTS_PATH, [])
+    pl = next((p for p in playlists_data if p['name'] == name), None)
+    if not pl:
+        return jsonify({'ok': False, 'error': 'Playlist introuvable'}), 404
+
+    # Determine output directory under source data
+    cfg = get_active_config()
+    source_base = cfg.get('source_data', '')
+    if not source_base:
+        return jsonify({'ok': False, 'error': 'Aucun dossier source configuré'}), 400
+
+    # Check all source files still exist
+    missing = []
+    for track in pl['tracks']:
+        if not os.path.exists(track['fullPath']):
+            missing.append(track['filename'])
+
+    if missing:
+        return jsonify({'ok': False, 'missing': missing}), 409
+
+    pl_dir = os.path.join(source_base, '_playlists', name)
+    os.makedirs(pl_dir, exist_ok=True)
+
+    # Create hard links (fall back to copy2 on cross-device)
+    fallback = False
+    for track in pl['tracks']:
+        src = track['fullPath']
+        dst = os.path.join(pl_dir, track['filename'])
+        if os.path.exists(dst):
+            os.remove(dst)  # overwrite existing
+        try:
+            os.link(src, dst)
+        except OSError as e:
+            if hasattr(e, 'errno') and e.errno == 18:  # EXDEV
+                shutil.copy2(src, dst)
+                fallback = True
+            else:
+                return jsonify({'ok': False, 'error': str(e)}), 500
+
+    # Update manifest
+    pl['exported'] = datetime.now().isoformat()
+    pl['exportedDir'] = pl_dir
+    save_json(PLAYLISTS_PATH, playlists_data)
+
+    result = {
+        'ok': True,
+        'dir': pl_dir,
+        'count': len(pl['tracks']),
+        'totalDuration': sum(t.get('duration', 0) for t in pl['tracks']),
+    }
+    if fallback:
+        result['fallback'] = 'copy'
+        result['warning'] = 'Certains fichiers ont été copiés (hard link impossible entre disques différents)'
+
+    return jsonify(result)
+
+
+@app.route('/playlists/<name>', methods=['PUT', 'DELETE'])
+def update_or_delete_playlist(name):
+    if request.method == 'PUT':
+        data = request.json
+        if not data or 'name' not in data:
+            return jsonify({'ok': False, 'error': 'Missing required key: name'}), 400
+
+        playlists_data = load_json(PLAYLISTS_PATH, [])
+        pl = next((p for p in playlists_data if p['name'] == name), None)
+        if not pl:
+            return jsonify({'ok': False, 'error': 'Playlist introuvable'}), 404
+
+        new_name = data['name']
+        now = datetime.now().isoformat()
+
+        new_pl = dict(pl)
+        new_pl['name'] = new_name
+        new_pl['updated'] = now
+
+        playlists_data = [p for p in playlists_data if p['name'] != name]
+        # Check if new name already exists
+        existing = next((p for p in playlists_data if p['name'] == new_name), None)
+        if existing:
+            existing.update(new_pl)
+            existing['created'] = existing.get('created', now)
+        else:
+            playlists_data.append(new_pl)
+
+        save_json(PLAYLISTS_PATH, playlists_data)
+        return jsonify({'ok': True, 'playlist': new_pl})
+
+    # DELETE
+    playlists_data = load_json(PLAYLISTS_PATH, [])
+    pl = next((p for p in playlists_data if p['name'] == name), None)
+    if not pl:
+        return jsonify({'ok': False, 'error': 'Playlist introuvable'}), 404
+
+    playlists_data = [p for p in playlists_data if p['name'] != name]
+    save_json(PLAYLISTS_PATH, playlists_data)
+    return jsonify({'ok': True})
 
 
 if __name__ == '__main__':
