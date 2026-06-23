@@ -2,17 +2,29 @@
 import { state } from './state.js';
 import { stopPlayer, seekAudio, isAudioPlaying, initAudioUI } from './audio.js';
 import { setActivePanel, navigateFocus, navigateColumn, getFocusedItem, getItems, revalidateFocus } from './focus.js';
-import { openModal, closeAllModals, openFilterPalette, closeFilterPalette, initFilterPalette } from './ui.js';
-import { renderAll, renderSource, renderJournal, renderPlaylistPanel, renderPlaylistSource, renderPlaylistManager } from './render.js';
+import { openModal, closeAllModals, openFilterPalette, closeFilterPalette, initFilterPalette, showError } from './ui.js';
+import { renderAll, renderSource, renderJournal, renderPlaylistPanel, renderPlaylistSource, renderPlaylistManager, patchPlaylistSourceFile } from './render.js';
 import { initConfigUI, runScan, executeCopy, initApp } from './actions.js';
 import { loadPlaylists, createNewPlaylist, savePlaylist, exportPlaylist, addTrack, removeTrack, reorderTrack, getPendingTracks, getActivePlaylistName, removePendingPlaylist, setPendingTracks, deletePlaylist, renamePlaylist } from './playlist.js';
 
 // ── Playlist mode helpers ─────────────────────────────────────────────────
 
 function togglePlaylistFocus() {
-  state.playlistFocus = state.playlistFocus === 'source' ? 'sidebar' : 'source';
-  document.getElementById('playlist-source').classList.toggle('panel-active');
-  document.getElementById('playlist-sidebar').classList.toggle('panel-active');
+  const newFocus = state.playlistFocus === 'source' ? 'sidebar' : 'source';
+  state.playlistFocus = newFocus;
+
+  const sourceEl = document.getElementById('playlist-source');
+  const sidebarEl = document.getElementById('playlist-sidebar');
+
+  // Explicit add/remove instead of toggle — prevents corruption when
+  // state and DOM are out of sync (e.g. after modal close, error recovery)
+  if (newFocus === 'sidebar') {
+    sourceEl.classList.remove('panel-active');
+    sidebarEl.classList.add('panel-active');
+  } else {
+    sidebarEl.classList.remove('panel-active');
+    sourceEl.classList.add('panel-active');
+  }
 }
 
 function toggleTrackInPlaylist() {
@@ -54,8 +66,12 @@ async function saveCurrentPlaylist() {
     showToast('⚠️ Playlist vide, rien à sauvegarder');
     return;
   }
-  await savePlaylist(name, tracks);
-  showToast(`💾 Playlist "${name}" sauvegardée (${tracks.length} morceaux)`);
+  try {
+    await savePlaylist(name, tracks);
+    showToast(`💾 Playlist "${name}" sauvegardée (${tracks.length} morceaux)`);
+  } catch (err) {
+    showError(`Échec de la sauvegarde : ${err.message}`);
+  }
 }
 
 async function showExportModal() {
@@ -211,7 +227,11 @@ document.addEventListener('keydown', (e) => {
       const focused = document.querySelector('#playlist-tracks .focused');
       if (focused) {
         const removeBtn = focused.querySelector('.pl-track-remove');
-        if (removeBtn) removeBtn.click();
+        if (removeBtn) {
+          const fullPath = removeBtn.dataset.fullpath;
+          removeBtn.click();
+          patchPlaylistSourceFile(fullPath, true);
+        }
       }
       return;
     }
@@ -260,9 +280,9 @@ document.addEventListener('keydown', (e) => {
       return;
     }
 
-    // ←→ — prevent scroll; keep Shift+←→ for audio seek
+    // ←→ — seek audio when playing
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      if (isAudioPlaying() && e.shiftKey) {
+      if (isAudioPlaying()) {
         seekAudio(e.key === 'ArrowRight' ? 1 : -1);
       }
       e.preventDefault();

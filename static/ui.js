@@ -1,4 +1,4 @@
-// ─── UI: modals, filter palette, config form ──────────────────────────────
+// ─── UI: modals, filter palette, config form, toast/error display ───────────
 import { state } from './state.js';
 import { revalidateFocus } from './focus.js';
 
@@ -55,4 +55,21 @@ export function closeFilterPalette(renderSource) {
   document.getElementById('filter-palette').classList.add('hidden');
   renderSource();
   revalidateFocus();
+}
+
+// ── Error display ─────────────────────────────────────────────────────────
+/**
+ * Show a red error message in the status bar that disappears after 5 seconds.
+ */
+export function showError(msg) {
+  const el = document.getElementById('status-text');
+  el.textContent = `⚠️ ${msg}`;
+  el.style.color = 'var(--led-red)';
+  clearTimeout(el._errorTimer);
+  el._errorTimer = setTimeout(() => {
+    el.style.color = '';
+    el.textContent = state.playlistMode
+      ? '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.'
+      : 'Prêt.';
+  }, 5000);
 }

@@ -113,9 +113,19 @@ export function renderEpars() {
 
 // ── Source Data panel ─────────────────────────────────────────────────────
 
-function buildSourceChildren(node, fullPath, baseDir, isFiltered) {
+function buildSourceChildren(node, fullPath, baseDir, isFiltered, _inPlaylistPaths, toggleFn) {
+  const toggle = toggleFn || toggleSourceDir;
   const childContainer = document.createElement('div');
   childContainer.className = 'children';
+
+  // En mode Playlist, calculer les chemins de la playlist active pour
+  // appliquer le badge ✅ sur les fichiers dépliés dynamiquement.
+  let inPlaylistPaths = _inPlaylistPaths;
+  if (!inPlaylistPaths && state.playlistMode) {
+    const name = getActivePlaylistName();
+    const pendingTracks = getPendingTracks(name);
+    inPlaylistPaths = new Set(pendingTracks.map(t => t.fullPath));
+  }
 
   const subDirs = Object.keys(node).filter(k => k !== '__files__').sort();
   for (const subName of subDirs) {
@@ -138,25 +148,31 @@ function buildSourceChildren(node, fullPath, baseDir, isFiltered) {
       countSpan.textContent = `(${subFiles.length})`;
       dirEl.appendChild(countSpan);
     }
-    dirEl.onclick = () => toggleSourceDir(subFullPath);
+    dirEl.onclick = () => toggle(subFullPath);
     childContainer.appendChild(dirEl);
     state.sourceNodeMap.set(subFullPath, { node: subNode, baseDir });
 
     if (subExpanded) {
-      dirEl.appendChild(buildSourceChildren(subNode, subFullPath, baseDir, isFiltered));
+      dirEl.appendChild(buildSourceChildren(subNode, subFullPath, baseDir, isFiltered, inPlaylistPaths, toggleFn));
     }
   }
 
   if (!isFiltered) {
+    const status = inPlaylistPaths ? 'nouveau' : 'doublon';
     for (const f of (node.__files__ || [])) {
-      childContainer.appendChild(makeFileEl(f.filename, f.relPath, 'doublon', baseDir + '/' + f.relPath, f.year, f.duration, f.codec));
+      const row = makeFileEl(f.filename, f.relPath, status, baseDir + '/' + f.relPath, f.year, f.duration, f.codec);
+      if (inPlaylistPaths && inPlaylistPaths.has(baseDir + '/' + f.relPath)) {
+        const label = row.querySelector('.file');
+        if (label) label.classList.add('in-playlist');
+      }
+      childContainer.appendChild(row);
     }
   }
   return childContainer;
 }
 
-export function toggleSourceDir(dirPath) {
-  const dirEl = document.querySelector(`#source-container .directory[data-dirpath="${CSS.escape(dirPath)}"]`);
+export function toggleSourceDir(dirPath, containerSelector = '#source-container') {
+  const dirEl = document.querySelector(`${containerSelector} .directory[data-dirpath="${CSS.escape(dirPath)}"]`);
   if (!dirEl) return;
 
   const existingChildren = dirEl.querySelector('.children');
@@ -175,6 +191,10 @@ export function toggleSourceDir(dirPath) {
   updateSourceHeaderCount();
 }
 
+function togglePlaylistSourceDir(dirPath) {
+  toggleSourceDir(dirPath, '#playlist-source-container');
+}
+
 function updateSourceHeaderCount() {
   if (!state.filterActive) return;
   const dirs = document.querySelectorAll('#source-container .directory');
@@ -182,7 +202,8 @@ function updateSourceHeaderCount() {
     dirs.length === 0 ? 'Aucun dossier trouvé' : `${dirs.length} dossier${dirs.length > 1 ? 's' : ''}`;
 }
 
-function renderDirTree(node, container, basePath) {
+function renderDirTree(node, container, basePath, toggleFn) {
+  const toggle = toggleFn || toggleSourceDir;
   const dirNames = Object.keys(node).filter(k => k !== '__files__').sort();
   for (const name of dirNames) {
     const fullPath = basePath + '/' + name;
@@ -204,12 +225,12 @@ function renderDirTree(node, container, basePath) {
       countSpan.textContent = `(${files.length})`;
       dirEl.appendChild(countSpan);
     }
-    dirEl.onclick = () => toggleSourceDir(fullPath);
+    dirEl.onclick = () => toggle(fullPath);
     container.appendChild(dirEl);
     state.sourceNodeMap.set(fullPath, { node: subNode, baseDir: basePath });
 
     if (isExpanded) {
-      dirEl.appendChild(buildSourceChildren(subNode, fullPath, basePath, false));
+      dirEl.appendChild(buildSourceChildren(subNode, fullPath, basePath, false, null, toggleFn));
     }
   }
 }
@@ -471,10 +492,9 @@ function renderPlaylistTabs() {
     ...Object.keys(state.pendingPlaylists)
   ]));
 
-  let idx = 0;
-  for (const name of allNames) {
+  for (const [i, name] of allNames.entries()) {
     const tab = document.createElement('span');
-    tab.className = 'pl-tab' + (idx === state.activePlaylistIndex ? ' active' : '');
+    tab.className = 'pl-tab' + (i === state.activePlaylistIndex ? ' active' : '');
     tab.textContent = name;
 
     const pl = state.playlists.find(p => p.name === name);
@@ -497,11 +517,10 @@ function renderPlaylistTabs() {
       if (oldTracks.length > 0) {
         await savePlaylist(oldName, oldTracks);
       }
-      state.activePlaylistIndex = idx;
+      state.activePlaylistIndex = i;
       renderPlaylistPanel();
     };
     container.appendChild(tab);
-    idx++;
   }
 
   const addBtn = document.createElement('span');
@@ -569,8 +588,10 @@ function renderPlaylistTracks() {
 
   container.querySelectorAll('.pl-track-remove').forEach(btn => {
     btn.onclick = () => {
-      removeTrack(getActivePlaylistName(), btn.dataset.fullpath);
+      const fullPath = btn.dataset.fullpath;
+      removeTrack(getActivePlaylistName(), fullPath);
       renderPlaylistPanel();
+      patchPlaylistSourceFile(fullPath, true);
     };
   });
 
@@ -620,14 +641,18 @@ function escapeHtml(str) {
 }
 
 /**
- * Render the Source Data tree inside the playlist layout (+ in-playlist indicators).
+ * Render the playlist source panel as an expandable tree of Source Data
+ * folders — identical in structure to the normal Source Data panel.
+ * Files already in the current playlist get the ✅ (in-playlist) badge,
+ * including when folders are expanded dynamically (handled internally by
+ * buildSourceChildren via state.playlistMode).
  */
 export function renderPlaylistSource() {
   const container = document.getElementById('playlist-source-container');
   if (!container) return;
   container.innerHTML = '';
-  state.sourceNodeMap.clear();
 
+  // Build trees from sourceFiles (same logic as renderSource)
   const allTrees = [];
   let totalCount = 0;
 
@@ -642,101 +667,21 @@ export function renderPlaylistSource() {
         current = current[parts[i]] = current[parts[i]] || {};
       }
       (current['__files__'] = current['__files__'] || []).push({
-        filename, relPath: data.path, year: data.year,
-        duration: data.duration, codec: data.codec, baseDir: dirPath
+        filename, relPath: data.path, year: data.year, duration: data.duration, codec: data.codec, baseDir: dirPath
       });
     }
     allTrees.push({ tree, dirPath });
   }
 
-  const activeName = getActivePlaylistName();
-  const pendingTracks = getPendingTracks(activeName);
-  const inPlaylistPaths = new Set(pendingTracks.map(t => t.fullPath));
-
+  // Render trees with playlist-specific toggle
+  // buildSourceChildren checks state.playlistMode internally and applies
+  // in-playlist badges on both initial render and dynamic expands.
   for (const { tree, dirPath } of allTrees) {
-    renderPlaylistDirTree(tree, container, dirPath, inPlaylistPaths);
+    renderDirTree(tree, container, dirPath, togglePlaylistSourceDir);
   }
 
   const countEl = document.getElementById('playlist-source-count');
   if (countEl) countEl.textContent = totalCount > 0 ? `(${totalCount.toLocaleString('fr')})` : '';
-}
-
-function renderPlaylistDirTree(node, container, basePath, inPlaylistPaths) {
-  const dirNames = Object.keys(node).filter(k => k !== '__files__').sort();
-  for (const name of dirNames) {
-    const fullPath = basePath + '/' + name;
-    const subNode = node[name];
-
-    const dirEl = document.createElement('div');
-    dirEl.className = 'directory';
-    dirEl.dataset.dirpath = fullPath;
-    dirEl.dataset.focuspath = fullPath;
-
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = name;
-    dirEl.appendChild(nameSpan);
-
-    const files = subNode.__files__ || [];
-    if (files.length > 0) {
-      const countSpan = document.createElement('span');
-      countSpan.className = 'dir-count';
-      countSpan.textContent = `(${files.length})`;
-      dirEl.appendChild(countSpan);
-    }
-
-    dirEl.onclick = () => togglePlaylistSourceDir(dirEl, subNode, fullPath, basePath, inPlaylistPaths);
-    container.appendChild(dirEl);
-    state.sourceNodeMap.set(fullPath, { node: subNode, baseDir: basePath });
-  }
-}
-
-function togglePlaylistSourceDir(dirEl, node, fullPath, basePath, inPlaylistPaths) {
-  const existingChildren = dirEl.querySelector('.children');
-  if (existingChildren) {
-    existingChildren.remove();
-    dirEl.classList.remove('expanded');
-    return;
-  }
-  dirEl.classList.add('expanded');
-  const children = document.createElement('div');
-  children.className = 'children';
-
-  const subNames = Object.keys(node).filter(k => k !== '__files__').sort();
-  for (const name of subNames) {
-    const subFullPath = fullPath + '/' + name;
-    const subNode = node[name];
-    const subDir = document.createElement('div');
-    subDir.className = 'directory';
-    subDir.dataset.dirpath = subFullPath;
-    subDir.dataset.focuspath = subFullPath;
-    subDir.textContent = name;
-    const files = subNode.__files__ || [];
-    if (files.length > 0) {
-      const countSpan = document.createElement('span');
-      countSpan.className = 'dir-count';
-      countSpan.textContent = `(${files.length})`;
-      subDir.appendChild(countSpan);
-    }
-    subDir.onclick = () => togglePlaylistSourceDir(subDir, subNode, subFullPath, basePath, inPlaylistPaths);
-    children.appendChild(subDir);
-    state.sourceNodeMap.set(subFullPath, { node: subNode, baseDir: basePath });
-  }
-
-  for (const f of (node.__files__ || [])) {
-    const fp = basePath + '/' + f.relPath;
-    const row = makeFileEl(f.filename, f.relPath, 'doublon', fp, f.year, f.duration, f.codec);
-    const label = row.querySelector('.file');
-    if (label) {
-      label.dataset.fullpath = fp;
-      if (inPlaylistPaths.has(fp)) {
-        label.classList.add('in-playlist');
-      }
-    }
-    row.dataset.focuspath = fp;
-    children.appendChild(row);
-  }
-
-  dirEl.appendChild(children);
 }
 
 /**
@@ -849,6 +794,28 @@ export function renderPlaylistManager() {
       renderPlaylistPanel();
     };
   });
+}
+
+// ── Targeted DOM patch for playlist source panel (avoids full rebuild) ────
+
+/**
+ * Add or remove the `in-playlist` CSS class on a file label in the playlist
+ * source panel.  Used when a track is removed from the sidebar so the source
+ * panel stays in sync without a full re-render.
+ *
+ * @param {string} fullPath - The data-fullpath value to search for.
+ * @param {boolean} remove - true to remove the class, false to add it.
+ */
+export function patchPlaylistSourceFile(fullPath, remove) {
+  const label = document.querySelector(
+    `#playlist-source-container .file[data-fullpath="${CSS.escape(fullPath)}"]`
+  );
+  if (!label) return;
+  if (remove) {
+    label.classList.remove('in-playlist');
+  } else {
+    label.classList.add('in-playlist');
+  }
 }
 
 // ── Render all ────────────────────────────────────────────────────────────

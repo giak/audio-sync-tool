@@ -237,6 +237,60 @@ header h1 {
   font-size: 13px; text-align: center; border-radius: 2px;
 }
 
+/* ===== Scan Progress Bar ============================================ */
+#scan-progress {
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 18px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-panel);
+  flex-shrink: 0;
+}
+#scan-progress-bar {
+  flex: 1; height: 6px;
+  background: var(--bg-focus);
+  border-radius: 3px; overflow: hidden;
+  min-width: 100px;
+}
+#scan-progress-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-green));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+#scan-progress-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+/* ===== Scanning button state ========================================= */
+#btn-scan.scanning {
+  pointer-events: none;
+  opacity: 0.7;
+  position: relative;
+  padding-left: 28px;
+}
+#btn-scan.scanning::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  margin-top: -6px;
+  width: 12px; height: 12px;
+  border: 2px solid var(--text-muted);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: scan-spin 0.8s linear infinite;
+}
+@keyframes scan-spin {
+  to { transform: rotate(360deg); }
+}
+#btn-scan:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 /* ===== Status Bar ==================================================== */
 #status-bar {
   background: var(--bg-deep);

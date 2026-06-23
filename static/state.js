@@ -1,13 +1,16 @@
 // ─── Single source of truth for all app state ──────────────────────────────
-// Imported by all modules that read/write state.
-// In ES modules, `import { state } from './state.js'` gives the same
-// live reference everywhere — no need for an event bus.
+// State is wrapped in a Proxy that validates critical fields on write.
+// Invalid values are silently rejected (console.warn) to prevent corruption.
 
-export const state = {
+const VALID_PANELS = new Set(['epars', 'source']);
+const VALID_MODALS = new Set([null, 'config', 'legend', 'journal', 'dialog', 'playlists']);
+const VALID_PLAYLIST_FOCUS = new Set(['source', 'sidebar']);
+
+const _state = {
   sourceFiles: {},
   eparsFiles: {},
   journal: [],
-  activeModal: null,          // null | 'config' | 'legend' | 'journal' | 'dialog'
+  activeModal: null,          // null | 'config' | 'legend' | 'journal' | 'dialog' | 'playlists'
   activePanel: 'epars',       // 'epars' | 'source'
   eparsFocusPath: null,       // full path string
   sourceFocusPath: null,      // full path string
@@ -24,3 +27,22 @@ export const state = {
   pendingPlaylists: {},           // { name: [track, ...] } — unsaved pending tracks
   playlistFocus: 'source',        // 'source' | 'sidebar' — keyboard focus in playlist mode
 };
+
+export const state = new Proxy(_state, {
+  set(target, prop, value) {
+    if (prop === 'activePanel' && !VALID_PANELS.has(value)) {
+      console.warn(`state.activePanel invalide: ${value}`);
+      return true; // ES modules (strict) — returning false throws TypeError
+    }
+    if (prop === 'activeModal' && !VALID_MODALS.has(value)) {
+      console.warn(`state.activeModal invalide: ${value}`);
+      return true;
+    }
+    if (prop === 'playlistFocus' && !VALID_PLAYLIST_FOCUS.has(value)) {
+      console.warn(`state.playlistFocus invalide: ${value}`);
+      return true;
+    }
+    target[prop] = value;
+    return true;
+  }
+});

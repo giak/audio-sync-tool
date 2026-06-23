@@ -1,7 +1,7 @@
 // ─── Business operations: scan, copy, config, init ───────────────────────
 import { state } from './state.js';
 import { api } from './api.js';
-import { openModal, closeAllModals } from './ui.js';
+import { openModal, closeAllModals, showError } from './ui.js';
 import { renderAll, renderSource, patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './render.js';
 import { setActivePanel, revalidateFocus } from './focus.js';
 
@@ -74,13 +74,58 @@ export function initConfigUI() {
 
 // ── Scan ──────────────────────────────────────────────────────────────────
 export async function runScan() {
-  document.getElementById('status-text').textContent = 'Scan en cours…';
-  const data = await api('/scan');
-  state.sourceFiles = data.source || {};
-  state.eparsFiles = data.epars || {};
-  state.journal = await api('/journal');
-  renderAll();
-  document.getElementById('status-text').textContent = 'Scan terminé.';
+  const btn = document.getElementById('btn-scan');
+  const progressBar = document.getElementById('scan-progress');
+  const progressFill = document.getElementById('scan-progress-fill');
+  const progressText = document.getElementById('scan-progress-text');
+  const statusText = document.getElementById('status-text');
+
+  // Disable button + show spinner
+  btn.disabled = true;
+  btn.classList.add('scanning');
+  progressBar.classList.remove('hidden');
+  progressFill.style.width = '0%';
+  progressText.textContent = '🔍 Préparation…';
+  statusText.textContent = 'Scan en cours…';
+
+  // Poll progress every 400ms
+  let pollTimer = setInterval(async () => {
+    try {
+      const p = await api('/scan-progress');
+      if (!p.running) {
+        clearInterval(pollTimer);
+        return;
+      }
+      const pct = p.total > 0 ? Math.round((p.current / p.total) * 100) : 0;
+      progressFill.style.width = Math.min(pct, 100) + '%';
+      progressText.textContent = `${p.phase || '…'} : ${p.current} / ${p.total} (${pct}%)`;
+      statusText.textContent = `🔍 Scan ${p.phase ? p.phase.toLowerCase() : '…'} — ${p.current}/${p.total}`;
+    } catch (_) { /* ignore polling errors */ }
+  }, 400);
+
+  let scanFailed = false;
+  try {
+    const data = await api('/scan');
+    state.sourceFiles = data.source || {};
+    state.eparsFiles = data.epars || {};
+    state.journal = await api('/journal');
+    renderAll();
+  } catch (err) {
+    scanFailed = true;
+    showError(`Scan échoué : ${err.message}`);
+  } finally {
+    clearInterval(pollTimer);
+    btn.disabled = false;
+    btn.classList.remove('scanning');
+    progressBar.classList.add('hidden');
+    progressFill.style.width = '0%';
+
+    if (!scanFailed) {
+      const totalFiles = Object.values(state.sourceFiles).reduce((s, f) => s + Object.keys(f).length, 0)
+        + Object.values(state.eparsFiles).reduce((s, f) => s + Object.keys(f).length, 0);
+      statusText.textContent = `Scan terminé — ${totalFiles.toLocaleString('fr')} fichiers`;
+    }
+  }
 }
 
 // ── Copy (F5) ─────────────────────────────────────────────────────────────
@@ -114,11 +159,11 @@ export function executeCopy() {
 
   document.getElementById('dialog-confirm').onclick = async () => {
     closeAllModals();
-    const res = await api('/copy', {
-      method: 'POST',
-      body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename: filename })
-    });
-    if (res.ok) {
+    try {
+      const res = await api('/copy', {
+        method: 'POST',
+        body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename: filename })
+      });
       state.journal = await api('/journal');
       // Compute the relative path for both state update and DOM patch
       let relPathNew = filename;
@@ -137,8 +182,8 @@ export function executeCopy() {
       }
       requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
       document.getElementById('status-text').textContent = `✓ ${filename} copié vers ${destDir}`;
-    } else {
-      document.getElementById('status-text').textContent = `✗ Erreur : ${res.error}`;
+    } catch (err) {
+      showError(`Échec de la copie : ${err.message}`);
     }
   };
   document.getElementById('dialog-cancel').onclick = () => closeAllModals();
