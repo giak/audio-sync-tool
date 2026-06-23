@@ -7,7 +7,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['static/**/*.ts'],
-      exclude: ['static/**/*.test.ts'],
+      exclude: ['static/**/*.test.ts', 'static/**/*.js'],
+      excludeAfterRemap: true,
       reporter: ['text', 'text-summary'],
     },
   },
