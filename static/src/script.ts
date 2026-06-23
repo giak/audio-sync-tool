@@ -390,6 +390,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 
   if (isInput) return;
 
+  // Shift+←→ — seek audio (explicit step)
   if (isAudioPlaying() && e.shiftKey) {
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
@@ -401,6 +402,14 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
       seekAudio(1);
       return;
     }
+  }
+
+  // ←→ — seek audio when playing (même comportement qu'en mode Playlist)
+  // Passe en navigation de colonne uniquement si aucun morceau ne joue.
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && isAudioPlaying()) {
+    e.preventDefault();
+    seekAudio(e.key === 'ArrowRight' ? 1 : -1);
+    return;
   }
 
   if (e.key === 'Tab') {
