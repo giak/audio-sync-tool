@@ -1,3 +1,5 @@
 data/config.json
 data/journal.json
 venv/
+node_modules/
+__pycache__/
