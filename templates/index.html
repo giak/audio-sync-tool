@@ -14,11 +14,84 @@
       <button id="btn-config">⚙️ Config</button>
       <button id="btn-scan">🔄 Scan</button>
       <button id="btn-journal">📋 Journal</button>
+      <button id="btn-legend">❓ Raccourcis</button>
+      <button id="btn-playlist">🎵 Playlist</button>
     </div>
   </header>
 
-  <div id="config-panel" class="hidden">
-    <h3>Configuration</h3>
+  <!-- Main workspace: two panels -->
+  <div id="main-panels">
+    <div id="panel-left" class="panel">
+      <h2>📂 Éparpillé <span id="epars-header-count" class="panel-header-count"></span></h2>
+      <div id="epars-status-line"></div>
+      <div id="epars-container"></div>
+    </div>
+    <div id="panel-right" class="panel">
+      <h2>📂 Source Data <span id="source-header-count" class="panel-header-count"></span></h2>
+      <div id="source-container"></div>
+    </div>
+  </div>
+
+  <!-- Filter palette (floating, appears on F7 or /) -->
+  <div id="filter-palette" class="hidden">
+    <input type="text" id="source-filter" placeholder="Filtrer les dossiers…" spellcheck="false" autocomplete="off">
+    <span id="source-filter-count"></span>
+  </div>
+
+  <!-- Audio player bar -->
+  <div id="player-bar" class="hidden">
+    <span id="player-stop">⏹</span>
+    <span id="player-filename"></span>
+    <span id="player-seek-bwd">⏪</span>
+    <div id="player-progress">
+      <div id="player-progress-fill"></div>
+    </div>
+    <span id="player-time">0:00 / 0:00</span>
+    <span id="player-seek-fwd">⏩</span>
+    <label id="player-step-label">
+      <input type="number" id="player-step" value="20" min="1" max="120">s
+    </label>
+  </div>
+
+  <!-- Playlist mode layout (hidden by default, shown when playlistMode === true) -->
+  <div id="playlist-layout" class="hidden">
+    <div id="playlist-main">
+      <div id="playlist-source" class="panel">
+        <h2>📂 Source Data <span id="playlist-source-count"></span></h2>
+        <div id="playlist-source-container"></div>
+      </div>
+      <div id="playlist-sidebar" class="panel">
+        <div id="playlist-tabs">
+          <!-- Dynamically rendered: tab bar with + button -->
+        </div>
+        <div id="playlist-panel">
+          <!-- Dynamically rendered: track list -->
+        </div>
+        <div id="playlist-actions">
+          <button id="pl-save">💾 Sauvegarder</button>
+          <button id="pl-export">📦 Exporter</button>
+          <button id="pl-manage">📋 Gérer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div id="status-bar">
+    <span id="status-text">Prêt. Configure les dossiers puis lance Scan.</span>
+  </div>
+</div>
+
+<!-- === Modals (overlays, outside document flow) === -->
+
+<!-- Config modal -->
+<div id="modal-config" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>⚙️ Configuration</h3>
+      <button class="modal-close" data-modal="config">✕</button>
+    </div>
     <div id="config-selector">
       <label>Profil :
         <select id="cfg-select"></select>
@@ -40,51 +113,79 @@
     <button id="btn-save-config">Sauvegarder</button>
     <p id="config-status"></p>
   </div>
+</div>
 
-  <div id="main-panels">
-    <div id="panel-left" class="panel">
-      <h2>📂 Éparpillé</h2>
-      <div id="epars-container"></div>
+<!-- Legend modal -->
+<div id="modal-legend" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>❓ Raccourcis & Légende</h3>
+      <button class="modal-close" data-modal="legend">✕</button>
     </div>
-    <div id="panel-right" class="panel">
-      <h2>📂 Source Data</h2>
-      <div id="source-container"></div>
+    <div id="legend-grid">
+      <div class="legend-section">
+        <h4>Statuts</h4>
+        <div class="legend-row"><span class="led-demo led-demo-nouveau"></span> Nouveau — pas dans la source</div>
+        <div class="legend-row"><span class="led-demo led-demo-doublon"></span> Doublon — déjà présent</div>
+        <div class="legend-row"><span class="led-demo led-demo-traite"></span> Traité — copié (absent source)</div>
+        <div class="legend-row"><span class="led-demo led-demo-playing"></span> En lecture</div>
+      </div>
+      <div class="legend-section">
+        <h4>Raccourcis</h4>
+        <div class="legend-row"><kbd>↑↓</kbd> Naviguer</div>
+        <div class="legend-row"><kbd>←→</kbd> Navigation colonnes (Source)</div>
+        <div class="legend-row"><kbd>Shift←→</kbd> Seek audio ±20s</div>
+        <div class="legend-row"><kbd>Tab</kbd> Basculer panneau</div>
+        <div class="legend-row"><kbd>Entrée</kbd> Jouer / Déplier dossier</div>
+        <div class="legend-row"><kbd>Espace</kbd> Sélectionner fichier</div>
+        <div class="legend-row"><kbd>F5</kbd> Copier → dossier</div>
+        <div class="legend-row"><kbd>F7</kbd> Filtrer dossiers</div>
+        <div class="legend-row"><kbd>/</kbd> Filtrer dossiers</div>
+        <div class="legend-row"><kbd>Échap</kbd> Fermer / Annuler</div>
+      </div>
     </div>
   </div>
+</div>
 
-  <div id="player-bar" class="hidden">
-    <span id="player-stop">⏹</span>
-    <span id="player-filename"></span>
-    <span id="player-seek-bwd">⏪</span>
-    <div id="player-progress">
-      <div id="player-progress-fill"></div>
+<!-- Journal modal -->
+<div id="modal-journal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>📋 Journal</h3>
+      <button class="modal-close" data-modal="journal">✕</button>
     </div>
-    <span id="player-time">0:00 / 0:00</span>
-    <span id="player-seek-fwd">⏩</span>
-    <label id="player-step-label">
-      <input type="number" id="player-step" value="20" min="1" max="120">s
-    </label>
-  </div>
-
-  <div id="status-bar">
-    <span id="status-text">Prêt. Configure les dossiers puis clique Scan.</span>
-    <span id="selected-info" class="hidden"></span>
-  </div>
-
-  <div id="journal-panel" class="hidden">
-    <h3>Journal des opérations</h3>
     <div id="journal-content"></div>
   </div>
 </div>
 
-<div id="confirm-dialog" class="hidden">
-  <div id="dialog-content">
-    <p id="dialog-msg"></p>
-    <button id="dialog-confirm">Copier</button>
-    <button id="dialog-cancel">Annuler</button>
+<!-- Playlist manager modal -->
+<div id="modal-playlists" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>🎵 Gestionnaire de playlists</h3>
+      <button class="modal-close" data-modal="playlists">✕</button>
+    </div>
+    <div id="pl-manager-content">
+      <!-- Rempli dynamiquement -->
+    </div>
   </div>
 </div>
 
-<script src="/static/script.js"></script>
+<!-- Confirm dialog modal -->
+<div id="modal-dialog" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content modal-sm">
+    <p id="dialog-msg"></p>
+    <div class="dialog-buttons">
+      <button id="dialog-confirm">Copier</button>
+      <button id="dialog-cancel">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/static/script.js"></script>
 </body>
 </html>

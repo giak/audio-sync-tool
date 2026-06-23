@@ -1,640 +1,358 @@
-const state = {
-  sourceFiles: {},
-  eparsFiles: {},
-  journal: [],
-  selectedFile: null,
-  selectedEparDir: null,
-  focusedPanel: null,
-  focusedIndex: -1,
-  eparsFileHint: null,
-  sourceDirHint: null
-};
+// ─── Orchestrator: keyboard router + toolbar bindings + init ──────────────
+import { state } from './state.js';
+import { stopPlayer, seekAudio, isAudioPlaying, initAudioUI } from './audio.js';
+import { setActivePanel, navigateFocus, navigateColumn, getFocusedItem, getItems, revalidateFocus } from './focus.js';
+import { openModal, closeAllModals, openFilterPalette, closeFilterPalette, initFilterPalette } from './ui.js';
+import { renderAll, renderSource, renderJournal, renderPlaylistPanel, renderPlaylistSource, renderPlaylistManager } from './render.js';
+import { initConfigUI, runScan, executeCopy, initApp } from './actions.js';
+import { loadPlaylists, createNewPlaylist, savePlaylist, exportPlaylist, addTrack, removeTrack, reorderTrack, getPendingTracks, getActivePlaylistName, removePendingPlaylist, setPendingTracks, deletePlaylist, renamePlaylist } from './playlist.js';
 
-// --- Audio player ---
-let currentAudio = null;
-let playerFilename = '';
-let playerFullpath = '';
+// ── Playlist mode helpers ─────────────────────────────────────────────────
 
-const playerBar = document.getElementById('player-bar');
-const playerStop = document.getElementById('player-stop');
-const playerFilenameEl = document.getElementById('player-filename');
-const playerProgress = document.getElementById('player-progress');
-const playerProgressFill = document.getElementById('player-progress-fill');
-const playerTime = document.getElementById('player-time');
-const playerSeekBwd = document.getElementById('player-seek-bwd');
-const playerSeekFwd = document.getElementById('player-seek-fwd');
-const playerStep = document.getElementById('player-step');
-
-function formatTime(s) {
-  if (!isFinite(s) || s < 0) return '0:00';
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, '0')}`;
+function togglePlaylistFocus() {
+  state.playlistFocus = state.playlistFocus === 'source' ? 'sidebar' : 'source';
+  document.getElementById('playlist-source').classList.toggle('panel-active');
+  document.getElementById('playlist-sidebar').classList.toggle('panel-active');
 }
 
-function updatePlayerUI() {
-  if (!currentAudio || !currentAudio.duration) return;
-  const pct = (currentAudio.currentTime / currentAudio.duration) * 100;
-  playerProgressFill.style.width = pct + '%';
-  playerTime.textContent = `${formatTime(currentAudio.currentTime)} / ${formatTime(currentAudio.duration)}`;
-}
+function toggleTrackInPlaylist() {
+  const container = document.getElementById('playlist-source-container');
+  const focused = container.querySelector('.focused');
+  if (!focused || !focused.classList.contains('file-row')) return;
 
-function stopPlayer() {
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio = null;
-  }
-  playerBar.classList.add('hidden');
-  document.querySelectorAll('.play-btn.playing').forEach(b => {
-    b.classList.remove('playing');
-    b.textContent = '▶';
-  });
-}
+  const label = focused.querySelector('.file');
+  const filename = label?.textContent || '';
+  const fullPath = label?.dataset?.fullpath || '';
+  if (!fullPath) return;
 
-function showPlayer(filename, fullpath) {
-  playerFilename = filename;
-  playerFullpath = fullpath;
-  playerFilenameEl.textContent = filename.length > 30 ? filename.slice(0, 27) + '...' : filename;
-  playerTime.textContent = '0:00 / 0:00';
-  playerProgressFill.style.width = '0%';
-  playerBar.classList.remove('hidden');
-}
-
-function togglePlay(filename, fullpath, btn) {
-  if (currentAudio && !currentAudio.paused) {
-    if (fullpath === playerFullpath) {
-      stopPlayer();
-      return;
-    }
-    currentAudio.pause();
-    currentAudio = null;
-    document.querySelectorAll('.play-btn.playing').forEach(b => {
-      b.classList.remove('playing');
-      b.textContent = '▶';
-    });
-  }
-  const audio = new Audio('/audio?path=' + encodeURIComponent(fullpath));
-  let started = false;
-
-  audio.ontimeupdate = () => {
-    if (!started && audio.duration) {
-      started = true;
-    }
-    updatePlayerUI();
+  const activeName = getActivePlaylistName();
+  const track = {
+    filename,
+    fullPath,
+    relPath: fullPath,
+    year: focused.querySelector('.year')?.textContent || null,
+    duration: parseInt(focused.dataset.durationSeconds) || null,
+    codec: focused.querySelector('.codec')?.textContent || null,
   };
 
-  audio.onloadedmetadata = () => {
-    updatePlayerUI();
-  };
-
-  audio.onended = () => {
-    if (currentAudio === audio) {
-      document.querySelectorAll('.play-btn.playing').forEach(b => {
-        b.classList.remove('playing');
-        b.textContent = '▶';
-      });
-      currentAudio = null;
-      playerBar.classList.add('hidden');
-    }
-  };
-
-  audio.onerror = () => {
-    btn.classList.remove('playing');
-    btn.textContent = '▶';
-    if (currentAudio === audio) {
-      currentAudio = null;
-      playerBar.classList.add('hidden');
-    }
-  };
-
-  audio.play().then(() => {
-    currentAudio = audio;
-    document.querySelectorAll('.play-btn.playing').forEach(b => {
-      b.classList.remove('playing');
-      b.textContent = '▶';
-    });
-    btn.classList.add('playing');
-    btn.textContent = '⏹';
-    showPlayer(filename, fullpath);
-  }).catch(() => {
-    btn.classList.remove('playing');
-    btn.textContent = '▶';
-    playerBar.classList.add('hidden');
-  });
-}
-
-playerStop.onclick = stopPlayer;
-
-playerProgress.onclick = (e) => {
-  if (!currentAudio || !currentAudio.duration) return;
-  const rect = playerProgress.getBoundingClientRect();
-  const pct = (e.clientX - rect.left) / rect.width;
-  currentAudio.currentTime = pct * currentAudio.duration;
-  updatePlayerUI();
-};
-
-function seekWithSteps(delta) {
-  if (!currentAudio || !currentAudio.duration) return;
-  const step = parseInt(playerStep.value) || 20;
-  currentAudio.currentTime = Math.max(0, Math.min(currentAudio.duration, currentAudio.currentTime + delta * step));
-  updatePlayerUI();
-}
-
-playerSeekBwd.onclick = () => seekWithSteps(-1);
-playerSeekFwd.onclick = () => seekWithSteps(1);
-
-// --- Keyboard navigation ---
-function getFocusedPanel() {
-  if (state.focusedPanel === 'source') return document.getElementById('source-container');
-  return document.getElementById('epars-container');
-}
-
-function getFocusedPanelEl() {
-  if (state.focusedPanel === 'source') return document.getElementById('panel-right');
-  return document.getElementById('panel-left');
-}
-
-function getItems(container) {
-  const items = container.querySelectorAll('.file-row, .directory');
-  return items;
-}
-
-function getItemType(el) {
-  if (el.classList.contains('directory')) return 'dir';
-  if (el.classList.contains('file-row')) return 'file';
-  return 'unknown';
-}
-
-function focusItem(container, idx) {
-  const items = getItems(container);
-  if (idx < 0) idx = 0;
-  if (idx >= items.length) idx = items.length - 1;
-  state.focusedIndex = idx;
-  container.querySelectorAll('.focused').forEach(r => r.classList.remove('focused'));
-  if (items[idx]) {
-    items[idx].classList.add('focused');
-    items[idx].scrollIntoView({ block: 'nearest' });
+  const added = addTrack(activeName, track);
+  if (added) {
+    label.classList.add('in-playlist');
+    showToast(`➕ ${filename} ajouté`);
+  } else {
+    removeTrack(activeName, fullPath);
+    label.classList.remove('in-playlist');
+    showToast(`➖ ${filename} retiré`);
   }
+  renderPlaylistPanel();
 }
 
-function setFocusedPanel(panel) {
-  state.focusedPanel = panel;
-  document.querySelectorAll('.panel-active').forEach(p => p.classList.remove('panel-active'));
-  getFocusedPanelEl().classList.add('panel-active');
-  const container = getFocusedPanel();
-  const items = getItems(container);
-  if (state.focusedIndex < 0 && items.length > 0) focusItem(container, 0);
-}
-
-document.getElementById('panel-left').onclick = () => setFocusedPanel('epars');
-document.getElementById('panel-right').onclick = () => setFocusedPanel('source');
-
-function revalidateFocus() {
-  if (!state.focusedPanel) return;
-  const container = getFocusedPanel();
-  const items = getItems(container);
-  if (items.length === 0) { state.focusedIndex = -1; return; }
-  if (state.focusedIndex >= items.length) state.focusedIndex = items.length - 1;
-  if (state.focusedIndex >= 0) focusItem(container, state.focusedIndex);
-}
-
-document.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-  // Audio seek
-  if (currentAudio && !currentAudio.paused) {
-    if (e.key === 'ArrowLeft') { seekWithSteps(-1); e.preventDefault(); return; }
-    if (e.key === 'ArrowRight') { seekWithSteps(1); e.preventDefault(); return; }
+async function saveCurrentPlaylist() {
+  const name = getActivePlaylistName();
+  const tracks = getPendingTracks(name);
+  if (tracks.length === 0) {
+    showToast('⚠️ Playlist vide, rien à sauvegarder');
+    return;
   }
+  await savePlaylist(name, tracks);
+  showToast(`💾 Playlist "${name}" sauvegardée (${tracks.length} morceaux)`);
+}
 
-  // TAB — switch panels
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const next = state.focusedPanel === 'source' ? 'epars' : 'source';
-    state.focusedIndex = -1;
-    setFocusedPanel(next);
+async function showExportModal() {
+  const name = getActivePlaylistName();
+  const tracks = getPendingTracks(name);
+  if (tracks.length === 0) {
+    showToast('⚠️ Playlist vide, rien à exporter');
     return;
   }
 
-  if (!state.focusedPanel) { setFocusedPanel('epars'); return; }
-  const container = getFocusedPanel();
+  const savedPl = state.playlists.find(p => p.name === name);
+  let existingWarning = '';
+  if (savedPl?.exported && savedPl.exportedDir) {
+    existingWarning = " (⚠️ l'export précédent sera écrasé)";
+  }
+
+  document.getElementById('dialog-msg').innerHTML = `
+    Exporter la playlist <strong>"${escapeHtml(name)}"</strong> ?<br>
+    ${tracks.length} morceau${tracks.length > 1 ? 'x' : ''}${existingWarning}
+  `;
+  document.getElementById('dialog-confirm').textContent = '📦 Exporter';
+  document.getElementById('dialog-cancel').textContent = 'Annuler';
+  openModal('dialog');
+
+  document.getElementById('dialog-confirm').onclick = async () => {
+    closeAllModals();
+    await savePlaylist(name, tracks);
+    const res = await exportPlaylist(name);
+    if (res.ok) {
+      showToast(`📦 Playlist "${name}" exportée — ${res.count} morceaux dans ${res.dir}`);
+      if (res.fallback === 'copy') {
+        showToast(`⚠️ ${res.warning || 'Copie physique utilisée'}`);
+      }
+    } else if (res.missing) {
+      showToast(`❌ Fichiers manquants : ${res.missing.join(', ')}`);
+    } else {
+      showToast(`❌ Erreur : ${res.error || 'Export échoué'}`);
+    }
+  };
+  document.getElementById('dialog-cancel').onclick = closeAllModals;
+}
+
+function moveTrackInPlaylist(direction) {
+  const name = getActivePlaylistName();
+  const focused = document.querySelector('#playlist-tracks .focused');
+  if (!focused) return;
+  const items = Array.from(focused.parentNode?.children || []);
+  const index = items.indexOf(focused);
+  if (index === -1) return;
+  reorderTrack(name, index, index + direction);
+  renderPlaylistPanel();
+}
+
+function showToast(msg) {
+  const el = document.getElementById('status-text');
+  el.textContent = msg;
+  clearTimeout(el._toastTimer);
+  el._toastTimer = setTimeout(() => {
+    if (state.playlistMode) {
+      el.textContent = '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.';
+    }
+  }, 3000);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ── Playlist mode toggle ──────────────────────────────────────────────────
+
+async function enterPlaylistMode() {
+  await loadPlaylists();
+  state.playlistMode = true;
+  state.playlistFocus = 'source';
+
+  document.getElementById('main-panels').classList.add('hidden');
+  document.getElementById('playlist-layout').classList.remove('hidden');
+
+  if (state.playlists.length === 0 && Object.keys(state.pendingPlaylists).length === 0) {
+    createNewPlaylist('playlist-1');
+    state.activePlaylistIndex = 0;
+  } else if (state.playlists.length > 0) {
+    // Restore saved playlists into pending state
+    for (const pl of state.playlists) {
+      if (!state.pendingPlaylists[pl.name]) {
+        setPendingTracks(pl.name, [...pl.tracks]);
+      }
+    }
+    state.activePlaylistIndex = 0;
+  }
+
+  renderPlaylistSource();
+  renderPlaylistPanel();
+  document.getElementById('playlist-source').classList.add('panel-active');
+  document.getElementById('status-text').textContent = '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.';
+}
+
+async function exitPlaylistMode() {
+  // Sauvegarder toutes les playlists modifiées avant de quitter
+  const savePromises = [];
+  for (const [name, tracks] of Object.entries(state.pendingPlaylists)) {
+    if (tracks.length > 0) {
+      savePromises.push(savePlaylist(name, tracks));
+    }
+  }
+  await Promise.all(savePromises);
+  state.playlistMode = false;
+  document.getElementById('playlist-layout').classList.add('hidden');
+  document.getElementById('main-panels').classList.remove('hidden');
+  document.getElementById('status-text').textContent = 'Prêt.';
+}
+
+// ── Keyboard router ───────────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (state.activeModal === 'dialog') {
+    if (e.key === 'Escape') { e.preventDefault(); closeAllModals(); }
+    return;
+  }
+  if (state.activeModal) {
+    if (e.key === 'Escape') { e.preventDefault(); closeAllModals(); }
+    return;
+  }
+
+  if (state.filterActive && document.activeElement?.id === 'source-filter') {
+    if (e.key === 'Escape') { e.preventDefault(); closeFilterPalette(renderSource); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); closeFilterPalette(renderSource); setActivePanel('source'); }
+    else if (e.key === 'Tab') { e.preventDefault(); closeFilterPalette(renderSource); setActivePanel('epars'); }
+    return;
+  }
+
+  const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName);
+
+  // ── Mode Playlist keyboard handling ────────────────────────────────────
+  if (state.playlistMode) {
+    if (e.key === 'Escape') { e.preventDefault(); exitPlaylistMode(); return; }
+    if (e.key === 'Tab') { e.preventDefault(); togglePlaylistFocus(); return; }
+    if (e.key === ' ' && !isInput) {
+      e.preventDefault();
+      if (state.playlistFocus === 'source') {
+        toggleTrackInPlaylist();
+      }
+      return;
+    }
+    if ((e.key === 'F7' || e.key === '/') && !isInput) {
+      e.preventDefault();
+      openFilterPalette((p) => {}, renderPlaylistSource);
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput && state.playlistFocus === 'sidebar') {
+      e.preventDefault();
+      const focused = document.querySelector('#playlist-tracks .focused');
+      if (focused) {
+        const removeBtn = focused.querySelector('.pl-track-remove');
+        if (removeBtn) removeBtn.click();
+      }
+      return;
+    }
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveCurrentPlaylist(); return; }
+    if (e.ctrlKey && e.key === 'e') { e.preventDefault(); showExportModal(); return; }
+    if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !isInput) {
+      e.preventDefault();
+      moveTrackInPlaylist(e.key === 'ArrowUp' ? -1 : 1);
+      return;
+    }
+
+    // ↑↓ — navigate in the active playlist panel
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !isInput) {
+      e.preventDefault();
+      if (state.playlistFocus === 'source') {
+        navigateFocus(
+          document.getElementById('playlist-source-container'),
+          e.key === 'ArrowDown' ? 1 : -1
+        );
+      } else if (state.playlistFocus === 'sidebar') {
+        const tracks = document.querySelectorAll('#playlist-tracks .pl-track');
+        if (tracks.length === 0) return;
+        const current = document.querySelector('#playlist-tracks .focused');
+        let idx = 0;
+        if (current) {
+          idx = Array.from(tracks).indexOf(current);
+          if (idx === -1) idx = 0;
+        }
+        tracks.forEach(t => t.classList.remove('focused'));
+        const newIdx = Math.max(0, Math.min(tracks.length - 1, idx + (e.key === 'ArrowDown' ? 1 : -1)));
+        tracks[newIdx].classList.add('focused');
+        tracks[newIdx].scrollIntoView({ block: 'nearest' });
+      }
+      return;
+    }
+
+    // Enter — in source panel: play audio on file, toggle directory
+    if (e.key === 'Enter' && !isInput && state.playlistFocus === 'source') {
+      e.preventDefault();
+      const focused = getFocusedItem(document.getElementById('playlist-source-container'));
+      if (focused?.classList.contains('file-row')) {
+        focused.querySelector('.play-btn')?.click();
+      } else if (focused?.classList.contains('directory')) {
+        focused.click();
+      }
+      return;
+    }
+
+    // ←→ — prevent scroll; keep Shift+←→ for audio seek
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (isAudioPlaying() && e.shiftKey) {
+        seekAudio(e.key === 'ArrowRight' ? 1 : -1);
+      }
+      e.preventDefault();
+      return;
+    }
+  }
+
+  if (e.key === 'F5') { e.preventDefault(); executeCopy(); return; }
+
+  if (e.key === 'F7' || (e.key === '/' && !isInput)) {
+    e.preventDefault();
+    openFilterPalette(setActivePanel, renderSource);
+    return;
+  }
+
+  if (e.key === 'Escape') {
+    if (state.filterActive) { e.preventDefault(); closeFilterPalette(renderSource); return; }
+    if (isAudioPlaying()) { e.preventDefault(); stopPlayer(); return; }
+    return;
+  }
+
+  if (isInput) return;
+
+  if (isAudioPlaying() && e.shiftKey) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); seekAudio(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); seekAudio(1); return; }
+  }
+
+  if (e.key === 'Tab') { e.preventDefault(); setActivePanel(state.activePanel === 'source' ? 'epars' : 'source'); return; }
+
+  const container = state.activePanel === 'source'
+    ? document.getElementById('source-container')
+    : document.getElementById('epars-container');
   const items = getItems(container);
   if (items.length === 0) return;
 
-  if (e.key === 'ArrowDown') {
+  if (e.key === 'ArrowDown') { e.preventDefault(); navigateFocus(container, 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); navigateFocus(container, -1); }
+  else if (e.key === 'ArrowLeft' && state.activePanel === 'source') { e.preventDefault(); navigateColumn(container, -1); }
+  else if (e.key === 'ArrowRight' && state.activePanel === 'source') { e.preventDefault(); navigateColumn(container, 1); }
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); }
+  else if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
-    if (state.focusedIndex < 0) focusItem(container, 0);
-    else focusItem(container, Math.min(state.focusedIndex + 1, items.length - 1));
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    if (state.focusedIndex < 0) focusItem(container, items.length - 1);
-    else focusItem(container, Math.max(0, state.focusedIndex - 1));
-  } else if (e.key === 'Enter') {
-    if (state.focusedIndex < 0) return;
-    const el = items[state.focusedIndex];
-    const type = getItemType(el);
-    if (type === 'file') {
-      const btn = el.querySelector('.play-btn');
-      if (btn) btn.click();
-    } else if (type === 'dir' && state.focusedPanel === 'source') {
+    const el = getFocusedItem(container);
+    if (!el) return;
+    if (el.classList.contains('file-row')) {
+      if (e.key === 'Enter') { el.querySelector('.play-btn')?.click(); }
+      else if (e.key === ' ' && state.activePanel === 'epars') {
+        el.querySelector('.file.nouveau')?.click();
+      }
+    } else if (el.classList.contains('directory') && state.activePanel === 'source') {
       el.click();
     }
-  } else if (e.key === ' ') {
-    e.preventDefault();
-    if (state.focusedIndex < 0) return;
-    const el = items[state.focusedIndex];
-    const type = getItemType(el);
-    if (type === 'file') {
-      if (state.focusedPanel === 'epars') {
-        const label = el.querySelector('.file.nouveau');
-        if (label) { label.click(); return; }
-      }
-      const btn = el.querySelector('.play-btn');
-      if (btn) btn.click();
-    } else if (type === 'dir' && state.focusedPanel === 'source') {
-      el.click();
-    }
-  } else if (e.key === 'F5') {
-    e.preventDefault();
-    const leftFocus = document.querySelector('#epars-container .focused .file');
-    const rightFocus = document.querySelector('#source-container .focused.directory');
-    if (!leftFocus) {
-      document.getElementById('status-text').textContent =
-        'Met d\'abord en surbrillance un fichier à gauche (↑↓).';
-      return;
-    }
-    if (!rightFocus) {
-      document.getElementById('status-text').textContent =
-        'Met d\'abord en surbrillance un dossier à droite (Tab puis ↑↓).';
-      return;
-    }
-    if (!leftFocus.dataset.epardir) {
-      document.getElementById('status-text').textContent =
-        'Ce fichier n\'a pas de dossier source valide.';
-      return;
-    }
-    const filename = leftFocus.dataset.filename;
-    const eparDir = leftFocus.dataset.epardir;
-    const relPath = state.eparsFiles[eparDir]?.[filename]?.path;
-    if (!relPath) {
-      document.getElementById('status-text').textContent =
-        'Fichier introuvable dans les données scannées.';
-      return;
-    }
-    const fullSrc = eparDir + '/' + relPath;
-    const destDir = rightFocus.dataset.dirpath;
-    document.getElementById('dialog-msg').textContent =
-      `Copier "${filename}" vers "${destDir}" ?`;
-    document.getElementById('confirm-dialog').classList.remove('hidden');
-    document.getElementById('dialog-confirm').onclick = async () => {
-      document.getElementById('confirm-dialog').classList.add('hidden');
-      const res = await api('/copy', {
-        method: 'POST',
-        body: JSON.stringify({
-          source_path: fullSrc,
-          dest_dir: destDir,
-          filename: filename
-        })
-      });
-      if (res.ok) {
-        state.journal = await api('/journal');
-        renderAll();
-        document.getElementById('status-text').textContent =
-          `✓ ${filename} copié vers ${destDir}`;
-      } else {
-        document.getElementById('status-text').textContent =
-          `✗ Erreur : ${res.error}`;
-      }
-    };
-    document.getElementById('dialog-cancel').onclick = () => {
-      document.getElementById('confirm-dialog').classList.add('hidden');
-    };
   }
 });
 
-// Patch renderAll to revalidate focus after re-render
-const origRenderAll = renderAll;
-renderAll = function() {
-  origRenderAll();
-  setTimeout(revalidateFocus, 0);
+// ── Toolbar bindings ──────────────────────────────────────────────────────
+document.getElementById('btn-config').onclick = () => openModal('config');
+document.getElementById('btn-legend').onclick = () => openModal('legend');
+document.getElementById('btn-journal').onclick = () => { renderJournal(); openModal('journal'); };
+document.getElementById('btn-scan').onclick = runScan;
+document.getElementById('pl-manage').onclick = () => {
+  renderPlaylistManager();
+  openModal('playlists');
 };
-
-async function api(url, opts = {}) {
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...opts
-  });
-  return res.json();
-}
-
-// Config
-const configPanel = document.getElementById('config-panel');
-const cfgSelect = document.getElementById('cfg-select');
-const cfgName = document.getElementById('cfg-name');
-const cfgSource = document.getElementById('cfg-source');
-const cfgEpars = document.getElementById('cfg-epars');
-const cfgStatus = document.getElementById('config-status');
-
-let configData = { active: 0, configs: [] };
-
-document.getElementById('btn-config').onclick = () => {
-  configPanel.classList.toggle('hidden');
-};
-
-function renderConfigSelect() {
-  const prev = cfgSelect.value;
-  cfgSelect.innerHTML = '';
-  configData.configs.forEach((c, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = c.name || `config-${i}`;
-    cfgSelect.appendChild(opt);
-  });
-  cfgSelect.value = prev < configData.configs.length ? prev : '0';
-  loadActiveConfig();
-}
-
-function loadActiveConfig() {
-  const idx = parseInt(cfgSelect.value) || 0;
-  const c = configData.configs[idx];
-  if (c) {
-    cfgName.value = c.name || '';
-    cfgSource.value = c.source_data || '';
-    cfgEpars.value = (c.epars_dirs || []).join('\n');
-  }
-}
-
-cfgSelect.onchange = loadActiveConfig;
-
-document.getElementById('btn-add-config').onclick = () => {
-  configData.configs.push({ name: 'nouveau', source_data: '', epars_dirs: [] });
-  configData.active = configData.configs.length - 1;
-  renderConfigSelect();
-  cfgSelect.value = configData.active;
-  loadActiveConfig();
-  cfgName.focus();
-};
-
-document.getElementById('btn-del-config').onclick = () => {
-  if (configData.configs.length <= 1) {
-    cfgStatus.textContent = '⚠️ Impossible de supprimer le dernier profil';
-    return;
-  }
-  const idx = parseInt(cfgSelect.value);
-  configData.configs.splice(idx, 1);
-  configData.active = Math.min(idx, configData.configs.length - 1);
-  renderConfigSelect();
-};
-
-document.getElementById('btn-save-config').onclick = async () => {
-  const idx = parseInt(cfgSelect.value) || 0;
-  configData.configs[idx] = {
-    name: cfgName.value.trim() || `config-${idx}`,
-    source_data: cfgSource.value.trim(),
-    epars_dirs: cfgEpars.value.split('\n').map(s => s.trim()).filter(Boolean)
-  };
-  configData.active = idx;
-  await api('/config', {
-    method: 'POST',
-    body: JSON.stringify(configData)
-  });
-  cfgStatus.textContent = '✓ Profil sauvegardé';
-  renderConfigSelect();
-};
-
-async function loadConfig() {
-  configData = await api('/config');
-  if (configData.configs && configData.configs.length > 0) {
-    renderConfigSelect();
+document.getElementById('btn-playlist').onclick = async () => {
+  if (state.playlistMode) {
+    exitPlaylistMode();
   } else {
-    configData = { active: 0, configs: [{ name: 'default', source_data: '', epars_dirs: [] }] };
-    renderConfigSelect();
+    await enterPlaylistMode();
   }
-}
-
-// Scan
-document.getElementById('btn-scan').onclick = async () => {
-  document.getElementById('status-text').textContent = 'Scan en cours...';
-  const data = await api('/scan');
-  state.sourceFiles = data.source || {};
-  state.eparsFiles = data.epars || {};
-  state.journal = await api('/journal');
-  renderAll();
-  document.getElementById('status-text').textContent = 'Scan terminé. Clique un fichier ● puis un dossier destination.';
 };
 
-// Journal toggle
-document.getElementById('btn-journal').onclick = () => {
-  document.getElementById('journal-panel').classList.toggle('hidden');
-  renderJournal();
-};
+// ── Panel click ───────────────────────────────────────────────────────────
+document.getElementById('panel-left').onclick = () => setActivePanel('epars');
+document.getElementById('panel-right').onclick = () => setActivePanel('source');
 
-function renderJournal() {
-  const container = document.getElementById('journal-content');
-  if (state.journal.length === 0) {
-    container.innerHTML = '<div style="color:#585b70">Aucune opération enregistrée.</div>';
-    return;
-  }
-  container.innerHTML = [...state.journal].reverse().map(e => {
-    const cls = e.status === 'copied' ? 'copied' : 'error';
-    return `<div class="${cls}">[${e.timestamp.slice(0,19)}] ${e.filename} → ${e.destination}</div>`;
-  }).join('');
-}
+// ── Modal backdrop/close ──────────────────────────────────────────────────
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-backdrop')) closeAllModals();
+  if (e.target.classList.contains('modal-close')) closeAllModals();
+});
 
-function getJournalFiles() {
-  const set = new Set();
-  for (const entry of state.journal) {
-    if (entry.status === 'copied') set.add(entry.filename);
-  }
-  return set;
-}
-
-function computeStatus(filename) {
-  const inSource = Object.values(state.sourceFiles).some(idx => filename in idx);
-  const journaled = getJournalFiles();
-  if (journaled.has(filename)) return 'traite';
-  if (inSource) return 'doublon';
-  return 'nouveau';
-}
-
-// Rendering
-function renderAll() {
-  renderEpars();
+// ── Filter palette → renderSource when filter changes ─────────────────────
+initFilterPalette(() => {
   renderSource();
-  renderJournal();
-}
+  revalidateFocus();
+});
 
-function makeFileEl(filename, relPath, status, fullpath, year) {
-  const row = document.createElement('div');
-  row.className = 'file-row';
-
-  const playBtn = document.createElement('span');
-  playBtn.className = 'play-btn';
-  playBtn.textContent = '▶';
-  playBtn.title = 'Écouter';
-  playBtn.onclick = (e) => {
-    e.stopPropagation();
-    togglePlay(filename, fullpath, playBtn);
-  };
-
-  const label = document.createElement('span');
-  label.className = `file ${status}`;
-  label.textContent = filename;
-  label.dataset.filename = filename;
-  label.dataset.fullpath = fullpath;
-
-  row.appendChild(playBtn);
-  row.appendChild(label);
-
-  if (year) {
-    const yearSpan = document.createElement('span');
-    yearSpan.className = 'year';
-    yearSpan.textContent = year;
-    row.appendChild(yearSpan);
-  }
-
-  return row;
-}
-
-function renderEpars() {
-  const container = document.getElementById('epars-container');
-  container.innerHTML = '';
-  for (const [dirPath, files] of Object.entries(state.eparsFiles)) {
-    const dirDiv = document.createElement('div');
-    dirDiv.className = 'directory';
-    const shortName = dirPath.split('/').filter(Boolean).pop() || dirPath;
-    dirDiv.textContent = shortName;
-    dirDiv.title = dirPath;
-    container.appendChild(dirDiv);
-
-    const fileList = document.createElement('div');
-    fileList.className = 'children';
-    container.appendChild(fileList);
-
-    const sorted = Object.entries(files).sort((a, b) => a[0].localeCompare(b[0]));
-    for (const [filename, data] of sorted) {
-      const relPath = data.path;
-      const fullpath = dirPath + '/' + relPath;
-      const status = computeStatus(filename);
-      const row = makeFileEl(filename, relPath, status, fullpath, data.year);
-
-      const label2 = row.querySelector('.file');
-      label2.dataset.epardir = dirPath;
-      if (status === 'nouveau') {
-        label2.onclick = () => selectFile(label2, filename, dirPath);
-      }
-
-      fileList.appendChild(row);
-    }
-  }
-}
-
-function renderSource() {
-  const container = document.getElementById('source-container');
-  container.innerHTML = '';
-  for (const [dirPath, files] of Object.entries(state.sourceFiles)) {
-    const tree = {};
-    for (const [filename, data] of Object.entries(files)) {
-      const relPath = data.path;
-      const parts = relPath.split('/');
-      if (parts.length === 1) {
-        (tree['__root__'] = tree['__root__'] || []).push({filename, relPath, year: data.year});
-      } else {
-        let current = tree;
-        for (let i = 0; i < parts.length - 1; i++) {
-          current = current[parts[i]] = current[parts[i]] || {};
-        }
-        (current['__files__'] = current['__files__'] || []).push({filename, relPath, year: data.year});
-      }
-    }
-    renderTree(tree, container, dirPath);
-  }
-}
-
-function renderTree(node, container, basePath) {
-  const dirs = Object.keys(node).filter(k => k !== '__root__' && k !== '__files__').sort();
-  for (const dirName of dirs) {
-    const div = document.createElement('div');
-    div.className = 'directory';
-    div.textContent = dirName;
-    div.dataset.dirpath = basePath + '/' + dirName;
-    div.onclick = () => selectDestination(div);
-    container.appendChild(div);
-
-    const childContainer = document.createElement('div');
-    childContainer.className = 'children';
-    container.appendChild(childContainer);
-    renderTree(node[dirName], childContainer, basePath + '/' + dirName);
-  }
-
-  const allFiles = [...(node['__root__'] || []), ...(node['__files__'] || [])];
-  for (const {filename, relPath, year} of allFiles) {
-    const fullpath = basePath + '/' + relPath;
-    const row = makeFileEl(filename, relPath, 'doublon', fullpath, year);
-    container.appendChild(row);
-  }
-}
-
-function selectFile(el, filename, eparDir) {
-  document.querySelectorAll('.file.selected').forEach(e => e.classList.remove('selected'));
-  el.classList.add('selected');
-  state.selectedFile = filename;
-  state.selectedEparDir = eparDir;
-  document.getElementById('selected-info').textContent = `Sélectionné : ${filename}`;
-  document.getElementById('selected-info').classList.remove('hidden');
-  document.getElementById('status-text').textContent = 'Clique un dossier dans le panneau Source Data pour copier.';
-}
-
-async function selectDestination(el) {
-  if (!state.selectedFile || !state.selectedEparDir) {
-    document.getElementById('status-text').textContent = 'Sélectionne d\'abord un fichier ● dans le panneau gauche.';
-    return;
-  }
-  const destDir = el.dataset.dirpath;
-  const srcPath = state.eparsFiles[state.selectedEparDir][state.selectedFile].path;
-
-  const fullSrc = state.selectedEparDir + '/' + srcPath;
-
-  // Confirm dialog
-  document.getElementById('dialog-msg').textContent =
-    `Copier "${state.selectedFile}" vers "${destDir}" ?`;
-  document.getElementById('confirm-dialog').classList.remove('hidden');
-
-  document.getElementById('dialog-confirm').onclick = async () => {
-    document.getElementById('confirm-dialog').classList.add('hidden');
-    const res = await api('/copy', {
-      method: 'POST',
-      body: JSON.stringify({
-        source_path: fullSrc,
-        dest_dir: destDir,
-        filename: state.selectedFile
-      })
-    });
-    if (res.ok) {
-      state.journal = await api('/journal');
-      renderAll();
-      document.getElementById('status-text').textContent =
-        `✓ ${state.selectedFile} copié vers ${destDir}`;
-      state.selectedFile = null;
-      state.selectedEparDir = null;
-      document.getElementById('selected-info').classList.add('hidden');
-    } else {
-      document.getElementById('status-text').textContent = `✗ Erreur : ${res.error}`;
-    }
-  };
-
-  document.getElementById('dialog-cancel').onclick = () => {
-    document.getElementById('confirm-dialog').classList.add('hidden');
-  };
-}
-
-// Init
-loadConfig();
-
-// Auto-scan if config already has paths
-setTimeout(async () => {
-  const active = configData.configs[configData.active];
-  if (active && (active.source_data || (active.epars_dirs && active.epars_dirs.length > 0))) {
-    document.getElementById('btn-scan').click();
-  }
-}, 300);
+// ── Boot ──────────────────────────────────────────────────────────────────
+initAudioUI();
+initConfigUI();
+initApp();
