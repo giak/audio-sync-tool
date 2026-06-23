@@ -1,5 +1,5 @@
 // ─── Unit tests for playlist.ts ──────────────────────────────────────────
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from './state.js';
 
 // Mock api.js before importing playlist.ts
@@ -7,15 +7,22 @@ vi.mock('./api.js', () => ({
   api: vi.fn(),
 }));
 
-import {
-  getPendingTracks, setPendingTracks,
-  addTrack, removeTrack, reorderTrack,
-  createNewPlaylist, removePendingPlaylist,
-  getActivePlaylistName,
-  loadPlaylists, savePlaylist, deletePlaylist,
-  renamePlaylist, exportPlaylist,
-} from './playlist.js';
 import { api } from './api.js';
+import {
+  addTrack,
+  createNewPlaylist,
+  deletePlaylist,
+  exportPlaylist,
+  getActivePlaylistName,
+  getPendingTracks,
+  loadPlaylists,
+  removePendingPlaylist,
+  removeTrack,
+  renamePlaylist,
+  reorderTrack,
+  savePlaylist,
+  setPendingTracks,
+} from './playlist.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -298,9 +305,7 @@ describe('savePlaylist', () => {
 
 describe('deletePlaylist', () => {
   it('sends DELETE and refreshes cache', async () => {
-    vi.mocked(api)
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce([]);
+    vi.mocked(api).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce([]);
 
     const result = await deletePlaylist('set-a');
 
@@ -310,9 +315,7 @@ describe('deletePlaylist', () => {
   });
 
   it('returns false when server returns ok: false', async () => {
-    vi.mocked(api)
-      .mockResolvedValueOnce({ ok: false, error: 'Not found' })
-      .mockResolvedValueOnce([]);
+    vi.mocked(api).mockResolvedValueOnce({ ok: false, error: 'Not found' }).mockResolvedValueOnce([]);
 
     const result = await deletePlaylist('nonexistent');
 

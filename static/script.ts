@@ -1,11 +1,41 @@
 // ─── Orchestrator: keyboard router + toolbar bindings + init ──────────────
+
+import { executeCopy, initApp, initConfigUI, runScan } from './actions.js';
+import { initAudioUI, isAudioPlaying, seekAudio, stopPlayer } from './audio.js';
+import { getFocusedItem, getItems, navigateColumn, navigateFocus, revalidateFocus, setActivePanel } from './focus.js';
+import {
+  addTrack,
+  createNewPlaylist,
+  deletePlaylist,
+  exportPlaylist,
+  getActivePlaylistName,
+  getPendingTracks,
+  loadPlaylists,
+  removePendingPlaylist,
+  removeTrack,
+  renamePlaylist,
+  reorderTrack,
+  savePlaylist,
+  setPendingTracks,
+} from './playlist.js';
+import {
+  patchPlaylistSourceFile,
+  renderAll,
+  renderJournal,
+  renderPlaylistManager,
+  renderPlaylistPanel,
+  renderPlaylistSource,
+  renderSource,
+} from './render.js';
 import { state } from './state.js';
-import { stopPlayer, seekAudio, isAudioPlaying, initAudioUI } from './audio.js';
-import { setActivePanel, navigateFocus, navigateColumn, getFocusedItem, getItems, revalidateFocus } from './focus.js';
-import { openModal, closeAllModals, openFilterPalette, closeFilterPalette, initFilterPalette, showError } from './ui.js';
-import { renderAll, renderSource, renderJournal, renderPlaylistPanel, renderPlaylistSource, renderPlaylistManager, patchPlaylistSourceFile } from './render.js';
-import { initConfigUI, runScan, executeCopy, initApp } from './actions.js';
-import { loadPlaylists, createNewPlaylist, savePlaylist, exportPlaylist, addTrack, removeTrack, reorderTrack, getPendingTracks, getActivePlaylistName, removePendingPlaylist, setPendingTracks, deletePlaylist, renamePlaylist } from './playlist.js';
+import {
+  closeAllModals,
+  closeFilterPalette,
+  initFilterPalette,
+  openFilterPalette,
+  openModal,
+  showError,
+} from './ui.js';
 
 // ── Playlist mode helpers ─────────────────────────────────────────────────
 
@@ -203,18 +233,33 @@ async function exitPlaylistMode(): Promise<void> {
 // ── Keyboard router ───────────────────────────────────────────────────────
 document.addEventListener('keydown', (e: KeyboardEvent) => {
   if (state.activeModal === 'dialog') {
-    if (e.key === 'Escape') { e.preventDefault(); closeAllModals(); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeAllModals();
+    }
     return;
   }
   if (state.activeModal) {
-    if (e.key === 'Escape') { e.preventDefault(); closeAllModals(); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeAllModals();
+    }
     return;
   }
 
   if (state.filterActive && document.activeElement?.id === 'source-filter') {
-    if (e.key === 'Escape') { e.preventDefault(); closeFilterPalette(renderSource); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); closeFilterPalette(renderSource); setActivePanel('source'); }
-    else if (e.key === 'Tab') { e.preventDefault(); closeFilterPalette(renderSource); setActivePanel('epars'); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeFilterPalette(renderSource);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      closeFilterPalette(renderSource);
+      setActivePanel('source');
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      closeFilterPalette(renderSource);
+      setActivePanel('epars');
+    }
     return;
   }
 
@@ -223,8 +268,16 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 
   // ── Mode Playlist keyboard handling ────────────────────────────────────
   if (state.playlistMode) {
-    if (e.key === 'Escape') { e.preventDefault(); exitPlaylistMode(); return; }
-    if (e.key === 'Tab') { e.preventDefault(); togglePlaylistFocus(); return; }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      exitPlaylistMode();
+      return;
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      togglePlaylistFocus();
+      return;
+    }
     if (e.key === ' ' && !isInput) {
       e.preventDefault();
       if (state.playlistFocus === 'source') {
@@ -250,8 +303,16 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
       }
       return;
     }
-    if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveCurrentPlaylist(); return; }
-    if (e.ctrlKey && e.key === 'e') { e.preventDefault(); showExportModal(); return; }
+    if (e.ctrlKey && e.key === 's') {
+      e.preventDefault();
+      saveCurrentPlaylist();
+      return;
+    }
+    if (e.ctrlKey && e.key === 'e') {
+      e.preventDefault();
+      showExportModal();
+      return;
+    }
     if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !isInput) {
       e.preventDefault();
       moveTrackInPlaylist(e.key === 'ArrowUp' ? -1 : 1);
@@ -305,7 +366,11 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     }
   }
 
-  if (e.key === 'F5') { e.preventDefault(); executeCopy(); return; }
+  if (e.key === 'F5') {
+    e.preventDefault();
+    executeCopy();
+    return;
+  }
 
   if (e.key === 'F7' || (e.key === '/' && !isInput)) {
     e.preventDefault();
@@ -314,39 +379,70 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   }
 
   if (e.key === 'Escape') {
-    if (state.filterActive) { e.preventDefault(); closeFilterPalette(renderSource); return; }
-    if (isAudioPlaying()) { e.preventDefault(); stopPlayer(); return; }
+    if (state.filterActive) {
+      e.preventDefault();
+      closeFilterPalette(renderSource);
+      return;
+    }
+    if (isAudioPlaying()) {
+      e.preventDefault();
+      stopPlayer();
+      return;
+    }
     return;
   }
 
   if (isInput) return;
 
   if (isAudioPlaying() && e.shiftKey) {
-    if (e.key === 'ArrowLeft') { e.preventDefault(); seekAudio(-1); return; }
-    if (e.key === 'ArrowRight') { e.preventDefault(); seekAudio(1); return; }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      seekAudio(-1);
+      return;
+    }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      seekAudio(1);
+      return;
+    }
   }
 
-  if (e.key === 'Tab') { e.preventDefault(); setActivePanel(state.activePanel === 'source' ? 'epars' : 'source'); return; }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    setActivePanel(state.activePanel === 'source' ? 'epars' : 'source');
+    return;
+  }
 
-  const container = state.activePanel === 'source'
-    ? document.getElementById('source-container')
-    : document.getElementById('epars-container');
+  const container =
+    state.activePanel === 'source'
+      ? document.getElementById('source-container')
+      : document.getElementById('epars-container');
   if (!container) return;
   const items = getItems(container);
   if (items.length === 0) return;
 
-  if (e.key === 'ArrowDown') { e.preventDefault(); navigateFocus(container, 1); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); navigateFocus(container, -1); }
-  else if (e.key === 'ArrowLeft' && state.activePanel === 'source') { e.preventDefault(); navigateColumn(container, -1); }
-  else if (e.key === 'ArrowRight' && state.activePanel === 'source') { e.preventDefault(); navigateColumn(container, 1); }
-  else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); }
-  else if (e.key === 'Enter' || e.key === ' ') {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    navigateFocus(container, 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    navigateFocus(container, -1);
+  } else if (e.key === 'ArrowLeft' && state.activePanel === 'source') {
+    e.preventDefault();
+    navigateColumn(container, -1);
+  } else if (e.key === 'ArrowRight' && state.activePanel === 'source') {
+    e.preventDefault();
+    navigateColumn(container, 1);
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+  } else if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
     const el = getFocusedItem(container) as HTMLElement | null;
     if (!el) return;
     if (el.classList.contains('file-row')) {
-      if (e.key === 'Enter') { (el.querySelector('.play-btn') as HTMLElement | null)?.click(); }
-      else if (e.key === ' ' && state.activePanel === 'epars') {
+      if (e.key === 'Enter') {
+        (el.querySelector('.play-btn') as HTMLElement | null)?.click();
+      } else if (e.key === ' ' && state.activePanel === 'epars') {
         (el.querySelector('.file.nouveau') as HTMLElement | null)?.click();
       }
     } else if (el.classList.contains('directory') && state.activePanel === 'source') {
@@ -358,7 +454,10 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 // ── Toolbar bindings ──────────────────────────────────────────────────────
 (document.getElementById('btn-config') as HTMLElement | null)!.onclick = () => openModal('config');
 (document.getElementById('btn-legend') as HTMLElement | null)!.onclick = () => openModal('legend');
-(document.getElementById('btn-journal') as HTMLElement | null)!.onclick = () => { renderJournal(); openModal('journal'); };
+(document.getElementById('btn-journal') as HTMLElement | null)!.onclick = () => {
+  renderJournal();
+  openModal('journal');
+};
 (document.getElementById('btn-scan') as HTMLElement | null)!.onclick = runScan;
 (document.getElementById('pl-manage') as HTMLElement | null)!.onclick = () => {
   renderPlaylistManager();

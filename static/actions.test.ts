@@ -1,5 +1,5 @@
 // ─── Unit tests for actions.ts ──────────────────────────────────────────
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from './state.js';
 
 // Mock the modules that actions.ts imports BEFORE importing actions.ts
@@ -26,12 +26,14 @@ vi.mock('./focus.js', () => ({
   revalidateFocus: vi.fn(),
 }));
 
-import { executeCopy, runScan, initApp, configData } from './actions.js';
+import { configData, executeCopy, initApp, runScan } from './actions.js';
 import { api } from './api.js';
-import { openModal, closeAllModals, showError } from './ui.js';
-import { renderAll, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderSource } from './render.js';
+import { patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderAll, renderSource } from './render.js';
+import { closeAllModals, openModal, showError } from './ui.js';
 
-function setupCopyDOM(opts: { hasLeftFocus?: boolean; hasRightFocus?: boolean; hasEparDir?: boolean; hasRelPath?: boolean } = {}): void {
+function setupCopyDOM(
+  opts: { hasLeftFocus?: boolean; hasRightFocus?: boolean; hasEparDir?: boolean; hasRelPath?: boolean } = {},
+): void {
   const { hasLeftFocus = true, hasRightFocus = true, hasEparDir = true, hasRelPath = true } = opts;
   document.body.innerHTML = `
     <div id="epars-container">
@@ -92,13 +94,13 @@ describe('executeCopy', () => {
   it('shows error when no file focused on left', () => {
     setupCopyDOM({ hasLeftFocus: false });
     executeCopy();
-    expect(document.getElementById('status-text')!.textContent).toContain('Met d\'abord en surbrillance un fichier');
+    expect(document.getElementById('status-text')!.textContent).toContain("Met d'abord en surbrillance un fichier");
   });
 
   it('shows error when no directory focused on right', () => {
     setupCopyDOM({ hasRightFocus: false });
     executeCopy();
-    expect(document.getElementById('status-text')!.textContent).toContain('Met d\'abord en surbrillance un dossier');
+    expect(document.getElementById('status-text')!.textContent).toContain("Met d'abord en surbrillance un dossier");
   });
 
   it('shows error when file has no eparDir', () => {
@@ -131,17 +133,30 @@ describe('executeCopy', () => {
     await (document.getElementById('dialog-confirm') as HTMLElement).onclick!();
 
     expect(closeAllModals).toHaveBeenCalled();
-    expect(api).toHaveBeenCalledWith('/copy', expect.objectContaining({
-      method: 'POST',
-      body: expect.stringContaining('song.mp3'),
-    }));
+    expect(api).toHaveBeenCalledWith(
+      '/copy',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('song.mp3'),
+      }),
+    );
     expect(state.sourceFiles['/home/music']['song.mp3']).toEqual({
-      path: 'Rock/song.mp3', year: '2021', duration: 240, codec: 'MP3 320kbps',
+      path: 'Rock/song.mp3',
+      year: '2021',
+      duration: 240,
+      codec: 'MP3 320kbps',
     });
     expect(patchEparsFileAfterCopy).toHaveBeenCalledWith('song.mp3', '/media/usb');
-    expect(patchSourceFileAfterCopy).toHaveBeenCalledWith('/home/music/Rock', 'song.mp3', expect.objectContaining({
-      path: 'Rock/song.mp3', year: '2021', duration: 240, codec: 'MP3 320kbps',
-    }));
+    expect(patchSourceFileAfterCopy).toHaveBeenCalledWith(
+      '/home/music/Rock',
+      'song.mp3',
+      expect.objectContaining({
+        path: 'Rock/song.mp3',
+        year: '2021',
+        duration: 240,
+        codec: 'MP3 320kbps',
+      }),
+    );
     expect(renderSource).not.toHaveBeenCalled();
     expect(document.getElementById('status-text')!.textContent).toContain('✓');
   });
@@ -168,9 +183,7 @@ describe('executeCopy', () => {
     executeCopy();
     await (document.getElementById('dialog-confirm') as HTMLElement).onclick!();
 
-    expect(showError).toHaveBeenCalledWith(
-      expect.stringContaining('Permission denied')
-    );
+    expect(showError).toHaveBeenCalledWith(expect.stringContaining('Permission denied'));
   });
 
   it('cancel click closes dialog without copying', () => {
@@ -200,7 +213,10 @@ describe('runScan', () => {
 
 describe('initApp', () => {
   it('loads config, cache, and journal on startup', async () => {
-    vi.mocked(api).mockResolvedValueOnce({ active: 0, configs: [{ name: 'test', source_data: '/src', epars_dirs: [] }] });
+    vi.mocked(api).mockResolvedValueOnce({
+      active: 0,
+      configs: [{ name: 'test', source_data: '/src', epars_dirs: [] }],
+    });
     vi.mocked(api).mockResolvedValueOnce({ source: { '/src': { 'a.mp3': { path: 'a.mp3' } } }, epars: {} });
     vi.mocked(api).mockResolvedValueOnce([]);
 

@@ -1,5 +1,5 @@
 // ─── Unit tests for patchSourceFileAfterCopy ─────────────────────────────
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from './state.js';
 
 // Polyfill CSS.escape for jsdom
@@ -31,7 +31,14 @@ vi.mock('./focus.js', () => ({
   revalidateFocus: vi.fn(),
 }));
 
-import { patchSourceFileAfterCopy, patchEparsFileAfterCopy, toggleSourceDir, renderJournal, renderEpars, renderSource } from './render.js';
+import {
+  patchEparsFileAfterCopy,
+  patchSourceFileAfterCopy,
+  renderEpars,
+  renderJournal,
+  renderSource,
+  toggleSourceDir,
+} from './render.js';
 import { countAllEparsFiles } from './utils.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -114,11 +121,12 @@ describe('patchSourceFileAfterCopy', () => {
         children.appendChild(row);
       });
 
-      const result = patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'beat.mp3',
-        { path: 'Rock/beat.mp3', year: '2025', duration: 180, codec: 'MP3 320kbps' }
-      );
+      const result = patchSourceFileAfterCopy('/home/Music/Rock', 'beat.mp3', {
+        path: 'Rock/beat.mp3',
+        year: '2025',
+        duration: 180,
+        codec: 'MP3 320kbps',
+      });
 
       expect(result).toBe(true);
 
@@ -130,11 +138,12 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('creates a file row with correct classes and data', () => {
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'x.mp3',
-        { path: 'Rock/x.mp3', year: '2025', duration: 240, codec: 'FLAC' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'x.mp3', {
+        path: 'Rock/x.mp3',
+        year: '2025',
+        duration: 240,
+        codec: 'FLAC',
+      });
 
       const rows = document.querySelectorAll('#source-container .file-row');
       const newRow = rows[rows.length - 1] as HTMLElement;
@@ -151,11 +160,12 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('includes metadata spans when provided', () => {
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'meta.mp3',
-        { path: 'Rock/meta.mp3', year: '2021', duration: 195, codec: 'MP3 320kbps' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'meta.mp3', {
+        path: 'Rock/meta.mp3',
+        year: '2021',
+        duration: 195,
+        codec: 'MP3 320kbps',
+      });
 
       const rows = [...document.querySelectorAll('#source-container .file-row')];
       const newRow = rows[rows.length - 1] as HTMLElement;
@@ -165,11 +175,12 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('omits metadata spans when absent', () => {
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'bare.mp3',
-        { path: 'Rock/bare.mp3', year: null, duration: 0, codec: '' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'bare.mp3', {
+        path: 'Rock/bare.mp3',
+        year: null,
+        duration: 0,
+        codec: '',
+      });
 
       const rows = document.querySelectorAll('#source-container .file-row');
       const newRow = [...rows].find(r => r.querySelector('.file')?.textContent === 'bare.mp3') as HTMLElement;
@@ -179,11 +190,12 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('updates the count badge', () => {
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'new.mp3',
-        { path: 'Rock/new.mp3', year: '2025', duration: 200, codec: 'MP3 320kbps' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'new.mp3', {
+        path: 'Rock/new.mp3',
+        year: '2025',
+        duration: 200,
+        codec: 'MP3 320kbps',
+      });
 
       const badge = document.querySelector('#source-container .dir-count');
       expect(badge).not.toBeNull();
@@ -191,11 +203,7 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('updates the sourceNodeMap in-memory node', () => {
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'mapped.mp3',
-        { path: 'Rock/mapped.mp3', year: '2025' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'mapped.mp3', { path: 'Rock/mapped.mp3', year: '2025' });
 
       const info = state.sourceNodeMap.get('/home/Music/Rock')!;
       expect(info).not.toBeUndefined();
@@ -210,11 +218,7 @@ describe('patchSourceFileAfterCopy', () => {
         baseDir: '/home/Music',
       });
 
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'first.mp3',
-        { path: 'Rock/first.mp3', year: '2025' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'first.mp3', { path: 'Rock/first.mp3', year: '2025' });
 
       const badge = document.querySelector('#source-container .dir-count');
       expect(badge).not.toBeNull();
@@ -235,11 +239,12 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('returns true without touching the DOM', () => {
-      const result = patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'hidden.mp3',
-        { path: 'Rock/hidden.mp3', year: '2025', duration: 180, codec: 'MP3 320kbps' }
-      );
+      const result = patchSourceFileAfterCopy('/home/Music/Rock', 'hidden.mp3', {
+        path: 'Rock/hidden.mp3',
+        year: '2025',
+        duration: 180,
+        codec: 'MP3 320kbps',
+      });
 
       expect(result).toBe(true);
       expect(document.querySelector('#source-container .directory')).toBeNull();
@@ -247,11 +252,7 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('adds the file to the in-memory node', () => {
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'phantom.mp3',
-        { path: 'Rock/phantom.mp3', year: '2025' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'phantom.mp3', { path: 'Rock/phantom.mp3', year: '2025' });
 
       const info = state.sourceNodeMap.get('/home/Music/Rock')!;
       expect((info.node as any).__files__.length).toBe(2);
@@ -273,21 +274,18 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('walks up, traverses down, and returns true', () => {
-      const result = patchSourceFileAfterCopy(
-        '/home/Music/Rock/ACDC',
-        'thunder.mp3',
-        { path: 'Rock/ACDC/thunder.mp3', year: '1990', duration: 292, codec: 'MP3 320kbps' }
-      );
+      const result = patchSourceFileAfterCopy('/home/Music/Rock/ACDC', 'thunder.mp3', {
+        path: 'Rock/ACDC/thunder.mp3',
+        year: '1990',
+        duration: 292,
+        codec: 'MP3 320kbps',
+      });
 
       expect(result).toBe(true);
     });
 
     it('adds the file to the leaf node after traverse-down', () => {
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock/ACDC',
-        'thunder.mp3',
-        { path: 'Rock/ACDC/thunder.mp3', year: '1990' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock/ACDC', 'thunder.mp3', { path: 'Rock/ACDC/thunder.mp3', year: '1990' });
 
       const rockInfo = state.sourceNodeMap.get('/home/Music/Rock')!;
       expect((rockInfo.node as any).ACDC.__files__.length).toBe(1);
@@ -295,11 +293,7 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('registers intermediate directories in sourceNodeMap', () => {
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock/ACDC',
-        'thunder.mp3',
-        { path: 'Rock/ACDC/thunder.mp3', year: '1990' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock/ACDC', 'thunder.mp3', { path: 'Rock/ACDC/thunder.mp3', year: '1990' });
 
       const acdcInfo = state.sourceNodeMap.get('/home/Music/Rock/ACDC')!;
       expect(acdcInfo).not.toBeUndefined();
@@ -317,11 +311,10 @@ describe('patchSourceFileAfterCopy', () => {
         baseDir: '/home/Music',
       });
 
-      const result = patchSourceFileAfterCopy(
-        '/home/Music/Rock/ACDC/BackInBlack',
-        'hib.mp3',
-        { path: 'Rock/ACDC/BackInBlack/hib.mp3', year: '1980' }
-      );
+      const result = patchSourceFileAfterCopy('/home/Music/Rock/ACDC/BackInBlack', 'hib.mp3', {
+        path: 'Rock/ACDC/BackInBlack/hib.mp3',
+        year: '1980',
+      });
 
       expect(result).toBe(true);
       expect(state.sourceNodeMap.has('/home/Music/Rock/ACDC')).toBe(true);
@@ -338,11 +331,7 @@ describe('patchSourceFileAfterCopy', () => {
         baseDir: '/home/Music',
       });
 
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock/ACDC',
-        'base.mp3',
-        { path: 'Rock/ACDC/base.mp3', year: '2025' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock/ACDC', 'base.mp3', { path: 'Rock/ACDC/base.mp3', year: '2025' });
 
       for (const [, info] of state.sourceNodeMap) {
         expect(info.baseDir).toBe('/home/Music');
@@ -368,11 +357,12 @@ describe('patchSourceFileAfterCopy', () => {
         baseDir: '/home/Music',
       });
 
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'deep.mp3',
-        { path: 'Rock/deep.mp3', year: '2025', duration: 180, codec: 'MP3 320kbps' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'deep.mp3', {
+        path: 'Rock/deep.mp3',
+        year: '2025',
+        duration: 180,
+        codec: 'MP3 320kbps',
+      });
 
       const rows = document.querySelectorAll('#source-container .file-row');
       expect(rows.length).toBe(2);
@@ -386,11 +376,7 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('returns false to signal fallback to renderSource()', () => {
-      const result = patchSourceFileAfterCopy(
-        '/some/unknown/path',
-        'lost.mp3',
-        { path: 'lost.mp3', year: '2025' }
-      );
+      const result = patchSourceFileAfterCopy('/some/unknown/path', 'lost.mp3', { path: 'lost.mp3', year: '2025' });
 
       expect(result).toBe(false);
       expect(state.sourceNodeMap.size).toBe(0);
@@ -405,11 +391,7 @@ describe('patchSourceFileAfterCopy', () => {
         baseDir: '/home/Music',
       });
 
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'counted.mp3',
-        { path: 'Rock/counted.mp3', year: '2025' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'counted.mp3', { path: 'Rock/counted.mp3', year: '2025' });
 
       const header = document.getElementById('source-header-count')!;
       expect(header.textContent).toBe('(1)');
@@ -425,11 +407,7 @@ describe('patchSourceFileAfterCopy', () => {
       state.sourceFilter = 'rock';
       document.getElementById('source-header-count')!.textContent = '(1 / 1)';
 
-      patchSourceFileAfterCopy(
-        '/home/Music/Rock',
-        'filtered.mp3',
-        { path: 'Rock/filtered.mp3', year: '2025' }
-      );
+      patchSourceFileAfterCopy('/home/Music/Rock', 'filtered.mp3', { path: 'Rock/filtered.mp3', year: '2025' });
 
       const header = document.getElementById('source-header-count')!;
       expect(header.textContent).toBe('(1 / 1)');
@@ -576,7 +554,10 @@ describe('patchEparsFileAfterCopy', () => {
 
     it('counts only files inside #epars-container', () => {
       setupMultiFileDOM();
-      document.body.insertAdjacentHTML('beforeend', '<span class="file nouveau led-nouveau" id="stray">stray.mp3</span>');
+      document.body.insertAdjacentHTML(
+        'beforeend',
+        '<span class="file nouveau led-nouveau" id="stray">stray.mp3</span>',
+      );
 
       patchEparsFileAfterCopy('b.mp3', '/media/usb');
 
@@ -651,7 +632,11 @@ describe('toggleSourceDir', () => {
     state.sourceNodeMap.set('/home/Music/Rock', {
       node: {
         ACDC: { __files__: [] },
-        Jazz: { __files__: [{ filename: 'cool.mp3', relPath: 'Rock/Jazz/cool.mp3', year: '2024', duration: 300, codec: 'FLAC' }] },
+        Jazz: {
+          __files__: [
+            { filename: 'cool.mp3', relPath: 'Rock/Jazz/cool.mp3', year: '2024', duration: 300, codec: 'FLAC' },
+          ],
+        },
         __files__: [
           { filename: 'a.mp3', relPath: 'Rock/a.mp3', year: '2022' },
           { filename: 'b.mp3', relPath: 'Rock/b.mp3', year: '2023' },
@@ -831,12 +816,14 @@ describe('renderJournal', () => {
 
   it('renders copied entry with 📋 icon, timestamp, filename and destination', () => {
     setupJournalDOM();
-    state.journal = [{
-      timestamp: '2025-06-22T14:30:00.000Z',
-      status: 'copied',
-      filename: 'song.mp3',
-      destination: '/home/music/Rock/song.mp3',
-    } as any];
+    state.journal = [
+      {
+        timestamp: '2025-06-22T14:30:00.000Z',
+        status: 'copied',
+        filename: 'song.mp3',
+        destination: '/home/music/Rock/song.mp3',
+      } as any,
+    ];
 
     renderJournal();
 
@@ -850,12 +837,14 @@ describe('renderJournal', () => {
 
   it('renders scan entry with 🔍 icon, action and details', () => {
     setupJournalDOM();
-    state.journal = [{
-      timestamp: '2025-06-22T10:00:00.000Z',
-      status: 'scan',
-      action: 'Scan terminé',
-      details: '42 fichiers source, 15 épars (3 dossiers)',
-    } as any];
+    state.journal = [
+      {
+        timestamp: '2025-06-22T10:00:00.000Z',
+        status: 'scan',
+        action: 'Scan terminé',
+        details: '42 fichiers source, 15 épars (3 dossiers)',
+      } as any,
+    ];
 
     renderJournal();
 
@@ -868,12 +857,14 @@ describe('renderJournal', () => {
 
   it('renders config entry with ⚙️ icon, action and details', () => {
     setupJournalDOM();
-    state.journal = [{
-      timestamp: '2025-06-22T09:00:00.000Z',
-      status: 'config',
-      action: 'Config sauvegardée',
-      details: 'Profil : Ma config',
-    } as any];
+    state.journal = [
+      {
+        timestamp: '2025-06-22T09:00:00.000Z',
+        status: 'config',
+        action: 'Config sauvegardée',
+        details: 'Profil : Ma config',
+      } as any,
+    ];
 
     renderJournal();
 
@@ -886,11 +877,13 @@ describe('renderJournal', () => {
 
   it('renders unknown status as error entry', () => {
     setupJournalDOM();
-    state.journal = [{
-      timestamp: '2025-06-22T08:00:00.000Z',
-      status: 'unknown',
-      action: 'Something happened',
-    } as any];
+    state.journal = [
+      {
+        timestamp: '2025-06-22T08:00:00.000Z',
+        status: 'unknown',
+        action: 'Something happened',
+      } as any,
+    ];
 
     renderJournal();
 
@@ -901,11 +894,13 @@ describe('renderJournal', () => {
 
   it('falls back to filename when status unknown and no action', () => {
     setupJournalDOM();
-    state.journal = [{
-      timestamp: '2025-06-22T08:00:00.000Z',
-      status: 'unknown',
-      filename: 'fallback.mp3',
-    } as any];
+    state.journal = [
+      {
+        timestamp: '2025-06-22T08:00:00.000Z',
+        status: 'unknown',
+        filename: 'fallback.mp3',
+      } as any,
+    ];
 
     renderJournal();
 
@@ -915,10 +910,12 @@ describe('renderJournal', () => {
 
   it('falls back to ? when no action, no filename', () => {
     setupJournalDOM();
-    state.journal = [{
-      timestamp: '2025-06-22T08:00:00.000Z',
-      status: 'unknown',
-    } as any];
+    state.journal = [
+      {
+        timestamp: '2025-06-22T08:00:00.000Z',
+        status: 'unknown',
+      } as any,
+    ];
 
     renderJournal();
 
@@ -930,7 +927,12 @@ describe('renderJournal', () => {
     setupJournalDOM();
     state.journal = [
       { timestamp: '2025-06-21T12:00:00.000Z', status: 'scan', action: 'First scan', details: '' },
-      { timestamp: '2025-06-22T14:00:00.000Z', status: 'copied', filename: 'second.mp3', destination: '/dst/second.mp3' },
+      {
+        timestamp: '2025-06-22T14:00:00.000Z',
+        status: 'copied',
+        filename: 'second.mp3',
+        destination: '/dst/second.mp3',
+      },
       { timestamp: '2025-06-22T15:00:00.000Z', status: 'copied', filename: 'third.mp3', destination: '/dst/third.mp3' },
     ] as any[];
 
@@ -945,11 +947,13 @@ describe('renderJournal', () => {
 
   it('handles missing timestamp gracefully', () => {
     setupJournalDOM();
-    state.journal = [{
-      status: 'copied',
-      filename: 'notime.mp3',
-      destination: '/dst/notime.mp3',
-    } as any];
+    state.journal = [
+      {
+        status: 'copied',
+        filename: 'notime.mp3',
+        destination: '/dst/notime.mp3',
+      } as any,
+    ];
 
     renderJournal();
 

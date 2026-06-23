@@ -1,6 +1,6 @@
 // ─── Integration test: REAL UX interactions (clicks, keyboard, navigation) ──
 // Only mocks api.js (network). focus.js, audio.js, ui.js, render.js are REAL.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from './state.js';
 
 // ── Mock ONLY api.js (network calls) ───────────────────────────────────────
@@ -27,11 +27,24 @@ vi.hoisted(() => {
       _data: Map<string, string>;
       dropEffect: string;
       effectAllowed: string;
-      constructor() { this._data = new Map(); this.dropEffect = 'none'; this.effectAllowed = 'all'; }
-      setData(format: string, data: string): void { this._data.set(format, data); }
-      getData(format: string): string { return this._data.get(format) || ''; }
-      clearData(format?: string): void { if (format) this._data.delete(format); else this._data.clear(); }
-      get types(): string[] { return Array.from(this._data.keys()); }
+      constructor() {
+        this._data = new Map();
+        this.dropEffect = 'none';
+        this.effectAllowed = 'all';
+      }
+      setData(format: string, data: string): void {
+        this._data.set(format, data);
+      }
+      getData(format: string): string {
+        return this._data.get(format) || '';
+      }
+      clearData(format?: string): void {
+        if (format) this._data.delete(format);
+        else this._data.clear();
+      }
+      get types(): string[] {
+        return Array.from(this._data.keys());
+      }
       setDragImage(): void {}
     };
   }
@@ -85,11 +98,17 @@ vi.hoisted(() => {
 
 // ── Import SCRIPT.TS (executes on the real DOM set up above) ────────────────
 import './script.js';
-import { renderEpars, renderSource, renderPlaylistSource, renderPlaylistPanel, renderPlaylistManager } from './render.js';
-import { setActivePanel } from './focus.js';
 import { executeCopy } from './actions.js';
 import { api } from './api.js';
 import { stopPlayer } from './audio.js';
+import { setActivePanel } from './focus.js';
+import {
+  renderEpars,
+  renderPlaylistManager,
+  renderPlaylistPanel,
+  renderPlaylistSource,
+  renderSource,
+} from './render.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -220,7 +239,9 @@ describe('Click interactions', () => {
   it('clicking source directory expands it', async () => {
     renderSource();
 
-    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]') as HTMLElement;
+    const rockDir = document.querySelector(
+      '#source-container .directory[data-dirpath="/home/music/Rock"]',
+    ) as HTMLElement;
     expect(rockDir).not.toBeNull();
     expect(rockDir.classList.contains('expanded')).toBe(false);
 
@@ -236,7 +257,9 @@ describe('Click interactions', () => {
   it('clicking directory again collapses it', async () => {
     renderSource();
 
-    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]') as HTMLElement;
+    const rockDir = document.querySelector(
+      '#source-container .directory[data-dirpath="/home/music/Rock"]',
+    ) as HTMLElement;
     rockDir.click();
     await flush();
     rockDir.click();
@@ -476,9 +499,19 @@ describe('Keyboard navigation', () => {
   });
 
   it('←→ navigates between columns in Source Data via keyboard router', async () => {
-    state.sourceFiles['/home/music']['d.mp3'] = { path: 'Electronic/d.mp3', year: '2023', duration: 180, codec: 'MP3 320kbps' };
+    state.sourceFiles['/home/music']['d.mp3'] = {
+      path: 'Electronic/d.mp3',
+      year: '2023',
+      duration: 180,
+      codec: 'MP3 320kbps',
+    };
     state.sourceFiles['/home/music']['e.mp3'] = { path: 'Pop/e.mp3', year: '2024', duration: 200, codec: 'FLAC' };
-    state.sourceFiles['/home/music']['f.mp3'] = { path: 'Metal/f.mp3', year: '2022', duration: 160, codec: 'MP3 192kbps' };
+    state.sourceFiles['/home/music']['f.mp3'] = {
+      path: 'Metal/f.mp3',
+      year: '2022',
+      duration: 160,
+      codec: 'MP3 192kbps',
+    };
 
     renderSource();
     state.activePanel = 'source';
@@ -495,11 +528,15 @@ describe('Keyboard navigation', () => {
     for (let i = 0; i < dirs.length; i++) {
       const col = i < 3 ? col1Left : col2Left;
       const top = (i < 3 ? i : i - 3) * rowHeight + 10;
-      (dirs[i] as HTMLElement).getBoundingClientRect = () => ({
-        left: col, top,
-        right: col + 200, bottom: top + 30,
-        width: 200, height: 30,
-      } as DOMRect);
+      (dirs[i] as HTMLElement).getBoundingClientRect = () =>
+        ({
+          left: col,
+          top,
+          right: col + 200,
+          bottom: top + 30,
+          width: 200,
+          height: 30,
+        }) as DOMRect;
     }
 
     dirs[0].classList.add('focused');
@@ -537,7 +574,9 @@ describe('F5 copy flow', () => {
     fileSpan.dataset.epardir = '/media/usb';
     fileSpan.closest('.file-row')!.classList.add('focused');
 
-    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]') as HTMLElement;
+    const rockDir = document.querySelector(
+      '#source-container .directory[data-dirpath="/home/music/Rock"]',
+    ) as HTMLElement;
     rockDir.classList.add('focused');
 
     dispatchKey('F5');
@@ -549,7 +588,10 @@ describe('F5 copy flow', () => {
 
   it('confirm dialog executes copy and patches DOM', async () => {
     vi.mocked(api).mockResolvedValueOnce({
-      ok: true, year: '2025', duration: 240, codec: 'MP3 320kbps',
+      ok: true,
+      year: '2025',
+      duration: 240,
+      codec: 'MP3 320kbps',
     });
     vi.mocked(api).mockResolvedValueOnce([
       { filename: 'new-track.mp3', status: 'copied', timestamp: '2025-01-01T00:00:00' },
@@ -563,7 +605,9 @@ describe('F5 copy flow', () => {
     fileSpan.closest('.file-row')!.classList.add('focused');
     fileSpan.classList.add('focused');
 
-    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]') as HTMLElement;
+    const rockDir = document.querySelector(
+      '#source-container .directory[data-dirpath="/home/music/Rock"]',
+    ) as HTMLElement;
     rockDir.classList.add('focused');
 
     dispatchKey('F5');
@@ -600,7 +644,9 @@ describe('Error resilience', () => {
     fileSpan.closest('.file-row')!.classList.add('focused');
     fileSpan.classList.add('focused');
 
-    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]') as HTMLElement;
+    const rockDir = document.querySelector(
+      '#source-container .directory[data-dirpath="/home/music/Rock"]',
+    ) as HTMLElement;
     rockDir.classList.add('focused');
 
     dispatchKey('F5');
@@ -767,9 +813,12 @@ describe('Playlist mode', () => {
     await flush();
     await flush();
 
-    expect(api).toHaveBeenCalledWith('/playlists', expect.objectContaining({
-      method: 'POST',
-    }));
+    expect(api).toHaveBeenCalledWith(
+      '/playlists',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
 
     expect(state.playlistMode).toBe(false);
     expect(document.getElementById('playlist-layout')!.classList.contains('hidden')).toBe(true);
@@ -789,9 +838,12 @@ describe('Playlist mode', () => {
     await flush();
     await flush();
 
-    expect(api).not.toHaveBeenCalledWith('/playlists', expect.objectContaining({
-      method: 'POST',
-    }));
+    expect(api).not.toHaveBeenCalledWith(
+      '/playlists',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
 
     expect(state.playlistMode).toBe(false);
   });
@@ -889,7 +941,9 @@ describe('Playlist mode', () => {
     expect(items.length).toBeGreaterThanOrEqual(2);
 
     items[0].classList.add('focused');
-    items.forEach((it, i) => { if (i > 0) it.classList.remove('focused'); });
+    items.forEach((it, i) => {
+      if (i > 0) it.classList.remove('focused');
+    });
 
     dispatchKey('ArrowDown');
     await flush();
@@ -938,9 +992,12 @@ describe('Playlist mode', () => {
     await flush();
     await flush();
 
-    expect(api).toHaveBeenCalledWith('/playlists', expect.objectContaining({
-      method: 'POST',
-    }));
+    expect(api).toHaveBeenCalledWith(
+      '/playlists',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
 
     expect(document.getElementById('status-text')!.textContent).toContain('sauvegardée');
   });
@@ -999,7 +1056,7 @@ describe('Playlist mode', () => {
     const remainingTracks = document.querySelectorAll('#playlist-tracks .pl-track');
     expect(remainingTracks.length).toBe(1);
     expect(remainingTracks[0].querySelector('.pl-track-name')!.textContent).toBe(
-      rows[1].querySelector('.file')!.textContent
+      rows[1].querySelector('.file')!.textContent,
     );
   });
 
@@ -1256,11 +1313,15 @@ describe('Playlist mode', () => {
 
   it('renderPlaylistManager renders table with saved and pending playlists', async () => {
     state.playlists = [
-      { name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }], exported: '2025-01-15T00:00:00Z' },
+      {
+        name: 'rock',
+        tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }],
+        exported: '2025-01-15T00:00:00Z',
+      },
       { name: 'jazz', tracks: [{ filename: 'b.mp3', fullPath: '/m/b.mp3', duration: 180 }] },
     ] as any[];
     state.pendingPlaylists = {
-      'rock': [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] as any[],
+      rock: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] as any[],
       'new-pl': [{ filename: 'c.mp3', fullPath: '/m/c.mp3', duration: 240 }] as any[],
     };
     renderPlaylistManager();
@@ -1277,7 +1338,9 @@ describe('Playlist mode', () => {
     dataTransfer.setData('text/plain', (fromEl as HTMLElement).dataset.index || '');
 
     fromEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dataTransfer as any }));
-    toEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dataTransfer as any }));
+    toEl.dispatchEvent(
+      new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dataTransfer as any }),
+    );
     toEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dataTransfer as any }));
     fromEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dataTransfer as any }));
   }
@@ -1309,9 +1372,7 @@ describe('Playlist mode', () => {
 
   it('Charger button loads playlist and enters playlist mode', async () => {
     state.playlistMode = false;
-    state.playlists = [
-      { name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] },
-    ] as any[];
+    state.playlists = [{ name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] }] as any[];
     state.pendingPlaylists = {};
     renderPlaylistManager();
     await flush();
@@ -1330,9 +1391,7 @@ describe('Playlist mode', () => {
   });
 
   it('Renommer button renames playlist via prompt and API', async () => {
-    state.playlists = [
-      { name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] },
-    ] as any[];
+    state.playlists = [{ name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] }] as any[];
     state.pendingPlaylists = {};
     renderPlaylistManager();
     await flush();
@@ -1347,10 +1406,13 @@ describe('Playlist mode', () => {
     await flush();
 
     expect(promptSpy).toHaveBeenCalled();
-    expect(api).toHaveBeenCalledWith('/playlists/rock', expect.objectContaining({
-      method: 'PUT',
-      body: expect.stringContaining('metal'),
-    }));
+    expect(api).toHaveBeenCalledWith(
+      '/playlists/rock',
+      expect.objectContaining({
+        method: 'PUT',
+        body: expect.stringContaining('metal'),
+      }),
+    );
     expect(document.getElementById('pl-manager-content')!.textContent).toContain('metal');
     expect(document.getElementById('pl-manager-content')!.textContent).not.toContain('rock');
 
@@ -1358,9 +1420,7 @@ describe('Playlist mode', () => {
   });
 
   it('Supprimer button deletes playlist after confirmation', async () => {
-    state.playlists = [
-      { name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] },
-    ] as any[];
+    state.playlists = [{ name: 'rock', tracks: [{ filename: 'a.mp3', fullPath: '/m/a.mp3', duration: 200 }] }] as any[];
     state.pendingPlaylists = {};
     renderPlaylistManager();
     await flush();
@@ -1375,9 +1435,12 @@ describe('Playlist mode', () => {
     await flush();
 
     expect(confirmSpy).toHaveBeenCalled();
-    expect(api).toHaveBeenCalledWith('/playlists/rock', expect.objectContaining({
-      method: 'DELETE',
-    }));
+    expect(api).toHaveBeenCalledWith(
+      '/playlists/rock',
+      expect.objectContaining({
+        method: 'DELETE',
+      }),
+    );
     expect(document.getElementById('pl-manager-content')!.textContent).not.toContain('rock');
 
     confirmSpy.mockRestore();
@@ -1425,7 +1488,9 @@ describe('Keyboard gaps', () => {
 
     document.querySelectorAll('#source-container .focused').forEach(el => el.classList.remove('focused'));
 
-    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]') as HTMLElement;
+    const rockDir = document.querySelector(
+      '#source-container .directory[data-dirpath="/home/music/Rock"]',
+    ) as HTMLElement;
     rockDir.classList.add('focused');
     expect(rockDir.classList.contains('expanded')).toBe(false);
 
@@ -1444,7 +1509,9 @@ describe('Keyboard gaps', () => {
 
     document.querySelectorAll('#source-container .focused').forEach(el => el.classList.remove('focused'));
 
-    const rockDir = document.querySelector('#source-container .directory[data-dirpath="/home/music/Rock"]') as HTMLElement;
+    const rockDir = document.querySelector(
+      '#source-container .directory[data-dirpath="/home/music/Rock"]',
+    ) as HTMLElement;
     rockDir.classList.add('focused');
 
     dispatchKey(' ');
@@ -1484,13 +1551,23 @@ describe('Player bar mouse', () => {
     await flush();
 
     const progressBar = document.getElementById('player-progress')!;
-    progressBar.getBoundingClientRect = () => ({
-      left: 0, width: 400, right: 400, top: 0, bottom: 20, height: 20,
-    } as DOMRect);
+    progressBar.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        width: 400,
+        right: 400,
+        top: 0,
+        bottom: 20,
+        height: 20,
+      }) as DOMRect;
 
-    progressBar.dispatchEvent(new MouseEvent('click', {
-      bubbles: true, clientX: 200, clientY: 10,
-    }));
+    progressBar.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        clientX: 200,
+        clientY: 10,
+      }),
+    );
 
     const pct = parseFloat(document.getElementById('player-progress-fill')!.style.width) || 0;
     expect(pct).toBeCloseTo(50, -1);
@@ -1583,7 +1660,7 @@ describe('Edge cases', () => {
       '/media/usb': {
         'tést ♫ ñ.mp3': { path: 'tést ♫ ñ.mp3', year: '2025', duration: 240, codec: 'MP3' },
         'a"b\'c.mp3': { path: 'a"b\'c.mp3', year: '2023', duration: 180, codec: 'FLAC' },
-      }
+      },
     };
 
     renderEpars();
@@ -1598,7 +1675,7 @@ describe('Edge cases', () => {
   it('handles very long filenames', async () => {
     const longName = 'a'.repeat(120) + '.mp3';
     state.eparsFiles = {
-      '/media/usb': { [longName]: { path: longName, year: '2024', duration: 100, codec: 'MP3' } }
+      '/media/usb': { [longName]: { path: longName, year: '2024', duration: 100, codec: 'MP3' } },
     };
 
     renderEpars();

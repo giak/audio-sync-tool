@@ -1,6 +1,7 @@
 // ─── Playlist business logic: CRUD, export, drag-drop state ─────────────
-import { state } from './state.js';
+
 import { api } from './api.js';
+import { state } from './state.js';
 
 interface PlaylistTrack {
   filename: string;
@@ -29,7 +30,7 @@ export async function loadPlaylists(): Promise<void> {
 export async function savePlaylist(name: string, tracks: PlaylistTrack[]): Promise<Record<string, unknown>> {
   const res = await api<{ playlist: Record<string, unknown> }>('/playlists', {
     method: 'POST',
-    body: JSON.stringify({ name, tracks })
+    body: JSON.stringify({ name, tracks }),
   });
   // Refresh local cache so tabs stay in sync
   await loadPlaylists();
@@ -44,7 +45,7 @@ export async function savePlaylist(name: string, tracks: PlaylistTrack[]): Promi
 export async function renamePlaylist(oldName: string, newName: string): Promise<Record<string, unknown>> {
   const res = await api(`/playlists/${encodeURIComponent(oldName)}`, {
     method: 'PUT',
-    body: JSON.stringify({ name: newName })
+    body: JSON.stringify({ name: newName }),
   });
   await loadPlaylists();
   return res;
@@ -68,7 +69,7 @@ export async function deletePlaylist(name: string): Promise<boolean> {
 export async function exportPlaylist(name: string): Promise<Record<string, unknown>> {
   return await api('/playlists/export', {
     method: 'POST',
-    body: JSON.stringify({ name })
+    body: JSON.stringify({ name }),
   });
 }
 

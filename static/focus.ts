@@ -31,7 +31,10 @@ export function focusItemByPath(container: HTMLElement, path: string | null): vo
   const items = getItems(container);
   container.querySelectorAll('.focused').forEach(r => r.classList.remove('focused'));
   if (!path) {
-    if (items.length > 0) { items[0].classList.add('focused'); items[0].scrollIntoView({ block: 'nearest' }); }
+    if (items.length > 0) {
+      items[0].classList.add('focused');
+      items[0].scrollIntoView({ block: 'nearest' });
+    }
     return;
   }
   for (const el of items) {
@@ -41,7 +44,10 @@ export function focusItemByPath(container: HTMLElement, path: string | null): vo
       return;
     }
   }
-  if (items.length > 0) { items[0].classList.add('focused'); items[0].scrollIntoView({ block: 'nearest' }); }
+  if (items.length > 0) {
+    items[0].classList.add('focused');
+    items[0].scrollIntoView({ block: 'nearest' });
+  }
 }
 
 export function getFocusedItem(container: HTMLElement): Element | null {
@@ -61,7 +67,10 @@ export function navigateFocus(container: HTMLElement, direction: number): void {
   const current = getFocusedItem(container);
   let idx = 0;
   for (let i = 0; i < items.length; i++) {
-    if (items[i] === current) { idx = i; break; }
+    if (items[i] === current) {
+      idx = i;
+      break;
+    }
   }
   if (!current) idx = direction > 0 ? -1 : items.length;
   const newIdx = Math.max(0, Math.min(items.length - 1, idx + direction));
@@ -83,7 +92,10 @@ export function navigateColumn(container: HTMLElement, direction: number): void 
     if (direction > 0 && dx <= 5) continue;
     const dy = Math.abs(rect.top - curRect.top);
     const dist = Math.abs(dx) + dy * 3;
-    if (dist < bestDist) { bestDist = dist; best = el; }
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = el;
+    }
   }
   if (best) focusItemByElement(container, best);
 }

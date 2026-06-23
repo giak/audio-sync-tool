@@ -26,10 +26,10 @@ export async function api<T = Record<string, unknown>>(url: string, opts: Reques
     try {
       const res = await fetch(url, {
         headers: { 'Content-Type': 'application/json' },
-        ...opts
+        ...opts,
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         throw new ApiError(res.status, (body.error as string) || `HTTP ${res.status}`, body);
       }
       return res.json() as Promise<T>;

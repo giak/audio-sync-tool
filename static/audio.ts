@@ -27,7 +27,8 @@ export function stopPlayer(): void {
   }
   if (playerBar) playerBar.classList.add('hidden');
   document.querySelectorAll('.play-btn.playing').forEach(b => {
-    b.classList.remove('playing'); b.textContent = '▶';
+    b.classList.remove('playing');
+    b.textContent = '▶';
   });
   document.querySelectorAll('.led-playing').forEach(l => l.classList.remove('led-playing'));
 }
@@ -45,11 +46,15 @@ function showPlayer(filename: string, fullpath: string): void {
 
 export function togglePlay(filename: string, fullpath: string, btn: HTMLElement): void {
   if (currentAudio && !currentAudio.paused) {
-    if (fullpath === playerFullpath) { stopPlayer(); return; }
+    if (fullpath === playerFullpath) {
+      stopPlayer();
+      return;
+    }
     currentAudio.pause();
     currentAudio = null;
     document.querySelectorAll('.play-btn.playing').forEach(b => {
-      b.classList.remove('playing'); b.textContent = '▶';
+      b.classList.remove('playing');
+      b.textContent = '▶';
     });
     document.querySelectorAll('.led-playing').forEach(l => l.classList.remove('led-playing'));
   }
@@ -60,38 +65,51 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
     if (!started && audio.duration) started = true;
     updatePlayerUI();
   };
-  audio.onloadedmetadata = () => { updatePlayerUI(); };
+  audio.onloadedmetadata = () => {
+    updatePlayerUI();
+  };
   audio.onended = () => {
     if (currentAudio === audio) {
       document.querySelectorAll('.play-btn.playing').forEach(b => {
-        b.classList.remove('playing'); b.textContent = '▶';
+        b.classList.remove('playing');
+        b.textContent = '▶';
       });
       currentAudio = null;
       if (playerBar) playerBar.classList.add('hidden');
     }
   };
   audio.onerror = () => {
-    btn.classList.remove('playing'); btn.textContent = '▶';
-    if (currentAudio === audio) { currentAudio = null; if (playerBar) playerBar.classList.add('hidden'); }
+    btn.classList.remove('playing');
+    btn.textContent = '▶';
+    if (currentAudio === audio) {
+      currentAudio = null;
+      if (playerBar) playerBar.classList.add('hidden');
+    }
   };
 
-  audio.play().then(() => {
-    currentAudio = audio;
-    document.querySelectorAll('.play-btn.playing').forEach(b => {
-      b.classList.remove('playing'); b.textContent = '▶';
+  audio
+    .play()
+    .then(() => {
+      currentAudio = audio;
+      document.querySelectorAll('.play-btn.playing').forEach(b => {
+        b.classList.remove('playing');
+        b.textContent = '▶';
+      });
+      document.querySelectorAll('.led-playing').forEach(l => l.classList.remove('led-playing'));
+      btn.classList.add('playing');
+      btn.textContent = '⏹';
+      showPlayer(filename, fullpath);
+      const row = btn.closest('.file-row');
+      if (row) {
+        const fileSpan = row.querySelector('.file');
+        if (fileSpan) fileSpan.classList.add('led-playing');
+      }
+    })
+    .catch(() => {
+      btn.classList.remove('playing');
+      btn.textContent = '▶';
+      if (playerBar) playerBar.classList.add('hidden');
     });
-    document.querySelectorAll('.led-playing').forEach(l => l.classList.remove('led-playing'));
-    btn.classList.add('playing'); btn.textContent = '⏹';
-    showPlayer(filename, fullpath);
-    const row = btn.closest('.file-row');
-    if (row) {
-      const fileSpan = row.querySelector('.file');
-      if (fileSpan) fileSpan.classList.add('led-playing');
-    }
-  }).catch(() => {
-    btn.classList.remove('playing'); btn.textContent = '▶';
-    if (playerBar) playerBar.classList.add('hidden');
-  });
 }
 
 export function seekAudio(delta: number): void {

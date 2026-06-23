@@ -8,9 +8,15 @@
     "build": "esbuild static/state.ts static/utils.ts static/api.ts static/render.ts static/focus.ts static/audio.ts static/ui.ts static/actions.ts static/playlist.ts static/script.ts --outdir=static --format=esm 2>&1",
     "dev": "esbuild static/state.ts static/utils.ts static/api.ts static/render.ts static/focus.ts static/audio.ts static/ui.ts static/actions.ts static/playlist.ts static/script.ts --outdir=static --format=esm --watch 2>&1",
     "typecheck": "tsc --noEmit",
-    "typecheck:watch": "tsc --noEmit --watch"
+    "typecheck:watch": "tsc --noEmit --watch",
+    "lint": "biome check static/",
+    "lint:write": "biome check --write static/",
+    "lint:unsafe": "biome check --write --unsafe static/",
+    "format": "biome format --write static/",
+    "format:check": "biome format static/"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.1",
     "@vitest/coverage-v8": "^1.6.1",
     "esbuild": "^0.28.1",
     "jsdom": "^28.1.0",

@@ -1,7 +1,7 @@
 // ─── Tests for initConfigUI / renderConfigSelect from actions.ts ────────
 // Separated from actions.test.ts because config DOM elements must exist
 // BEFORE the module is imported (actions.ts binds cfgSelect at module scope).
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
   document.body.innerHTML = `
@@ -19,13 +19,16 @@ vi.hoisted(() => {
 vi.mock('./api.js', () => ({ api: vi.fn() }));
 vi.mock('./ui.js', () => ({ openModal: vi.fn(), closeAllModals: vi.fn() }));
 vi.mock('./render.js', () => ({
-  renderAll: vi.fn(), renderJournal: vi.fn(), renderSource: vi.fn(),
-  patchEparsFileAfterCopy: vi.fn(), patchSourceFileAfterCopy: vi.fn(),
+  renderAll: vi.fn(),
+  renderJournal: vi.fn(),
+  renderSource: vi.fn(),
+  patchEparsFileAfterCopy: vi.fn(),
+  patchSourceFileAfterCopy: vi.fn(),
 }));
 vi.mock('./focus.js', () => ({ setActivePanel: vi.fn(), revalidateFocus: vi.fn() }));
 vi.mock('./audio.js', () => ({ togglePlay: vi.fn() }));
 
-import { configData, renderConfigSelect, initConfigUI } from './actions.js';
+import { configData, initConfigUI, renderConfigSelect } from './actions.js';
 import { api } from './api.js';
 
 beforeEach(() => {

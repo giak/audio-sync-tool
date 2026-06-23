@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  formatTime,
-  formatDuration,
-  getJournalFiles,
   computeStatus,
   countAllEparsFiles,
   dirHasMatchingDescendant,
+  formatDuration,
+  formatTime,
+  getJournalFiles,
   type JournalEntry,
 } from './utils.js';
 

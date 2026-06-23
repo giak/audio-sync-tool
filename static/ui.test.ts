@@ -1,5 +1,5 @@
 // ─── Unit tests for ui.ts ────────────────────────────────────────────────
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Set up DOM before module evaluation (ui.ts uses getElementById at module scope)
 vi.hoisted(() => {
@@ -56,8 +56,8 @@ vi.mock('./state.js', () => ({
   state: mockState,
 }));
 
-import { openModal, closeAllModals, initFilterPalette, openFilterPalette, closeFilterPalette } from './ui.js';
 import { revalidateFocus } from './focus.js';
+import { closeAllModals, closeFilterPalette, initFilterPalette, openFilterPalette, openModal } from './ui.js';
 
 // Mock revalidateFocus
 vi.mock('./focus.js', () => ({

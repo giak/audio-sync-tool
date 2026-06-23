@@ -1,14 +1,14 @@
 // ─── Unit tests for focus.ts ────────────────────────────────────────────
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  getItems,
+  focusItemByElement,
   focusItemByPath,
   getFocusedItem,
-  focusItemByElement,
-  navigateFocus,
+  getItems,
   navigateColumn,
-  setActivePanel,
+  navigateFocus,
   revalidateFocus,
+  setActivePanel,
 } from './focus.js';
 import { state } from './state.js';
 

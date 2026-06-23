@@ -61,11 +61,7 @@ export function getJournalFiles(journal: JournalEntry[]): Set<string> {
  */
 export type FileStatus = 'nouveau' | 'doublon' | 'traite';
 
-export function computeStatus(
-  filename: string,
-  sourceFiles: SourceFiles,
-  journal: JournalEntry[]
-): FileStatus {
+export function computeStatus(filename: string, sourceFiles: SourceFiles, journal: JournalEntry[]): FileStatus {
   const inSource = Object.values(sourceFiles).some(idx => filename in idx);
   if (inSource) return 'doublon';
   const journaled = getJournalFiles(journal);
@@ -96,4 +92,3 @@ export function dirHasMatchingDescendant(node: TreeNode, term: string): boolean 
   }
   return false;
 }
-

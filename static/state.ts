@@ -98,6 +98,5 @@ export const state = new Proxy<AppState>(_state, {
     }
     (target as unknown as Record<string, unknown>)[prop as string] = value;
     return true;
-  }
+  },
 });
-

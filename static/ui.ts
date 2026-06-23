@@ -1,6 +1,7 @@
 // ─── UI: modals, filter palette, config form, toast/error display ───────────
-import { state } from './state.js';
+
 import { revalidateFocus } from './focus.js';
+import { state } from './state.js';
 
 // ── Modals ─────────────────────────────────────────────────────────────────
 export function openModal(name: string): void {
@@ -37,10 +38,7 @@ export function initFilterPalette(onFilterChange: () => void): void {
   });
 }
 
-export function openFilterPalette(
-  setActivePanel: (panel: 'epars' | 'source') => void,
-  renderSource: () => void
-): void {
+export function openFilterPalette(setActivePanel: (panel: 'epars' | 'source') => void, renderSource: () => void): void {
   setActivePanel('source');
   state.filterActive = true;
   state.sourceFilter = '';

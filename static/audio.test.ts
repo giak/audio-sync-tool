@@ -1,5 +1,5 @@
 // ─── Unit tests for audio.ts ──────────────────────────────────────────────
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Set up DOM before module evaluation (audio.ts calls getElementById at module scope)
 vi.hoisted(() => {
@@ -70,7 +70,7 @@ afterEach(() => {
   delete (globalThis as any).Audio;
 });
 
-import { stopPlayer, togglePlay, seekAudio, isAudioPlaying, initAudioUI } from './audio.js';
+import { initAudioUI, isAudioPlaying, seekAudio, stopPlayer, togglePlay } from './audio.js';
 
 /** Wait for pending microtasks (e.g. .then() callbacks from play promise) */
 function flush(): Promise<void> {
