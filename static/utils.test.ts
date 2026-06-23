@@ -6,6 +6,7 @@ import {
   computeStatus,
   countAllEparsFiles,
   dirHasMatchingDescendant,
+  type JournalEntry,
 } from './utils.js';
 
 describe('formatTime', () => {
@@ -72,7 +73,7 @@ describe('getJournalFiles', () => {
   });
 
   it('collects filenames with status copied', () => {
-    const journal = [
+    const journal: JournalEntry[] = [
       { filename: 'a.mp3', status: 'copied' },
       { filename: 'b.mp3', status: 'copied' },
       { filename: 'c.mp3', status: 'error' },
@@ -84,7 +85,7 @@ describe('getJournalFiles', () => {
   });
 
   it('ignores entries without the copied status', () => {
-    const journal = [
+    const journal: JournalEntry[] = [
       { filename: 'x.mp3', status: 'pending' },
       { filename: 'y.mp3', status: 'failed' },
     ];
@@ -112,21 +113,19 @@ describe('computeStatus', () => {
   });
 
   it('returns traite for a file in journal but not in source', () => {
-    const journal = [{ filename: 'x.mp3', status: 'copied' }];
+    const journal: JournalEntry[] = [{ filename: 'x.mp3', status: 'copied' }];
     const status = computeStatus('x.mp3', sourceFiles, journal);
     expect(status).toBe('traite');
   });
 
   it('prioritises doublon over traite — file in both source and journal', () => {
-    // 'b.mp3' exists in source AND was copied → should show doublon (gray)
-    const journal = [{ filename: 'b.mp3', status: 'copied' }];
+    const journal: JournalEntry[] = [{ filename: 'b.mp3', status: 'copied' }];
     const status = computeStatus('b.mp3', sourceFiles, journal);
     expect(status).toBe('doublon');
   });
 
   it('returns traite for a file in journal but not in source', () => {
-    // Second test for clarity: file only in journal
-    const journal = [{ filename: 'only_journal.mp3', status: 'copied' }];
+    const journal: JournalEntry[] = [{ filename: 'only_journal.mp3', status: 'copied' }];
     const status = computeStatus('only_journal.mp3', sourceFiles, journal);
     expect(status).toBe('traite');
   });
@@ -137,8 +136,7 @@ describe('computeStatus', () => {
   });
 
   it('does not mark as traite for non-copied journal entries', () => {
-    // 'c.mp3' not in sourceFiles, not copied → nouveau
-    const journal = [{ filename: 'c.mp3', status: 'error' }];
+    const journal: JournalEntry[] = [{ filename: 'c.mp3', status: 'error' }];
     const status = computeStatus('c.mp3', sourceFiles, journal);
     expect(status).toBe('nouveau');
   });
@@ -160,12 +158,12 @@ describe('countAllEparsFiles', () => {
 
 describe('dirHasMatchingDescendant', () => {
   it('returns false for an empty node', () => {
-    expect(dirHasMatchingDescendant({}, 'test')).toBe(false);
+    expect(dirHasMatchingDescendant({} as any, 'test')).toBe(false);
   });
 
   it('matches a direct child directory name', () => {
     const node = { jazz: { __files__: [] } };
-    expect(dirHasMatchingDescendant(node, 'jaz')).toBe(true);
+    expect(dirHasMatchingDescendant(node as any, 'jaz')).toBe(true);
   });
 
   it('matches a nested descendant directory', () => {
@@ -176,12 +174,12 @@ describe('dirHasMatchingDescendant', () => {
         },
       },
     };
-    expect(dirHasMatchingDescendant(node, 'jaz')).toBe(true);
+    expect(dirHasMatchingDescendant(node as any, 'jaz')).toBe(true);
   });
 
   it('is case-insensitive', () => {
     const node = { Jazz: { __files__: [] } };
-    expect(dirHasMatchingDescendant(node, 'jaz')).toBe(true);
+    expect(dirHasMatchingDescendant(node as any, 'jaz')).toBe(true);
   });
 
   it('returns false when no name matches', () => {
@@ -189,11 +187,11 @@ describe('dirHasMatchingDescendant', () => {
       rock: { __files__: [] },
       pop: { __files__: [] },
     };
-    expect(dirHasMatchingDescendant(node, 'jaz')).toBe(false);
+    expect(dirHasMatchingDescendant(node as any, 'jaz')).toBe(false);
   });
 
   it('skips __files__ keys', () => {
     const node = { __files__: [{ filename: 'jazzy.mp3' }] };
-    expect(dirHasMatchingDescendant(node, 'jaz')).toBe(false);
+    expect(dirHasMatchingDescendant(node as any, 'jaz')).toBe(false);
   });
 });

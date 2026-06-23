@@ -1,8 +1,8 @@
-// ─── Unit tests for actions.js ──────────────────────────────────────────
+// ─── Unit tests for actions.ts ──────────────────────────────────────────
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { state } from './state.js';
 
-// Mock the modules that actions.js imports BEFORE importing actions.js
+// Mock the modules that actions.ts imports BEFORE importing actions.ts
 vi.mock('./api.js', () => ({
   api: vi.fn(),
 }));
@@ -31,7 +31,8 @@ import { api } from './api.js';
 import { openModal, closeAllModals, showError } from './ui.js';
 import { renderAll, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderSource } from './render.js';
 
-function setupCopyDOM({ hasLeftFocus = true, hasRightFocus = true, hasEparDir = true, hasRelPath = true } = {}) {
+function setupCopyDOM(opts: { hasLeftFocus?: boolean; hasRightFocus?: boolean; hasEparDir?: boolean; hasRelPath?: boolean } = {}): void {
+  const { hasLeftFocus = true, hasRightFocus = true, hasEparDir = true, hasRelPath = true } = opts;
   document.body.innerHTML = `
     <div id="epars-container">
       <div class="focused file-row">
@@ -91,44 +92,43 @@ describe('executeCopy', () => {
   it('shows error when no file focused on left', () => {
     setupCopyDOM({ hasLeftFocus: false });
     executeCopy();
-    expect(document.getElementById('status-text').textContent).toContain('Met d\'abord en surbrillance un fichier');
+    expect(document.getElementById('status-text')!.textContent).toContain('Met d\'abord en surbrillance un fichier');
   });
 
   it('shows error when no directory focused on right', () => {
     setupCopyDOM({ hasRightFocus: false });
     executeCopy();
-    expect(document.getElementById('status-text').textContent).toContain('Met d\'abord en surbrillance un dossier');
+    expect(document.getElementById('status-text')!.textContent).toContain('Met d\'abord en surbrillance un dossier');
   });
 
   it('shows error when file has no eparDir', () => {
     setupCopyDOM({ hasEparDir: false });
     executeCopy();
-    expect(document.getElementById('status-text').textContent).toContain('pas de dossier source valide');
+    expect(document.getElementById('status-text')!.textContent).toContain('pas de dossier source valide');
   });
 
   it('shows error when file not found in eparsFiles data', () => {
     state.eparsFiles = {};
     executeCopy();
-    expect(document.getElementById('status-text').textContent).toContain('Fichier introuvable');
+    expect(document.getElementById('status-text')!.textContent).toContain('Fichier introuvable');
   });
 
   it('opens confirm dialog with correct message', () => {
     executeCopy();
     expect(openModal).toHaveBeenCalledWith('dialog');
-    expect(document.getElementById('dialog-msg').textContent).toContain('Copier "song.mp3"');
-    expect(document.getElementById('dialog-msg').textContent).toContain('/home/music/Rock');
+    expect(document.getElementById('dialog-msg')!.textContent).toContain('Copier "song.mp3"');
+    expect(document.getElementById('dialog-msg')!.textContent).toContain('/home/music/Rock');
   });
 
   it('confirm click executes copy and updates state', async () => {
     vi.mocked(api).mockResolvedValueOnce({ ok: true, year: '2021', duration: 240, codec: 'MP3 320kbps' });
     vi.mocked(api).mockResolvedValueOnce([{ filename: 'song.mp3', status: 'copied' }]);
-    vi.mocked(patchSourceFileAfterCopy).mockReturnValue(true); // patch succeeds
+    vi.mocked(patchSourceFileAfterCopy).mockReturnValue(true);
 
     state.sourceFiles['/home/music'] = { 'old.mp3': { path: 'old.mp3' } };
 
     executeCopy();
-    // Simulate confirm click
-    await document.getElementById('dialog-confirm').onclick();
+    await (document.getElementById('dialog-confirm') as HTMLElement).onclick!();
 
     expect(closeAllModals).toHaveBeenCalled();
     expect(api).toHaveBeenCalledWith('/copy', expect.objectContaining({
@@ -142,31 +142,31 @@ describe('executeCopy', () => {
     expect(patchSourceFileAfterCopy).toHaveBeenCalledWith('/home/music/Rock', 'song.mp3', expect.objectContaining({
       path: 'Rock/song.mp3', year: '2021', duration: 240, codec: 'MP3 320kbps',
     }));
-    expect(renderSource).not.toHaveBeenCalled(); // patch succeeded, no fallback
-    expect(document.getElementById('status-text').textContent).toContain('✓');
+    expect(renderSource).not.toHaveBeenCalled();
+    expect(document.getElementById('status-text')!.textContent).toContain('✓');
   });
 
   it('falls back to renderSource when patchSourceFileAfterCopy returns false', async () => {
     vi.mocked(api).mockResolvedValueOnce({ ok: true, year: '2021', duration: 240, codec: 'MP3 320kbps' });
     vi.mocked(api).mockResolvedValueOnce([{ filename: 'song.mp3', status: 'copied' }]);
-    vi.mocked(patchSourceFileAfterCopy).mockReturnValue(false); // patch fails — e.g. new base dir
+    vi.mocked(patchSourceFileAfterCopy).mockReturnValue(false);
 
     state.sourceFiles['/home/music'] = { 'old.mp3': { path: 'old.mp3' } };
 
     executeCopy();
-    await document.getElementById('dialog-confirm').onclick();
+    await (document.getElementById('dialog-confirm') as HTMLElement).onclick!();
 
     expect(patchEparsFileAfterCopy).toHaveBeenCalledWith('song.mp3', '/media/usb');
     expect(patchSourceFileAfterCopy).toHaveBeenCalled();
-    expect(renderSource).toHaveBeenCalled(); // fallback triggered
-    expect(document.getElementById('status-text').textContent).toContain('✓');
+    expect(renderSource).toHaveBeenCalled();
+    expect(document.getElementById('status-text')!.textContent).toContain('✓');
   });
 
   it('shows error when copy fails', async () => {
     vi.mocked(api).mockRejectedValueOnce(new Error('Permission denied'));
 
     executeCopy();
-    await document.getElementById('dialog-confirm').onclick();
+    await (document.getElementById('dialog-confirm') as HTMLElement).onclick!();
 
     expect(showError).toHaveBeenCalledWith(
       expect.stringContaining('Permission denied')
@@ -175,7 +175,7 @@ describe('executeCopy', () => {
 
   it('cancel click closes dialog without copying', () => {
     executeCopy();
-    document.getElementById('dialog-cancel').onclick();
+    (document.getElementById('dialog-cancel') as HTMLElement).onclick!();
     expect(closeAllModals).toHaveBeenCalled();
     expect(api).not.toHaveBeenCalled();
   });
@@ -194,7 +194,7 @@ describe('runScan', () => {
     expect(state.sourceFiles['/src']).toBeDefined();
     expect(state.eparsFiles['/ep']).toBeDefined();
     expect(renderAll).toHaveBeenCalled();
-    expect(document.getElementById('status-text').textContent).toContain('Scan terminé');
+    expect(document.getElementById('status-text')!.textContent).toContain('Scan terminé');
   });
 });
 

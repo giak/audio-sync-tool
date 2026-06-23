@@ -1,7 +1,7 @@
-// ─── Unit tests for ui.js ────────────────────────────────────────────────
+// ─── Unit tests for ui.ts ────────────────────────────────────────────────
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Set up DOM before module evaluation (ui.js uses getElementById at module scope)
+// Set up DOM before module evaluation (ui.ts uses getElementById at module scope)
 vi.hoisted(() => {
   document.body.innerHTML = `
     <div id="modal-config" class="modal hidden">
@@ -45,17 +45,18 @@ vi.hoisted(() => {
   `;
 });
 
+const mockState = vi.hoisted(() => ({
+  activeModal: null as string | null,
+  filterActive: false as boolean,
+  sourceFilter: '' as string,
+  sourceExpanded: new Set<string>(),
+}));
+
 vi.mock('./state.js', () => ({
-  state: {
-    activeModal: null,
-    filterActive: false,
-    sourceFilter: '',
-    sourceExpanded: new Set(),
-  },
+  state: mockState,
 }));
 
 import { openModal, closeAllModals, initFilterPalette, openFilterPalette, closeFilterPalette } from './ui.js';
-import { state } from './state.js';
 import { revalidateFocus } from './focus.js';
 
 // Mock revalidateFocus
@@ -63,51 +64,46 @@ vi.mock('./focus.js', () => ({
   revalidateFocus: vi.fn(),
 }));
 
-// Note: state is already imported and mocked above.
-// revalidateFocus is mocked via vi.mock.
-
 beforeEach(() => {
-  state.activeModal = null;
-  state.filterActive = false;
-  state.sourceFilter = '';
-  state.sourceExpanded = new Set();
+  mockState.activeModal = null;
+  mockState.filterActive = false;
+  mockState.sourceFilter = '';
+  (mockState.sourceExpanded as Set<string>).clear();
   vi.clearAllMocks();
   // Hide all modals
   document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
-  document.getElementById('filter-palette').classList.add('hidden');
-  document.getElementById('source-filter').value = '';
+  document.getElementById('filter-palette')!.classList.add('hidden');
+  (document.getElementById('source-filter') as HTMLInputElement).value = '';
 });
 
 describe('openModal', () => {
   it('sets activeModal to the given name', () => {
     openModal('config');
-    expect(state.activeModal).toBe('config');
+    expect(mockState.activeModal).toBe('config');
   });
 
   it('shows the correct modal element', () => {
-    expect(document.getElementById('modal-config').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('modal-config')!.classList.contains('hidden')).toBe(true);
 
     openModal('config');
-    expect(document.getElementById('modal-config').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('modal-config')!.classList.contains('hidden')).toBe(false);
   });
 
   it('hides all modals before showing the target one', () => {
-    // Open two modals sequentially
     openModal('config');
-    expect(document.getElementById('modal-config').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('modal-config')!.classList.contains('hidden')).toBe(false);
 
     openModal('dialog');
-    // config should be hidden again
-    expect(document.getElementById('modal-config').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('modal-dialog').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('modal-config')!.classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('modal-dialog')!.classList.contains('hidden')).toBe(false);
   });
 });
 
 describe('closeAllModals', () => {
   it('sets activeModal to null', () => {
-    state.activeModal = 'config';
+    mockState.activeModal = 'config';
     closeAllModals();
-    expect(state.activeModal).toBeNull();
+    expect(mockState.activeModal).toBeNull();
   });
 
   it('hides all modal elements', () => {
@@ -130,24 +126,24 @@ describe('openFilterPalette', () => {
   it('sets filterActive to true', () => {
     const setActivePanel = vi.fn();
     openFilterPalette(setActivePanel, vi.fn());
-    expect(state.filterActive).toBe(true);
+    expect(mockState.filterActive).toBe(true);
   });
 
   it('sets sourceFilter to empty string', () => {
-    state.sourceFilter = 'old';
+    mockState.sourceFilter = 'old';
     openFilterPalette(vi.fn(), vi.fn());
-    expect(state.sourceFilter).toBe('');
+    expect(mockState.sourceFilter).toBe('');
   });
 
   it('clears the filter input value', () => {
-    document.getElementById('source-filter').value = 'something';
+    (document.getElementById('source-filter') as HTMLInputElement).value = 'something';
     openFilterPalette(vi.fn(), vi.fn());
-    expect(document.getElementById('source-filter').value).toBe('');
+    expect((document.getElementById('source-filter') as HTMLInputElement).value).toBe('');
   });
 
   it('shows the filter palette', () => {
     openFilterPalette(vi.fn(), vi.fn());
-    expect(document.getElementById('filter-palette').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('filter-palette')!.classList.contains('hidden')).toBe(false);
   });
 
   it('calls setActivePanel with source', () => {
@@ -163,7 +159,7 @@ describe('openFilterPalette', () => {
   });
 
   it('focuses the filter input', () => {
-    const input = document.getElementById('source-filter');
+    const input = document.getElementById('source-filter') as HTMLInputElement;
     const focusSpy = vi.spyOn(input, 'focus');
     openFilterPalette(vi.fn(), vi.fn());
     expect(focusSpy).toHaveBeenCalled();
@@ -172,27 +168,27 @@ describe('openFilterPalette', () => {
 
 describe('closeFilterPalette', () => {
   it('sets filterActive to false', () => {
-    state.filterActive = true;
+    mockState.filterActive = true;
     closeFilterPalette(vi.fn());
-    expect(state.filterActive).toBe(false);
+    expect(mockState.filterActive).toBe(false);
   });
 
   it('clears sourceFilter', () => {
-    state.sourceFilter = 'rock';
+    mockState.sourceFilter = 'rock';
     closeFilterPalette(vi.fn());
-    expect(state.sourceFilter).toBe('');
+    expect(mockState.sourceFilter).toBe('');
   });
 
   it('clears sourceExpanded', () => {
-    state.sourceExpanded.add('/path/to/dir');
+    (mockState.sourceExpanded as Set<string>).add('/path/to/dir');
     closeFilterPalette(vi.fn());
-    expect(state.sourceExpanded.size).toBe(0);
+    expect((mockState.sourceExpanded as Set<string>).size).toBe(0);
   });
 
   it('hides the filter palette', () => {
-    document.getElementById('filter-palette').classList.remove('hidden');
+    document.getElementById('filter-palette')!.classList.remove('hidden');
     closeFilterPalette(vi.fn());
-    expect(document.getElementById('filter-palette').classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('filter-palette')!.classList.contains('hidden')).toBe(true);
   });
 
   it('calls renderSource', () => {
@@ -220,14 +216,12 @@ describe('initFilterPalette', () => {
     const onFilterChange = vi.fn();
     initFilterPalette(onFilterChange);
 
-    const input = document.getElementById('source-filter');
+    const input = document.getElementById('source-filter') as HTMLInputElement;
     input.value = 'rock';
     input.dispatchEvent(new Event('input'));
 
-    // Should not fire immediately (debounced)
     expect(onFilterChange).not.toHaveBeenCalled();
 
-    // Advance past the 150ms debounce
     vi.advanceTimersByTime(160);
 
     expect(onFilterChange).toHaveBeenCalled();
@@ -237,57 +231,52 @@ describe('initFilterPalette', () => {
     const onFilterChange = vi.fn();
     initFilterPalette(onFilterChange);
 
-    const input = document.getElementById('source-filter');
+    const input = document.getElementById('source-filter') as HTMLInputElement;
     input.value = 'jazz';
     input.dispatchEvent(new Event('input'));
 
     vi.advanceTimersByTime(160);
 
-    expect(state.sourceFilter).toBe('jazz');
-    expect(state.filterActive).toBe(true);
+    expect(mockState.sourceFilter).toBe('jazz');
+    expect(mockState.filterActive).toBe(true);
   });
 
   it('clears filterActive when input is empty', () => {
     const onFilterChange = vi.fn();
     initFilterPalette(onFilterChange);
 
-    const input = document.getElementById('source-filter');
+    const input = document.getElementById('source-filter') as HTMLInputElement;
     input.value = '';
     input.dispatchEvent(new Event('input'));
 
     vi.advanceTimersByTime(160);
 
-    expect(state.filterActive).toBe(false);
+    expect(mockState.filterActive).toBe(false);
   });
 
   it('clears sourceExpanded when input is empty', () => {
-    state.sourceExpanded.add('/some/dir');
+    (mockState.sourceExpanded as Set<string>).add('/some/dir');
     const onFilterChange = vi.fn();
     initFilterPalette(onFilterChange);
 
-    const input = document.getElementById('source-filter');
+    const input = document.getElementById('source-filter') as HTMLInputElement;
     input.value = 'jazz';
     input.dispatchEvent(new Event('input'));
     vi.advanceTimersByTime(160);
 
-    // Now clear
     input.value = '';
     input.dispatchEvent(new Event('input'));
     vi.advanceTimersByTime(160);
 
-    // When filter becomes empty, sourceExpanded should be cleared
-    // (but only if the previous filter was non-empty then became empty)
-    // Actually the code clears sourceExpanded when filterActive becomes false
-    expect(state.filterActive).toBe(false);
+    expect(mockState.filterActive).toBe(false);
   });
 
   it('debounces rapidly: only last value wins', () => {
     const onFilterChange = vi.fn();
     initFilterPalette(onFilterChange);
 
-    const input = document.getElementById('source-filter');
+    const input = document.getElementById('source-filter') as HTMLInputElement;
 
-    // Rapid typing
     input.value = 'r';
     input.dispatchEvent(new Event('input'));
     vi.advanceTimersByTime(50);
@@ -303,11 +292,10 @@ describe('initFilterPalette', () => {
     input.value = 'rock';
     input.dispatchEvent(new Event('input'));
 
-    // Only 100ms total advanced, so the first 3 timeouts were cancelled
     expect(onFilterChange).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(160);
     expect(onFilterChange).toHaveBeenCalledTimes(1);
-    expect(state.sourceFilter).toBe('rock');
+    expect(mockState.sourceFilter).toBe('rock');
   });
 });

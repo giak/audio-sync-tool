@@ -2,21 +2,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { state } from './state.js';
 
-// Polyfill CSS.escape for jsdom (CSS global may not exist)
-if (typeof CSS === 'undefined') globalThis.CSS = {};
+// Polyfill CSS.escape for jsdom
+if (typeof CSS === 'undefined') (globalThis as any).CSS = {};
 if (!CSS.escape) {
-  CSS.escape = (val) => String(val).replace(/[^\w-]/g, '\\$&');
+  (CSS as any).escape = (val: string) => String(val).replace(/[^\w-]/g, '\\$&');
 }
 
-// Mock all render.js dependencies BEFORE importing
+// Mock all render.ts dependencies BEFORE importing
 vi.mock('./utils.js', () => ({
-  formatDuration: vi.fn((s) => {
+  formatDuration: vi.fn((s: number | null | undefined) => {
     if (!s || s <= 0) return '';
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, '0')}`;
   }),
-  computeStatus: vi.fn(() => 'doublon'),
+  computeStatus: vi.fn(() => 'doublon' as const),
   countAllEparsFiles: vi.fn(() => 0),
   dirHasMatchingDescendant: vi.fn(() => false),
 }));
@@ -36,7 +36,8 @@ import { countAllEparsFiles } from './utils.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function setupSourceDOM({ createDirEl = false, expanded = false, badgeText = '' } = {}) {
+function setupSourceDOM(opts: { createDirEl?: boolean; expanded?: boolean; badgeText?: string } = {}): void {
+  const { createDirEl = false, expanded = false, badgeText = '' } = opts;
   document.body.innerHTML = `
     <div id="source-container"></div>
     <span id="source-header-count"></span>
@@ -47,7 +48,7 @@ function setupSourceDOM({ createDirEl = false, expanded = false, badgeText = '' 
   `;
 
   if (createDirEl) {
-    const container = document.getElementById('source-container');
+    const container = document.getElementById('source-container')!;
     const dirEl = document.createElement('div');
     dirEl.className = 'directory';
     dirEl.dataset.dirpath = '/home/Music/Rock';
@@ -69,7 +70,7 @@ function setupSourceDOM({ createDirEl = false, expanded = false, badgeText = '' 
   }
 }
 
-function resetState() {
+function resetState(): void {
   state.sourceFiles = { '/home/Music': { 'old.mp3': { path: 'Rock/old.mp3' } } };
   state.eparsFiles = {};
   state.journal = [];
@@ -86,11 +87,9 @@ describe('patchSourceFileAfterCopy', () => {
     resetState();
   });
 
-  // ──────── Case 1: dirEl visible + expanded ──────────────────────────────
   describe('when destDir is visible and expanded', () => {
     beforeEach(() => {
       setupSourceDOM({ createDirEl: true, expanded: true, badgeText: '(3)' });
-      // Register the node in sourceNodeMap (mimics what renderDirTree does)
       state.sourceNodeMap.set('/home/Music/Rock', {
         node: {
           __files__: [
@@ -104,8 +103,7 @@ describe('patchSourceFileAfterCopy', () => {
     });
 
     it('inserts a file row sorted alphabetically', () => {
-      // Pre-populate the children div with existing file rows (simulates renderSource)
-      const children = document.querySelector('#source-container .children');
+      const children = document.querySelector('#source-container .children')!;
       ['a.mp3', 'b.mp3', 'c.mp3'].forEach(fn => {
         const row = document.createElement('div');
         row.className = 'file-row';
@@ -127,8 +125,6 @@ describe('patchSourceFileAfterCopy', () => {
       const rows = children.querySelectorAll('.file-row');
       expect(rows.length).toBe(4);
 
-      // Sorted by localeCompare: a.mp3 < b.mp3 < beat.mp3 < c.mp3
-      // ('.' < 'e' in Unicode, so 'b.mp3' < 'beat.mp3')
       const labels = [...rows].map(r => r.querySelector('.file')?.textContent);
       expect(labels).toEqual(['a.mp3', 'b.mp3', 'beat.mp3', 'c.mp3']);
     });
@@ -140,20 +136,18 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/x.mp3', year: '2025', duration: 240, codec: 'FLAC' }
       );
 
-      // x.mp3 is last alphabetically after a, b, c
       const rows = document.querySelectorAll('#source-container .file-row');
-      const newRow = rows[rows.length - 1];
+      const newRow = rows[rows.length - 1] as HTMLElement;
       expect(newRow).not.toBeNull();
       expect(newRow.className).toBe('file-row');
       expect(newRow.dataset.focuspath).toBe('/home/Music/Rock/x.mp3');
 
-      const label = newRow.querySelector('.file');
-      expect(label).not.toBeNull();
+      const label = newRow.querySelector('.file')!;
       expect(label.classList.contains('doublon')).toBe(true);
       expect(label.classList.contains('led-doublon')).toBe(true);
       expect(label.textContent).toBe('x.mp3');
-      expect(label.dataset.filename).toBe('x.mp3');
-      expect(label.dataset.fullpath).toBe('/home/Music/Rock/x.mp3');
+      expect((label as HTMLElement).dataset.filename).toBe('x.mp3');
+      expect((label as HTMLElement).dataset.fullpath).toBe('/home/Music/Rock/x.mp3');
     });
 
     it('includes metadata spans when provided', () => {
@@ -163,7 +157,8 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/meta.mp3', year: '2021', duration: 195, codec: 'MP3 320kbps' }
       );
 
-      const newRow = [...document.querySelectorAll('#source-container .file-row')].pop();
+      const rows = [...document.querySelectorAll('#source-container .file-row')];
+      const newRow = rows[rows.length - 1] as HTMLElement;
       expect(newRow.querySelector('.year')?.textContent).toBe('2021');
       expect(newRow.querySelector('.codec')?.textContent).toBe('MP3 320kbps');
       expect(newRow.querySelector('.duration')?.textContent).toBe('3:15');
@@ -177,7 +172,7 @@ describe('patchSourceFileAfterCopy', () => {
       );
 
       const rows = document.querySelectorAll('#source-container .file-row');
-      const newRow = [...rows].find(r => r.querySelector('.file')?.textContent === 'bare.mp3');
+      const newRow = [...rows].find(r => r.querySelector('.file')?.textContent === 'bare.mp3') as HTMLElement;
       expect(newRow.querySelector('.year')).toBeNull();
       expect(newRow.querySelector('.codec')).toBeNull();
       expect(newRow.querySelector('.duration')).toBeNull();
@@ -192,7 +187,7 @@ describe('patchSourceFileAfterCopy', () => {
 
       const badge = document.querySelector('#source-container .dir-count');
       expect(badge).not.toBeNull();
-      expect(badge.textContent).toBe('(4)'); // was (3), now 4 files
+      expect(badge!.textContent).toBe('(4)');
     });
 
     it('updates the sourceNodeMap in-memory node', () => {
@@ -202,14 +197,13 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/mapped.mp3', year: '2025' }
       );
 
-      const info = state.sourceNodeMap.get('/home/Music/Rock');
+      const info = state.sourceNodeMap.get('/home/Music/Rock')!;
       expect(info).not.toBeUndefined();
-      expect(info.node.__files__.length).toBe(4);
-      expect(info.node.__files__[3].filename).toBe('mapped.mp3');
+      expect((info.node as any).__files__.length).toBe(4);
+      expect((info.node as any).__files__[3].filename).toBe('mapped.mp3');
     });
 
     it('creates a count badge when none existed', () => {
-      // Re-create DOM without badge
       setupSourceDOM({ createDirEl: true, expanded: true });
       state.sourceNodeMap.set('/home/Music/Rock', {
         node: { __files__: [] },
@@ -224,16 +218,13 @@ describe('patchSourceFileAfterCopy', () => {
 
       const badge = document.querySelector('#source-container .dir-count');
       expect(badge).not.toBeNull();
-      expect(badge.textContent).toBe('(1)');
+      expect(badge!.textContent).toBe('(1)');
     });
   });
 
-  // ──────── Case 2: collapsed — in-memory only, no DOM changes ────────────
   describe('when destDir is in sourceNodeMap but not in DOM (parent collapsed)', () => {
     beforeEach(() => {
       setupSourceDOM();
-      // The directory IS in sourceNodeMap but was NEVER rendered to DOM
-      // (parent was collapsed when renderSource ran)
       state.sourceNodeMap.set('/home/Music/Rock', {
         node: {
           ACDC: { __files__: [] },
@@ -251,7 +242,6 @@ describe('patchSourceFileAfterCopy', () => {
       );
 
       expect(result).toBe(true);
-      // No directory element exists in DOM for this path
       expect(document.querySelector('#source-container .directory')).toBeNull();
       expect(document.querySelector('#source-container .file-row')).toBeNull();
     });
@@ -263,18 +253,16 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/phantom.mp3', year: '2025' }
       );
 
-      const info = state.sourceNodeMap.get('/home/Music/Rock');
-      expect(info.node.__files__.length).toBe(2);
-      expect(info.node.__files__[1].filename).toBe('phantom.mp3');
-      expect(info.node.__files__[1].baseDir).toBe('/home/Music');
+      const info = state.sourceNodeMap.get('/home/Music/Rock')!;
+      expect((info.node as any).__files__.length).toBe(2);
+      expect((info.node as any).__files__[1].filename).toBe('phantom.mp3');
+      expect((info.node as any).__files__[1].baseDir).toBe('/home/Music');
     });
   });
 
-  // ──────── Case 3: deep path, walk-up + traverse-down ─────────────────────
   describe('when destDir is deep and parent is collapsed (walk-up needed)', () => {
     beforeEach(() => {
       setupSourceDOM();
-      // Only the ancestor (Rock) is in sourceNodeMap. ACDC is NOT.
       state.sourceNodeMap.set('/home/Music/Rock', {
         node: {
           ACDC: { __files__: [] },
@@ -301,10 +289,9 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/ACDC/thunder.mp3', year: '1990' }
       );
 
-      // Verify the file is in the right node
-      const rockInfo = state.sourceNodeMap.get('/home/Music/Rock');
-      expect(rockInfo.node.ACDC.__files__.length).toBe(1);
-      expect(rockInfo.node.ACDC.__files__[0].filename).toBe('thunder.mp3');
+      const rockInfo = state.sourceNodeMap.get('/home/Music/Rock')!;
+      expect((rockInfo.node as any).ACDC.__files__.length).toBe(1);
+      expect((rockInfo.node as any).ACDC.__files__[0].filename).toBe('thunder.mp3');
     });
 
     it('registers intermediate directories in sourceNodeMap', () => {
@@ -314,16 +301,14 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/ACDC/thunder.mp3', year: '1990' }
       );
 
-      const acdcInfo = state.sourceNodeMap.get('/home/Music/Rock/ACDC');
+      const acdcInfo = state.sourceNodeMap.get('/home/Music/Rock/ACDC')!;
       expect(acdcInfo).not.toBeUndefined();
       expect(acdcInfo.node).toBeDefined();
       expect(acdcInfo.baseDir).toBe('/home/Music');
-      // The node should be the same reference
-      expect(acdcInfo.node).toBe(state.sourceNodeMap.get('/home/Music/Rock').node.ACDC);
+      expect(acdcInfo.node).toBe(state.sourceNodeMap.get('/home/Music/Rock')!.node.ACDC);
     });
 
     it('handles multiple missingParts (3+ levels deep)', () => {
-      // Set up: Rock → ACDC → BackInBlack (3 levels)
       state.sourceNodeMap.set('/home/Music/Rock', {
         node: {
           ACDC: { BackInBlack: { __files__: [] } },
@@ -339,15 +324,12 @@ describe('patchSourceFileAfterCopy', () => {
       );
 
       expect(result).toBe(true);
-
-      // Verify all intermediate entries registered
       expect(state.sourceNodeMap.has('/home/Music/Rock/ACDC')).toBe(true);
       expect(state.sourceNodeMap.has('/home/Music/Rock/ACDC/BackInBlack')).toBe(true);
 
-      // Verify file at the right level
-      const leaf = state.sourceNodeMap.get('/home/Music/Rock/ACDC/BackInBlack');
-      expect(leaf.node.__files__.length).toBe(1);
-      expect(leaf.node.__files__[0].filename).toBe('hib.mp3');
+      const leaf = state.sourceNodeMap.get('/home/Music/Rock/ACDC/BackInBlack')!;
+      expect((leaf.node as any).__files__.length).toBe(1);
+      expect((leaf.node as any).__files__[0].filename).toBe('hib.mp3');
     });
 
     it('preserves baseDir from the ancestor through all levels', () => {
@@ -362,16 +344,14 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/ACDC/base.mp3', year: '2025' }
       );
 
-      // All registered entries should have the same baseDir
-      for (const [path, info] of state.sourceNodeMap) {
+      for (const [, info] of state.sourceNodeMap) {
         expect(info.baseDir).toBe('/home/Music');
       }
     });
 
     it('inserts file row when deepest path IS in DOM and expanded', () => {
-      // The root dir is in DOM with a children div (expanded) and 1 pre-existing row
       setupSourceDOM({ createDirEl: true, expanded: true, badgeText: '(1)' });
-      const children = document.querySelector('#source-container .children');
+      const children = document.querySelector('#source-container .children')!;
       const existing = document.createElement('div');
       existing.className = 'file-row';
       const espan = document.createElement('span');
@@ -380,7 +360,6 @@ describe('patchSourceFileAfterCopy', () => {
       existing.appendChild(espan);
       children.appendChild(existing);
 
-      // sourceNodeMap has the Rock directory registered
       state.sourceNodeMap.set('/home/Music/Rock', {
         node: {
           ACDC: { __files__: [] },
@@ -395,18 +374,15 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/deep.mp3', year: '2025', duration: 180, codec: 'MP3 320kbps' }
       );
 
-      // Since dirEl exists and is expanded, a row should be inserted alongside the existing one
       const rows = document.querySelectorAll('#source-container .file-row');
       expect(rows.length).toBe(2);
       expect(rows[1].querySelector('.file')?.textContent).toBe('deep.mp3');
     });
   });
 
-  // ──────── Case 4: no ancestor found → fallback ──────────────────────────
   describe('when no ancestor is found in sourceNodeMap', () => {
     beforeEach(() => {
       setupSourceDOM();
-      // sourceNodeMap is empty — no ancestor registered
     });
 
     it('returns false to signal fallback to renderSource()', () => {
@@ -417,12 +393,10 @@ describe('patchSourceFileAfterCopy', () => {
       );
 
       expect(result).toBe(false);
-      // sourceNodeMap should still be empty
       expect(state.sourceNodeMap.size).toBe(0);
     });
   });
 
-  // ──────── Case 5: header count ──────────────────────────────────────────
   describe('header count update', () => {
     it('updates the source-header-count element', () => {
       setupSourceDOM({ createDirEl: true, expanded: true });
@@ -437,9 +411,7 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/counted.mp3', year: '2025' }
       );
 
-      const header = document.getElementById('source-header-count');
-      // state.sourceFiles has 1 file (old.mp3), no new file added there
-      // (that's done by executeCopy, not patchSourceFileAfterCopy)
+      const header = document.getElementById('source-header-count')!;
       expect(header.textContent).toBe('(1)');
     });
 
@@ -451,7 +423,7 @@ describe('patchSourceFileAfterCopy', () => {
       });
       state.filterActive = true;
       state.sourceFilter = 'rock';
-      document.getElementById('source-header-count').textContent = '(1 / 1)';
+      document.getElementById('source-header-count')!.textContent = '(1 / 1)';
 
       patchSourceFileAfterCopy(
         '/home/Music/Rock',
@@ -459,19 +431,18 @@ describe('patchSourceFileAfterCopy', () => {
         { path: 'Rock/filtered.mp3', year: '2025' }
       );
 
-      const header = document.getElementById('source-header-count');
+      const header = document.getElementById('source-header-count')!;
       expect(header.textContent).toBe('(1 / 1)');
     });
   });
 });
 
-// ──────── patchEparsFileAfterCopy (light coverage) ────────────────────────
 describe('patchEparsFileAfterCopy', () => {
   beforeEach(() => {
     resetState();
   });
 
-  function setupEparsDOM(filename = 'song.mp3', eparDir = '/media/usb', initStatus = 'nouveau') {
+  function setupEparsDOM(filename = 'song.mp3', eparDir = '/media/usb', initStatus = 'nouveau'): void {
     document.body.innerHTML = `
       <div id="epars-container">
         <div class="children">
@@ -500,12 +471,11 @@ describe('patchEparsFileAfterCopy', () => {
 
   it('changes status from nouveau to doublon', () => {
     setupEparsDOM('song.mp3', '/media/usb', 'nouveau');
-    // Add the file to sourceFiles so computeStatus returns 'doublon'
     state.sourceFiles['/home/Music'] = { 'song.mp3': { path: 'Rock/song.mp3' } };
 
     patchEparsFileAfterCopy('song.mp3', '/media/usb');
 
-    const fileSpan = document.querySelector('#epars-container .file');
+    const fileSpan = document.querySelector('#epars-container .file')!;
     expect(fileSpan.classList.contains('doublon')).toBe(true);
     expect(fileSpan.classList.contains('led-doublon')).toBe(true);
     expect(fileSpan.classList.contains('nouveau')).toBe(false);
@@ -514,8 +484,8 @@ describe('patchEparsFileAfterCopy', () => {
 
   it('removes onclick handler when no longer nouveau', () => {
     setupEparsDOM('song.mp3', '/media/usb', 'nouveau');
-    const fileSpan = document.querySelector('#epars-container .file');
-    fileSpan.onclick = () => {}; // set a handler
+    const fileSpan = document.querySelector('#epars-container .file') as HTMLElement;
+    fileSpan.onclick = () => {};
     state.sourceFiles['/home/Music'] = { 'song.mp3': { path: 'Rock/song.mp3' } };
 
     patchEparsFileAfterCopy('song.mp3', '/media/usb');
@@ -525,13 +495,11 @@ describe('patchEparsFileAfterCopy', () => {
 
   it('does nothing when file is not found in DOM', () => {
     setupEparsDOM('song.mp3', '/media/usb', 'nouveau');
-    // Call with wrong filename — should not throw
     expect(() => patchEparsFileAfterCopy('nonexistent.mp3', '/media/usb')).not.toThrow();
   });
 
-  // ── Status counters with multiple files ───────────────────────────
   describe('status counters with multiple files', () => {
-    function setupMultiFileDOM() {
+    function setupMultiFileDOM(): void {
       document.body.innerHTML = `
         <div id="epars-container">
           <div class="children">
@@ -586,13 +554,10 @@ describe('patchEparsFileAfterCopy', () => {
 
     it('updates counters when a nouveau file becomes doublon', () => {
       setupMultiFileDOM();
-      // The mock computeStatus returns 'doublon' — so patching a nouveau → doublon
 
       patchEparsFileAfterCopy('b.mp3', '/media/usb');
 
-      const statusLine = document.getElementById('epars-status-line');
-      // Before: 2 nouveau, 1 doublon, 1 traité
-      // After:  1 nouveau, 2 doublon, 1 traité
+      const statusLine = document.getElementById('epars-status-line')!;
       expect(statusLine.textContent).toContain('1 reste');
       expect(statusLine.textContent).toContain('2 doublon');
       expect(statusLine.textContent).toContain('1 traité');
@@ -600,12 +565,10 @@ describe('patchEparsFileAfterCopy', () => {
 
     it('updates counters when a doublon file changes (stays doublon)', () => {
       setupMultiFileDOM();
-      // The mock computeStatus returns 'doublon' — patching a doublon → doublon
 
       patchEparsFileAfterCopy('c.mp3', '/media/usb');
 
-      const statusLine = document.getElementById('epars-status-line');
-      // Counters should stay the same
+      const statusLine = document.getElementById('epars-status-line')!;
       expect(statusLine.textContent).toContain('2 reste');
       expect(statusLine.textContent).toContain('1 doublon');
       expect(statusLine.textContent).toContain('1 traité');
@@ -613,30 +576,26 @@ describe('patchEparsFileAfterCopy', () => {
 
     it('counts only files inside #epars-container', () => {
       setupMultiFileDOM();
-      // Add a stray .file span outside epars-container — should be ignored
       document.body.insertAdjacentHTML('beforeend', '<span class="file nouveau led-nouveau" id="stray">stray.mp3</span>');
 
       patchEparsFileAfterCopy('b.mp3', '/media/usb');
 
-      const statusLine = document.getElementById('epars-status-line');
-      // The stray span must not affect counters: 1 reste, 2 doublon, 1 traité
+      const statusLine = document.getElementById('epars-status-line')!;
       expect(statusLine.textContent).toContain('1 reste');
       expect(statusLine.textContent).toContain('2 doublon');
       expect(statusLine.textContent).toContain('1 traité');
     });
   });
 
-  // ── Header count ─────────────────────────────────────────────────
   describe('header count update', () => {
     it('updates epars-header-count from state.eparsFiles', () => {
       setupEparsDOM('song.mp3', '/media/usb', 'nouveau');
       state.sourceFiles['/home/Music'] = { 'song.mp3': { path: 'Rock/song.mp3' } };
-      // Simulate 42 total files across all epars dirs
       vi.mocked(countAllEparsFiles).mockReturnValue(42);
 
       patchEparsFileAfterCopy('song.mp3', '/media/usb');
 
-      expect(document.getElementById('epars-header-count').textContent).toBe('(42)');
+      expect(document.getElementById('epars-header-count')!.textContent).toBe('(42)');
     });
 
     it('sets empty header when no files remain', () => {
@@ -646,18 +605,18 @@ describe('patchEparsFileAfterCopy', () => {
 
       patchEparsFileAfterCopy('song.mp3', '/media/usb');
 
-      expect(document.getElementById('epars-header-count').textContent).toBe('');
+      expect(document.getElementById('epars-header-count')!.textContent).toBe('');
     });
   });
 });
 
-// ──────── toggleSourceDir ──────────────────────────────────────────────────
 describe('toggleSourceDir', () => {
   beforeEach(() => {
     resetState();
   });
 
-  function setupToggleDOM({ initExpanded = false } = {}) {
+  function setupToggleDOM(opts: { initExpanded?: boolean } = {}): void {
+    const { initExpanded = false } = opts;
     document.body.innerHTML = `
       <div id="source-container"></div>
       <span id="source-header-count">(5)</span>
@@ -667,7 +626,7 @@ describe('toggleSourceDir', () => {
       <span id="epars-container"></span>
     `;
 
-    const container = document.getElementById('source-container');
+    const container = document.getElementById('source-container')!;
     const dirEl = document.createElement('div');
     dirEl.className = 'directory' + (initExpanded ? ' expanded' : '');
     dirEl.dataset.dirpath = '/home/Music/Rock';
@@ -689,7 +648,6 @@ describe('toggleSourceDir', () => {
 
     container.appendChild(dirEl);
 
-    // nodeMap entry with sub-dirs and files
     state.sourceNodeMap.set('/home/Music/Rock', {
       node: {
         ACDC: { __files__: [] },
@@ -704,7 +662,6 @@ describe('toggleSourceDir', () => {
     });
   }
 
-  // ── Expand ──────────────────────────────────────────────────────
   describe('expand', () => {
     it('adds dirPath to sourceExpanded set', () => {
       setupToggleDOM();
@@ -719,7 +676,7 @@ describe('toggleSourceDir', () => {
       setupToggleDOM();
       toggleSourceDir('/home/Music/Rock');
 
-      const dirEl = document.querySelector('#source-container .directory');
+      const dirEl = document.querySelector('#source-container .directory')!;
       expect(dirEl.classList.contains('expanded')).toBe(true);
     });
 
@@ -727,19 +684,19 @@ describe('toggleSourceDir', () => {
       setupToggleDOM();
       toggleSourceDir('/home/Music/Rock');
 
-      const dirEl = document.querySelector('#source-container .directory');
+      const dirEl = document.querySelector('#source-container .directory')!;
       const children = dirEl.querySelector('.children');
       expect(children).not.toBeNull();
-      expect(children.className).toBe('children');
+      expect(children!.className).toBe('children');
     });
 
     it('builds sub-directories inside the children div', () => {
       setupToggleDOM();
       toggleSourceDir('/home/Music/Rock');
 
-      const children = document.querySelector('#source-container .children');
+      const children = document.querySelector('#source-container .children')!;
       const subDirs = children.querySelectorAll('.directory');
-      expect(subDirs.length).toBe(2); // ACDC, Jazz
+      expect(subDirs.length).toBe(2);
 
       const names = [...subDirs].map(d => d.querySelector('span')?.textContent);
       expect(names).toContain('ACDC');
@@ -750,9 +707,9 @@ describe('toggleSourceDir', () => {
       setupToggleDOM();
       toggleSourceDir('/home/Music/Rock');
 
-      const children = document.querySelector('#source-container .children');
+      const children = document.querySelector('#source-container .children')!;
       const fileRows = children.querySelectorAll('.file-row');
-      expect(fileRows.length).toBe(3); // a.mp3, b.mp3, c.mp3
+      expect(fileRows.length).toBe(3);
 
       const labels = [...fileRows].map(r => r.querySelector('.file')?.textContent).sort();
       expect(labels).toEqual(['a.mp3', 'b.mp3', 'c.mp3']);
@@ -763,9 +720,8 @@ describe('toggleSourceDir', () => {
       toggleSourceDir('/home/Music/Rock');
 
       const subDirs = document.querySelectorAll('#source-container .children > .directory');
-      // ACDC: 0 files → no badge; Jazz: 1 file → badge (1)
-      const acdc = [...subDirs].find(d => d.querySelector('span')?.textContent === 'ACDC');
-      const jazz = [...subDirs].find(d => d.querySelector('span')?.textContent === 'Jazz');
+      const acdc = [...subDirs].find(d => d.querySelector('span')?.textContent === 'ACDC')!;
+      const jazz = [...subDirs].find(d => d.querySelector('span')?.textContent === 'Jazz')!;
 
       expect(acdc.querySelector('.dir-count')).toBeNull();
       expect(jazz.querySelector('.dir-count')?.textContent).toBe('(1)');
@@ -777,8 +733,7 @@ describe('toggleSourceDir', () => {
 
       toggleSourceDir('/home/Music/Rock');
 
-      // expanded class added, but no children created (info is null)
-      const dirEl = document.querySelector('#source-container .directory');
+      const dirEl = document.querySelector('#source-container .directory')!;
       expect(dirEl.classList.contains('expanded')).toBe(true);
       expect(dirEl.querySelector('.children')).toBeNull();
     });
@@ -790,16 +745,14 @@ describe('toggleSourceDir', () => {
 
       toggleSourceDir('/home/Music/Rock');
 
-      const children = document.querySelector('#source-container .children');
-      // Sub-dirs visible, files hidden (isFiltered=true skips __files__)
+      const children = document.querySelector('#source-container .children')!;
       const subDirs = children.querySelectorAll('.directory');
       expect(subDirs.length).toBe(2);
       const fileRows = children.querySelectorAll('.file-row');
-      expect(fileRows.length).toBe(0); // filtered → no files
+      expect(fileRows.length).toBe(0);
     });
   });
 
-  // ── Collapse ────────────────────────────────────────────────────
   describe('collapse', () => {
     it('removes dirPath from sourceExpanded set', () => {
       setupToggleDOM({ initExpanded: true });
@@ -814,7 +767,7 @@ describe('toggleSourceDir', () => {
       setupToggleDOM({ initExpanded: true });
       toggleSourceDir('/home/Music/Rock');
 
-      const dirEl = document.querySelector('#source-container .directory');
+      const dirEl = document.querySelector('#source-container .directory')!;
       expect(dirEl.classList.contains('expanded')).toBe(false);
     });
 
@@ -828,7 +781,6 @@ describe('toggleSourceDir', () => {
     });
   });
 
-  // ── Non-existent dirPath ─────────────────────────────────────────
   describe('when dirPath is not in DOM', () => {
     it('returns early without errors', () => {
       setupToggleDOM();
@@ -838,16 +790,13 @@ describe('toggleSourceDir', () => {
     });
   });
 
-  // ── Idempotence ─────────────────────────────────────────────────
   describe('idempotence', () => {
     it('expanding an already expanded dir collapses it', () => {
       setupToggleDOM({ initExpanded: true });
-      // First call (already expanded) → collapse
       toggleSourceDir('/home/Music/Rock');
       expect(state.sourceExpanded.has('/home/Music/Rock')).toBe(false);
       expect(document.querySelector('#source-container .children')).toBeNull();
 
-      // Second call → re-expand
       toggleSourceDir('/home/Music/Rock');
       expect(state.sourceExpanded.has('/home/Music/Rock')).toBe(true);
       expect(document.querySelector('#source-container .children')).not.toBeNull();
@@ -855,9 +804,8 @@ describe('toggleSourceDir', () => {
   });
 });
 
-// ──────── renderJournal ────────────────────────────────────────────────────
 describe('renderJournal', () => {
-  function setupJournalDOM() {
+  function setupJournalDOM(): void {
     document.body.innerHTML = '<div id="journal-content"></div>';
   }
 
@@ -867,17 +815,17 @@ describe('renderJournal', () => {
 
     renderJournal();
 
-    const content = document.getElementById('journal-content');
+    const content = document.getElementById('journal-content')!;
     expect(content.textContent).toContain('Aucune opération enregistrée');
   });
 
   it('shows placeholder when journal is null', () => {
     setupJournalDOM();
-    state.journal = null;
+    state.journal = null as any;
 
     renderJournal();
 
-    const content = document.getElementById('journal-content');
+    const content = document.getElementById('journal-content')!;
     expect(content.textContent).toContain('Aucune opération enregistrée');
   });
 
@@ -888,16 +836,15 @@ describe('renderJournal', () => {
       status: 'copied',
       filename: 'song.mp3',
       destination: '/home/music/Rock/song.mp3',
-    }];
+    } as any];
 
     renderJournal();
 
-    const content = document.getElementById('journal-content');
+    const content = document.getElementById('journal-content')!;
     expect(content.innerHTML).toContain('📋');
     expect(content.innerHTML).toContain('song.mp3');
     expect(content.innerHTML).toContain('/home/music/Rock/song.mp3');
     expect(content.querySelector('.copied')).not.toBeNull();
-    // Timestamp: slice(0,19).replace('T', ' ') → '2025-06-22 14:30:00'
     expect(content.textContent).toContain('2025-06-22 14:30:00');
   });
 
@@ -908,11 +855,11 @@ describe('renderJournal', () => {
       status: 'scan',
       action: 'Scan terminé',
       details: '42 fichiers source, 15 épars (3 dossiers)',
-    }];
+    } as any];
 
     renderJournal();
 
-    const content = document.getElementById('journal-content');
+    const content = document.getElementById('journal-content')!;
     expect(content.innerHTML).toContain('🔍');
     expect(content.innerHTML).toContain('Scan terminé');
     expect(content.innerHTML).toContain('42 fichiers source, 15 épars (3 dossiers)');
@@ -926,11 +873,11 @@ describe('renderJournal', () => {
       status: 'config',
       action: 'Config sauvegardée',
       details: 'Profil : Ma config',
-    }];
+    } as any];
 
     renderJournal();
 
-    const content = document.getElementById('journal-content');
+    const content = document.getElementById('journal-content')!;
     expect(content.innerHTML).toContain('⚙️');
     expect(content.innerHTML).toContain('Config sauvegardée');
     expect(content.innerHTML).toContain('Profil : Ma config');
@@ -943,11 +890,11 @@ describe('renderJournal', () => {
       timestamp: '2025-06-22T08:00:00.000Z',
       status: 'unknown',
       action: 'Something happened',
-    }];
+    } as any];
 
     renderJournal();
 
-    const content = document.getElementById('journal-content');
+    const content = document.getElementById('journal-content')!;
     expect(content.querySelector('.error')).not.toBeNull();
     expect(content.textContent).toContain('Something happened');
   });
@@ -958,11 +905,11 @@ describe('renderJournal', () => {
       timestamp: '2025-06-22T08:00:00.000Z',
       status: 'unknown',
       filename: 'fallback.mp3',
-    }];
+    } as any];
 
     renderJournal();
 
-    const content = document.getElementById('journal-content');
+    const content = document.getElementById('journal-content')!;
     expect(content.textContent).toContain('fallback.mp3');
   });
 
@@ -971,11 +918,11 @@ describe('renderJournal', () => {
     state.journal = [{
       timestamp: '2025-06-22T08:00:00.000Z',
       status: 'unknown',
-    }];
+    } as any];
 
     renderJournal();
 
-    const content = document.getElementById('journal-content');
+    const content = document.getElementById('journal-content')!;
     expect(content.textContent).toContain('?');
   });
 
@@ -985,13 +932,12 @@ describe('renderJournal', () => {
       { timestamp: '2025-06-21T12:00:00.000Z', status: 'scan', action: 'First scan', details: '' },
       { timestamp: '2025-06-22T14:00:00.000Z', status: 'copied', filename: 'second.mp3', destination: '/dst/second.mp3' },
       { timestamp: '2025-06-22T15:00:00.000Z', status: 'copied', filename: 'third.mp3', destination: '/dst/third.mp3' },
-    ];
+    ] as any[];
 
     renderJournal();
 
     const entries = document.querySelectorAll('#journal-content > div');
     expect(entries.length).toBe(3);
-    // Most recent first: third, second, scan
     expect(entries[0].textContent).toContain('third.mp3');
     expect(entries[1].textContent).toContain('second.mp3');
     expect(entries[2].textContent).toContain('First scan');
@@ -1003,19 +949,17 @@ describe('renderJournal', () => {
       status: 'copied',
       filename: 'notime.mp3',
       destination: '/dst/notime.mp3',
-    }];
+    } as any];
 
     renderJournal();
 
-    const content = document.getElementById('journal-content');
-    // (e.timestamp || '') → '' when timestamp is absent
+    const content = document.getElementById('journal-content')!;
     expect(content.textContent).toContain('notime.mp3');
   });
 });
 
-// ──────── renderEpars ────────────────────────────────────────────────────────
 describe('renderEpars', () => {
-  function setupRenderEparsDOM() {
+  function setupRenderEparsDOM(): void {
     document.body.innerHTML = `
       <div id="epars-container"></div>
       <span id="epars-header-count"></span>
@@ -1033,8 +977,8 @@ describe('renderEpars', () => {
 
   it('renders empty container when no epars files', () => {
     renderEpars();
-    expect(document.getElementById('epars-container').children.length).toBe(0);
-    expect(document.getElementById('epars-header-count').textContent).toBe('');
+    expect(document.getElementById('epars-container')!.children.length).toBe(0);
+    expect(document.getElementById('epars-header-count')!.textContent).toBe('');
   });
 
   it('renders a directory for each epars dir', () => {
@@ -1052,7 +996,7 @@ describe('renderEpars', () => {
 
     const fileRows = document.querySelectorAll('.file-row');
     expect(fileRows.length).toBe(1);
-    const fileSpan = fileRows[0].querySelector('.file');
+    const fileSpan = fileRows[0].querySelector('.file') as HTMLElement;
     expect(fileSpan.textContent).toBe('track.mp3');
     expect(fileSpan.dataset.filename).toBe('track.mp3');
     expect(fileSpan.dataset.epardir).toBe('/media/usb');
@@ -1062,25 +1006,23 @@ describe('renderEpars', () => {
     state.eparsFiles['/media/usb'] = { 'meta.mp3': { path: 'meta.mp3', year: '2021', duration: 195, codec: 'FLAC' } };
     renderEpars();
 
-    const row = document.querySelector('.file-row');
+    const row = document.querySelector('.file-row')!;
     expect(row.querySelector('.year')?.textContent).toBe('2021');
     expect(row.querySelector('.codec')?.textContent).toBe('FLAC');
     expect(row.querySelector('.duration')?.textContent).toBe('3:15');
   });
 
   it('renders status line with file counts', () => {
-    // computeStatus is mocked to always return 'doublon' (see vi.mock at top)
     state.eparsFiles['/usb'] = { 'a.mp3': { path: 'a.mp3' } };
     renderEpars();
 
-    const statusLine = document.getElementById('epars-status-line');
+    const statusLine = document.getElementById('epars-status-line')!;
     expect(statusLine.textContent).toContain('1 doublon');
   });
 });
 
-// ──────── renderSource ───────────────────────────────────────────────────────
 describe('renderSource', () => {
-  function setupRenderSourceDOM() {
+  function setupRenderSourceDOM(): void {
     document.body.innerHTML = `
       <div id="source-container"></div>
       <span id="source-header-count"></span>
@@ -1103,7 +1045,7 @@ describe('renderSource', () => {
 
   it('renders empty container when no source files', () => {
     renderSource();
-    expect(document.getElementById('source-container').children.length).toBe(0);
+    expect(document.getElementById('source-container')!.children.length).toBe(0);
   });
 
   it('renders directories for source data tree', () => {
@@ -1112,14 +1054,13 @@ describe('renderSource', () => {
 
     const dirs = document.querySelectorAll('#source-container > .directory');
     expect(dirs.length).toBe(1);
-    expect(dirs[0].dataset.dirpath).toBe('/home/Music/Rock');
+    expect((dirs[0] as HTMLElement).dataset.dirpath).toBe('/home/Music/Rock');
   });
 
   it('does not show files for collapsed directories', () => {
     state.sourceFiles['/home/Music'] = { 'a.mp3': { path: 'Rock/a.mp3' } };
     renderSource();
 
-    // Files are only visible when a directory is expanded
     const fileRows = document.querySelectorAll('.file-row');
     expect(fileRows.length).toBe(0);
   });
@@ -1142,7 +1083,7 @@ describe('renderSource', () => {
     };
     renderSource();
 
-    const header = document.getElementById('source-header-count');
+    const header = document.getElementById('source-header-count')!;
     expect(header.textContent).toBe('(2)');
   });
 
@@ -1151,21 +1092,19 @@ describe('renderSource', () => {
     renderSource();
 
     expect(state.sourceNodeMap.has('/home/Music/Rock')).toBe(true);
-    const info = state.sourceNodeMap.get('/home/Music/Rock');
+    const info = state.sourceNodeMap.get('/home/Music/Rock')!;
     expect(info.baseDir).toBe('/home/Music');
-    expect(info.node.__files__).toBeDefined();
-    expect(info.node.__files__.length).toBe(1);
+    expect((info.node as any).__files__).toBeDefined();
+    expect((info.node as any).__files__.length).toBe(1);
   });
 
   it('handles nested subdirectories', () => {
     state.sourceFiles['/home/Music'] = { 'deep.mp3': { path: 'Rock/ACDC/deep.mp3' } };
     renderSource();
 
-    // Only top-level dirs are rendered initially
     const topDirs = document.querySelectorAll('#source-container > .directory');
     expect(topDirs.length).toBe(1);
-    expect(topDirs[0].dataset.dirpath).toBe('/home/Music/Rock');
-    // ACDC is a child of Rock, not rendered until Rock is expanded
+    expect((topDirs[0] as HTMLElement).dataset.dirpath).toBe('/home/Music/Rock');
     expect(topDirs[0].querySelector('.children')).toBeNull();
   });
 });

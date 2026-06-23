@@ -1,8 +1,8 @@
-// ─── Unit tests for playlist.js ──────────────────────────────────────────
+// ─── Unit tests for playlist.ts ──────────────────────────────────────────
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { state } from './state.js';
 
-// Mock api.js before importing playlist.js
+// Mock api.js before importing playlist.ts
 vi.mock('./api.js', () => ({
   api: vi.fn(),
 }));
@@ -19,7 +19,16 @@ import { api } from './api.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function makeTrack(filename, extra = {}) {
+interface TrackInput {
+  filename: string;
+  fullPath?: string;
+  year?: string;
+  duration?: number;
+  codec?: string;
+  [key: string]: unknown;
+}
+
+function makeTrack(filename: string, extra: TrackInput = {}): Record<string, unknown> {
   return {
     filename,
     fullPath: `/music/${filename}`,
@@ -51,7 +60,7 @@ describe('createNewPlaylist', () => {
 
   it('does nothing if the name already exists', () => {
     createNewPlaylist('test-pl');
-    getPendingTracks('test-pl').push(makeTrack('a.mp3')); // mutate directly
+    getPendingTracks('test-pl').push(makeTrack('a.mp3') as any);
     createNewPlaylist('test-pl'); // should NOT reset
     expect(getPendingTracks('test-pl')).toHaveLength(1);
   });
@@ -68,7 +77,7 @@ describe('getPendingTracks / setPendingTracks', () => {
   });
 
   it('setPendingTracks replaces tracks', () => {
-    setPendingTracks('pl', [makeTrack('a.mp3')]);
+    setPendingTracks('pl', [makeTrack('a.mp3') as any]);
     expect(getPendingTracks('pl')).toHaveLength(1);
     expect(getPendingTracks('pl')[0].filename).toBe('a.mp3');
   });
@@ -86,7 +95,7 @@ describe('addTrack', () => {
 
   it('adds a track and returns true', () => {
     const track = makeTrack('song.mp3');
-    const result = addTrack('pl', track);
+    const result = addTrack('pl', track as any);
     expect(result).toBe(true);
     expect(getPendingTracks('pl')).toHaveLength(1);
     expect(getPendingTracks('pl')[0]).toEqual(track);
@@ -94,23 +103,23 @@ describe('addTrack', () => {
 
   it('refuses duplicate tracks by fullPath (spec §6.2)', () => {
     const track = makeTrack('song.mp3', { fullPath: '/music/song.mp3' });
-    addTrack('pl', track);
-    const dupResult = addTrack('pl', track);
+    addTrack('pl', track as any);
+    const dupResult = addTrack('pl', track as any);
     expect(dupResult).toBe(false);
     expect(getPendingTracks('pl')).toHaveLength(1);
   });
 
   it('treats tracks with different fullPath as distinct (same filename, different dir)', () => {
-    addTrack('pl', makeTrack('song.mp3', { fullPath: '/a/song.mp3' }));
-    const result = addTrack('pl', makeTrack('song.mp3', { fullPath: '/b/song.mp3' }));
+    addTrack('pl', makeTrack('song.mp3', { fullPath: '/a/song.mp3' }) as any);
+    const result = addTrack('pl', makeTrack('song.mp3', { fullPath: '/b/song.mp3' }) as any);
     expect(result).toBe(true);
     expect(getPendingTracks('pl')).toHaveLength(2);
   });
 
   it('adds multiple tracks sequentially', () => {
-    addTrack('pl', makeTrack('a.mp3'));
-    addTrack('pl', makeTrack('b.mp3'));
-    addTrack('pl', makeTrack('c.mp3'));
+    addTrack('pl', makeTrack('a.mp3') as any);
+    addTrack('pl', makeTrack('b.mp3') as any);
+    addTrack('pl', makeTrack('c.mp3') as any);
     expect(getPendingTracks('pl')).toHaveLength(3);
   });
 });
@@ -118,9 +127,9 @@ describe('addTrack', () => {
 describe('removeTrack', () => {
   beforeEach(() => {
     createNewPlaylist('pl');
-    addTrack('pl', makeTrack('a.mp3'));
-    addTrack('pl', makeTrack('b.mp3'));
-    addTrack('pl', makeTrack('c.mp3'));
+    addTrack('pl', makeTrack('a.mp3') as any);
+    addTrack('pl', makeTrack('b.mp3') as any);
+    addTrack('pl', makeTrack('c.mp3') as any);
   });
 
   it('removes a track by fullPath', () => {
@@ -146,9 +155,9 @@ describe('removeTrack', () => {
 describe('reorderTrack', () => {
   beforeEach(() => {
     createNewPlaylist('pl');
-    addTrack('pl', makeTrack('A.mp3'));
-    addTrack('pl', makeTrack('B.mp3'));
-    addTrack('pl', makeTrack('C.mp3'));
+    addTrack('pl', makeTrack('A.mp3') as any);
+    addTrack('pl', makeTrack('B.mp3') as any);
+    addTrack('pl', makeTrack('C.mp3') as any);
   });
 
   it('moves a track from index 0 to index 2', () => {
@@ -202,10 +211,10 @@ describe('reorderTrack', () => {
 describe('removePendingPlaylist', () => {
   it('removes a pending playlist entirely', () => {
     createNewPlaylist('pl');
-    addTrack('pl', makeTrack('A.mp3'));
+    addTrack('pl', makeTrack('A.mp3') as any);
     removePendingPlaylist('pl');
     expect(state.pendingPlaylists).toEqual({});
-    expect(getPendingTracks('pl')).toEqual([]); // returns []
+    expect(getPendingTracks('pl')).toEqual([]);
   });
 
   it('does nothing for nonexistent playlist', () => {
@@ -237,7 +246,6 @@ describe('getActivePlaylistName', () => {
   it('falls back to playlist-1 when index is out of range', () => {
     createNewPlaylist('only');
     state.activePlaylistIndex = 5;
-    // keys[5] is undefined → returns 'playlist-1'
     expect(getActivePlaylistName()).toBe('playlist-1');
   });
 });
@@ -274,9 +282,9 @@ describe('savePlaylist', () => {
     const serverPlaylist = { name: 'set-a', trackCount: 3 };
     vi.mocked(api)
       .mockResolvedValueOnce({ ok: true, playlist: serverPlaylist })
-      .mockResolvedValueOnce([serverPlaylist]); // loadPlaylists refresh
+      .mockResolvedValueOnce([serverPlaylist]);
 
-    const tracks = [makeTrack('a.mp3'), makeTrack('b.mp3'), makeTrack('c.mp3')];
+    const tracks = [makeTrack('a.mp3'), makeTrack('b.mp3'), makeTrack('c.mp3')] as any[];
     const result = await savePlaylist('set-a', tracks);
 
     expect(api).toHaveBeenCalledWith('/playlists', {
@@ -292,7 +300,7 @@ describe('deletePlaylist', () => {
   it('sends DELETE and refreshes cache', async () => {
     vi.mocked(api)
       .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce([]); // loadPlaylists refresh
+      .mockResolvedValueOnce([]);
 
     const result = await deletePlaylist('set-a');
 
@@ -308,7 +316,6 @@ describe('deletePlaylist', () => {
 
     const result = await deletePlaylist('nonexistent');
 
-    // deletePlaylist returns res.ok — which is false
     expect(result).toBe(false);
   });
 });
@@ -325,7 +332,7 @@ describe('renamePlaylist', () => {
       method: 'PUT',
       body: JSON.stringify({ name: 'new-name' }),
     });
-    expect(result.ok).toBe(true);
+    expect((result as Record<string, unknown>).ok).toBe(true);
     expect(state.playlists).toEqual([{ name: 'new-name' }]);
   });
 });
@@ -350,7 +357,7 @@ describe('exportPlaylist', () => {
 
     const result = await exportPlaylist('broken');
 
-    expect(result.ok).toBe(false);
-    expect(result.missing).toEqual(['ghost.mp3']);
+    expect((result as Record<string, unknown>).ok).toBe(false);
+    expect((result as Record<string, unknown>).missing).toEqual(['ghost.mp3']);
   });
 });
