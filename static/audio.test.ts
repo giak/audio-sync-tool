@@ -47,7 +47,7 @@ vi.hoisted(() => {
 
 vi.mock('./utils.js', () => ({
   formatTime: vi.fn((s: number) => {
-    if (!isFinite(s) || s < 0) return '0:00';
+    if (!Number.isFinite(s) || s < 0) return '0:00';
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, '0')}`;
@@ -157,8 +157,8 @@ describe('togglePlay', () => {
 
   it('shows truncated filename in player bar (> 30 chars)', async () => {
     const btn = makeBtn();
-    const longName = 'a'.repeat(35) + '.mp3';
-    togglePlay(longName, '/path/' + longName, btn);
+    const longName = `${'a'.repeat(35)}.mp3`;
+    togglePlay(longName, `/path/${longName}`, btn);
     (globalThis as any).__audioResolve();
     await flush();
 

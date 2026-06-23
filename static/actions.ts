@@ -43,7 +43,7 @@ export function renderConfigSelect(): void {
 }
 
 function loadActiveConfig(): void {
-  const idx = parseInt(cfgSelect?.value || '0') || 0;
+  const idx = parseInt(cfgSelect?.value || '0', 10) || 0;
   const c = configData.configs[idx];
   if (c) {
     if (cfgName) cfgName.value = c.name || '';
@@ -74,7 +74,7 @@ export function initConfigUI(): void {
         if (cfgStatus) cfgStatus.textContent = '⚠️ Impossible de supprimer le dernier profil';
         return;
       }
-      const idx = parseInt(cfgSelect?.value || '0') || 0;
+      const idx = parseInt(cfgSelect?.value || '0', 10) || 0;
       configData.configs.splice(idx, 1);
       configData.active = Math.min(idx, configData.configs.length - 1);
       renderConfigSelect();
@@ -84,7 +84,7 @@ export function initConfigUI(): void {
   const saveBtn = document.getElementById('btn-save-config');
   if (saveBtn) {
     saveBtn.onclick = async () => {
-      const idx = parseInt(cfgSelect?.value || '0') || 0;
+      const idx = parseInt(cfgSelect?.value || '0', 10) || 0;
       configData.configs[idx] = {
         name: (cfgName?.value || '').trim() || `config-${idx}`,
         source_data: (cfgSource?.value || '').trim(),
@@ -125,7 +125,7 @@ export async function runScan(): Promise<void> {
         return;
       }
       const pct = p.total > 0 ? Math.round((p.current / p.total) * 100) : 0;
-      if (progressFill) progressFill.style.width = Math.min(pct, 100) + '%';
+      if (progressFill) progressFill.style.width = `${Math.min(pct, 100)}%`;
       if (progressText) progressText.textContent = `${p.phase || '…'} : ${p.current} / ${p.total} (${pct}%)`;
       if (statusText)
         statusText.textContent = `🔍 Scan ${p.phase ? p.phase.toLowerCase() : '…'} — ${p.current}/${p.total}`;
@@ -187,7 +187,7 @@ export function executeCopy(): void {
     if (statusText) statusText.textContent = 'Fichier introuvable dans les données scannées.';
     return;
   }
-  const fullSrc = eparDir + '/' + relPath;
+  const fullSrc = `${eparDir}/${relPath}`;
   const destDir = rightFocus.dataset.dirpath || '';
 
   const dialogMsg = document.getElementById('dialog-msg');
@@ -211,10 +211,10 @@ export function executeCopy(): void {
         state.journal = await api('/journal');
         // Compute the relative path for both state update and DOM patch
         let relPathNew = filename;
-        const sourceDir = Object.keys(state.sourceFiles).find(dir => destDir === dir || destDir.startsWith(dir + '/'));
+        const sourceDir = Object.keys(state.sourceFiles).find(dir => destDir === dir || destDir.startsWith(`${dir}/`));
         if (sourceDir && destDir.startsWith(sourceDir)) {
           const rel = destDir.substring(sourceDir.length).replace(/^\/+/, '');
-          relPathNew = rel ? rel + '/' + filename : filename;
+          relPathNew = rel ? `${rel}/${filename}` : filename;
           if (!state.sourceFiles[sourceDir]) state.sourceFiles[sourceDir] = {};
           state.sourceFiles[sourceDir][filename] = {
             path: relPathNew,
@@ -262,7 +262,7 @@ export async function initApp(): Promise<void> {
     renderConfigSelect();
 
     state.journal = (journal || []) as typeof state.journal;
-    if (cache && cache.source && Object.keys(cache.source).length > 0) {
+    if (cache?.source && Object.keys(cache.source).length > 0) {
       state.sourceFiles = (cache.source || {}) as typeof state.sourceFiles;
       state.eparsFiles = (cache.epars || {}) as typeof state.eparsFiles;
     }

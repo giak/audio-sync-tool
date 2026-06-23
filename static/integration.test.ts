@@ -98,7 +98,6 @@ vi.hoisted(() => {
 
 // ── Import SCRIPT.TS (executes on the real DOM set up above) ────────────────
 import './script.js';
-import { executeCopy } from './actions.js';
 import { api } from './api.js';
 import { stopPlayer } from './audio.js';
 import { setActivePanel } from './focus.js';
@@ -399,7 +398,7 @@ describe('Keyboard navigation', () => {
     await flush();
 
     let focused = document.querySelector('#epars-container .focused');
-    while (focused && focused.classList.contains('directory')) {
+    while (focused?.classList.contains('directory')) {
       dispatchKey('ArrowDown');
       await flush();
       focused = document.querySelector('#epars-container .focused');
@@ -423,7 +422,7 @@ describe('Keyboard navigation', () => {
     await flush();
 
     let focused = document.querySelector('#epars-container .focused');
-    while (focused && focused.classList.contains('directory')) {
+    while (focused?.classList.contains('directory')) {
       dispatchKey('ArrowDown');
       await flush();
       focused = document.querySelector('#epars-container .focused');
@@ -1673,7 +1672,7 @@ describe('Edge cases', () => {
   });
 
   it('handles very long filenames', async () => {
-    const longName = 'a'.repeat(120) + '.mp3';
+    const longName = `${'a'.repeat(120)}.mp3`;
     state.eparsFiles = {
       '/media/usb': { [longName]: { path: longName, year: '2024', duration: 100, codec: 'MP3' } },
     };

@@ -7,7 +7,7 @@ import { state } from './state.js';
 export function openModal(name: string): void {
   state.activeModal = name as typeof state.activeModal;
   for (const el of document.querySelectorAll('.modal')) el.classList.add('hidden');
-  const el = document.getElementById('modal-' + name);
+  const el = document.getElementById(`modal-${name}`);
   if (el) el.classList.remove('hidden');
   setTimeout(() => {
     const focusable = el?.querySelector('button, input, select, textarea, [tabindex]');

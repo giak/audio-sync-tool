@@ -3,7 +3,6 @@
 import { togglePlay } from './audio.js';
 import { focusItemByElement, revalidateFocus, setActivePanel } from './focus.js';
 import {
-  addTrack,
   createNewPlaylist,
   deletePlaylist,
   getActivePlaylistName,
@@ -52,7 +51,7 @@ type ToggleFn = (dirPath: string) => void;
 
 function makeFileEl(
   filename: string,
-  relPath: string,
+  _relPath: string,
   status: FileStatus,
   fullpath: string,
   year: string | null,
@@ -125,7 +124,7 @@ export function renderJournal(): void {
 
 // ── Éparpillé panel ───────────────────────────────────────────────────────
 
-function selectEparsFile(el: HTMLElement, filename: string, eparDir: string): void {
+function selectEparsFile(el: HTMLElement, _filename: string, _eparDir: string): void {
   for (const el of document.querySelectorAll('.file.selected')) el.classList.remove('selected');
   el.classList.add('selected');
   const statusText = document.getElementById('status-text');
@@ -152,7 +151,7 @@ export function renderEpars(): void {
   for (const [dirPath, files] of Object.entries(state.eparsFiles)) {
     const dirDiv = document.createElement('div');
     dirDiv.className = 'directory';
-    dirDiv.dataset.focuspath = 'epars-dir:' + dirPath;
+    dirDiv.dataset.focuspath = `epars-dir:${dirPath}`;
     const shortName = dirPath.split('/').filter(Boolean).pop() || dirPath;
     dirDiv.textContent = shortName;
     dirDiv.title = dirPath;
@@ -165,7 +164,7 @@ export function renderEpars(): void {
     const sorted = Object.entries(files).sort((a, b) => a[0].localeCompare(b[0]));
     for (const [filename, data] of sorted) {
       const relPath = data.path;
-      const fullpath = dirPath + '/' + relPath;
+      const fullpath = `${dirPath}/${relPath}`;
       const status = computeStatus(filename, state.sourceFiles, state.journal as any);
       if (status === 'nouveau') countNouveau++;
       else if (status === 'doublon') countDoublon++;
@@ -220,13 +219,13 @@ function buildSourceChildren(
     .filter(k => k !== '__files__')
     .sort();
   for (const subName of subDirs) {
-    const subFullPath = fullPath + '/' + subName;
+    const subFullPath = `${fullPath}/${subName}`;
     const subNode = node[subName] as TreeNode;
     const subFiles = (subNode.__files__ || []) as FileEntry[];
     const subExpanded = state.sourceExpanded.has(subFullPath);
 
     const dirEl = document.createElement('div');
-    dirEl.className = 'directory' + (subExpanded ? ' expanded' : '');
+    dirEl.className = `directory${subExpanded ? ' expanded' : ''}`;
     dirEl.dataset.dirpath = subFullPath;
     dirEl.dataset.focuspath = subFullPath;
 
@@ -251,9 +250,9 @@ function buildSourceChildren(
   if (!isFiltered) {
     const status: FileStatus = inPlaylistPaths ? 'nouveau' : 'doublon';
     for (const f of (node.__files__ || []) as FileEntry[]) {
-      const fullFilePath = baseDir + '/' + f.relPath;
+      const fullFilePath = `${baseDir}/${f.relPath}`;
       const row = makeFileEl(f.filename, f.relPath, status, fullFilePath, f.year, f.duration, f.codec);
-      if (inPlaylistPaths && inPlaylistPaths.has(fullFilePath)) {
+      if (inPlaylistPaths?.has(fullFilePath)) {
         const label = row.querySelector('.file');
         if (label) label.classList.add('in-playlist');
       }
@@ -305,13 +304,13 @@ function renderDirTree(node: TreeNode, container: HTMLElement, basePath: string,
     .filter(k => k !== '__files__')
     .sort();
   for (const name of dirNames) {
-    const fullPath = basePath + '/' + name;
+    const fullPath = `${basePath}/${name}`;
     const subNode = node[name] as TreeNode;
     const isExpanded = state.sourceExpanded.has(fullPath);
     const files = (subNode.__files__ || []) as FileEntry[];
 
     const dirEl = document.createElement('div');
-    dirEl.className = 'directory' + (isExpanded ? ' expanded' : '');
+    dirEl.className = `directory${isExpanded ? ' expanded' : ''}`;
     dirEl.dataset.dirpath = fullPath;
     dirEl.dataset.focuspath = fullPath;
 
@@ -342,7 +341,7 @@ function renderFilteredSource(container: HTMLElement, allTrees: TreeAndDir[]): n
       .filter(k => k !== '__files__')
       .sort();
     for (const name of dirNames) {
-      const fullPath = dirPath + '/' + name;
+      const _fullPath = `${dirPath}/${name}`;
       if (!name.toLowerCase().includes(term) && !dirHasMatchingDescendant(tree[name] as TreeNode, term)) continue;
       visibleCount++;
       renderFilteredDirNode(tree[name] as TreeNode, container, dirPath, name);
@@ -353,7 +352,7 @@ function renderFilteredSource(container: HTMLElement, allTrees: TreeAndDir[]): n
 
 function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath: string, name: string): void {
   const term = state.sourceFilter.toLowerCase();
-  const fullPath = basePath + '/' + name;
+  const fullPath = `${basePath}/${name}`;
   if (!name.toLowerCase().includes(term) && !dirHasMatchingDescendant(node, term)) return;
 
   const manualExpand = state.sourceExpanded.has(fullPath);
@@ -361,7 +360,7 @@ function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath:
   const files = (node.__files__ || []) as FileEntry[];
 
   const dirEl = document.createElement('div');
-  dirEl.className = 'directory' + (isExpanded ? ' expanded' : '');
+  dirEl.className = `directory${isExpanded ? ' expanded' : ''}`;
   dirEl.dataset.dirpath = fullPath;
   dirEl.dataset.focuspath = fullPath;
 
@@ -528,7 +527,7 @@ export function patchSourceFileAfterCopy(
   for (const part of missingParts) {
     if (!node[part]) node[part] = {};
     node = node[part] as TreeNode;
-    currentPath += '/' + part;
+    currentPath += `/${part}`;
     state.sourceNodeMap.set(currentPath, {
       node: node as unknown as Record<string, unknown>,
       baseDir: ancestorInfo.baseDir,
@@ -582,7 +581,7 @@ export function patchSourceFileAfterCopy(
         filename,
         fileData.path,
         'doublon',
-        destDir + '/' + filename,
+        `${destDir}/${filename}`,
         fileData.year,
         fileData.duration,
         fileData.codec,
@@ -625,7 +624,7 @@ function renderPlaylistTabs(): void {
 
   for (const [i, name] of allNames.entries()) {
     const tab = document.createElement('span');
-    tab.className = 'pl-tab' + (i === state.activePlaylistIndex ? ' active' : '');
+    tab.className = `pl-tab${i === state.activePlaylistIndex ? ' active' : ''}`;
     tab.textContent = name;
 
     const pl = state.playlists.find(p => p.name === name);
@@ -663,7 +662,7 @@ function renderPlaylistTabs(): void {
   addBtn.title = 'Nouvelle playlist';
   addBtn.onclick = () => {
     const name = prompt('Nom de la nouvelle playlist :', `playlist-${Date.now()}`);
-    if (name && name.trim()) {
+    if (name?.trim()) {
       createNewPlaylist(name.trim());
       const newKeys = Array.from(
         new Set([...state.playlists.map(p => p.name), ...Object.keys(state.pendingPlaylists)]),
@@ -745,7 +744,7 @@ function renderPlaylistTracks(): void {
       trackEl.classList.remove('drag-over');
       const fromIdx = parseInt(e.dataTransfer?.getData('text/plain') || '', 10);
       const toIdx = parseInt(trackEl.dataset.index || '', 10);
-      if (!isNaN(fromIdx) && !isNaN(toIdx)) {
+      if (!Number.isNaN(fromIdx) && !Number.isNaN(toIdx)) {
         reorderTrack(getActivePlaylistName(), fromIdx, toIdx);
         renderPlaylistPanel();
       }
@@ -904,7 +903,7 @@ export function renderPlaylistManager(): void {
     (btn as HTMLElement).onclick = async () => {
       const oldName = (btn as HTMLElement).dataset.name || '';
       const newName = prompt('Nouveau nom :', oldName);
-      if (newName && newName.trim() && newName.trim() !== oldName) {
+      if (newName?.trim() && newName.trim() !== oldName) {
         const saved = state.playlists.find(p => p.name === oldName);
         const pending = getPendingTracks(oldName);
         if (saved) {

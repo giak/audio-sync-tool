@@ -6,21 +6,17 @@ import { getFocusedItem, getItems, navigateColumn, navigateFocus, revalidateFocu
 import {
   addTrack,
   createNewPlaylist,
-  deletePlaylist,
   exportPlaylist,
   getActivePlaylistName,
   getPendingTracks,
   loadPlaylists,
-  removePendingPlaylist,
   removeTrack,
-  renamePlaylist,
   reorderTrack,
   savePlaylist,
   setPendingTracks,
 } from './playlist.js';
 import {
   patchPlaylistSourceFile,
-  renderAll,
   renderJournal,
   renderPlaylistManager,
   renderPlaylistPanel,
@@ -61,7 +57,7 @@ function toggleTrackInPlaylist(): void {
   const container = document.getElementById('playlist-source-container') as HTMLElement | null;
   if (!container) return;
   const focused = container.querySelector('.focused') as HTMLElement | null;
-  if (!focused || !focused.classList.contains('file-row')) return;
+  if (!focused?.classList.contains('file-row')) return;
 
   const label = focused.querySelector('.file') as HTMLElement | null;
   const filename = label?.textContent || '';

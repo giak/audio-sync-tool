@@ -609,7 +609,7 @@ describe('toggleSourceDir', () => {
 
     const container = document.getElementById('source-container')!;
     const dirEl = document.createElement('div');
-    dirEl.className = 'directory' + (initExpanded ? ' expanded' : '');
+    dirEl.className = `directory${initExpanded ? ' expanded' : ''}`;
     dirEl.dataset.dirpath = '/home/Music/Rock';
     dirEl.dataset.focuspath = '/home/Music/Rock';
     const nameSpan = document.createElement('span');

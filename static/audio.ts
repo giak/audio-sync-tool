@@ -2,7 +2,7 @@
 import { formatTime } from './utils.js';
 
 let currentAudio: HTMLAudioElement | null = null;
-let playerFilename = '';
+let _playerFilename = '';
 let playerFullpath = '';
 
 const playerBar = document.getElementById('player-bar') as HTMLElement | null;
@@ -12,9 +12,9 @@ const playerTime = document.getElementById('player-time') as HTMLElement | null;
 const playerStep = document.getElementById('player-step') as HTMLInputElement | null;
 
 function updatePlayerUI(): void {
-  if (!currentAudio || !currentAudio.duration) return;
+  if (!currentAudio?.duration) return;
   const pct = (currentAudio.currentTime / currentAudio.duration) * 100;
-  if (playerProgressFill) playerProgressFill.style.width = pct + '%';
+  if (playerProgressFill) playerProgressFill.style.width = `${pct}%`;
   if (playerTime) {
     playerTime.textContent = `${formatTime(currentAudio.currentTime)} / ${formatTime(currentAudio.duration)}`;
   }
@@ -34,10 +34,10 @@ export function stopPlayer(): void {
 }
 
 function showPlayer(filename: string, fullpath: string): void {
-  playerFilename = filename;
+  _playerFilename = filename;
   playerFullpath = fullpath;
   if (playerFilenameEl) {
-    playerFilenameEl.textContent = filename.length > 30 ? filename.slice(0, 27) + '...' : filename;
+    playerFilenameEl.textContent = filename.length > 30 ? `${filename.slice(0, 27)}...` : filename;
   }
   if (playerTime) playerTime.textContent = '0:00 / 0:00';
   if (playerProgressFill) playerProgressFill.style.width = '0%';
@@ -58,7 +58,7 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
     });
     for (const el of document.querySelectorAll('.led-playing')) el.classList.remove('led-playing');
   }
-  const audio = new Audio('/audio?path=' + encodeURIComponent(fullpath));
+  const audio = new Audio(`/audio?path=${encodeURIComponent(fullpath)}`);
   let started = false;
 
   audio.ontimeupdate = () => {
@@ -113,8 +113,8 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
 }
 
 export function seekAudio(delta: number): void {
-  if (!currentAudio || !currentAudio.duration) return;
-  const step = playerStep ? parseInt(playerStep.value) || 20 : 20;
+  if (!currentAudio?.duration) return;
+  const step = playerStep ? parseInt(playerStep.value, 10) || 20 : 20;
   currentAudio.currentTime = Math.max(0, Math.min(currentAudio.duration, currentAudio.currentTime + delta * step));
   updatePlayerUI();
 }
@@ -131,7 +131,7 @@ export function initAudioUI(): void {
   const progressEl = document.getElementById('player-progress');
   if (progressEl) {
     progressEl.onclick = (e: MouseEvent) => {
-      if (!currentAudio || !currentAudio.duration) return;
+      if (!currentAudio?.duration) return;
       const rect = (e.target as HTMLElement).getBoundingClientRect();
       currentAudio.currentTime = ((e.clientX - rect.left) / rect.width) * currentAudio.duration;
       updatePlayerUI();
