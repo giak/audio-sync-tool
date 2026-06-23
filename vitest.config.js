@@ -6,10 +6,9 @@ export default defineConfig({
     environment: 'jsdom',
     coverage: {
       provider: 'v8',
-      include: ['static/**/*.{js,ts}'],
-      exclude: ['static/**/*.test.{js,ts}'],
+      include: ['static/**/*.ts'],
+      exclude: ['static/**/*.test.ts'],
       reporter: ['text', 'text-summary'],
     },
   },
-
 });
