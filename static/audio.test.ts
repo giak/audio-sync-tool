@@ -62,7 +62,7 @@ beforeEach(() => {
   document.getElementById('player-bar')!.classList.add('hidden');
   document.getElementById('player-progress-fill')!.style.width = '0%';
   // Remove any stray play buttons
-  document.querySelectorAll('.play-btn').forEach(b => b.remove());
+  for (const el of document.querySelectorAll('.play-btn')) el.remove();
 });
 
 afterEach(() => {

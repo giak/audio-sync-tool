@@ -29,7 +29,7 @@ export function getItems(container: HTMLElement): NodeListOf<Element> {
 
 export function focusItemByPath(container: HTMLElement, path: string | null): void {
   const items = getItems(container);
-  container.querySelectorAll('.focused').forEach(r => r.classList.remove('focused'));
+  for (const el of container.querySelectorAll('.focused')) el.classList.remove('focused');
   if (!path) {
     if (items.length > 0) {
       items[0].classList.add('focused');
@@ -55,7 +55,7 @@ export function getFocusedItem(container: HTMLElement): Element | null {
 }
 
 export function focusItemByElement(container: HTMLElement, el: Element): void {
-  container.querySelectorAll('.focused').forEach(r => r.classList.remove('focused'));
+  for (const el of container.querySelectorAll('.focused')) el.classList.remove('focused');
   el.classList.add('focused');
   el.scrollIntoView({ block: 'nearest' });
   setFocusPath((el as HTMLElement).dataset.focuspath || null);
@@ -102,7 +102,7 @@ export function navigateColumn(container: HTMLElement, direction: number): void 
 
 export function setActivePanel(panel: 'epars' | 'source'): void {
   state.activePanel = panel;
-  document.querySelectorAll('.panel-active').forEach(p => p.classList.remove('panel-active'));
+  for (const el of document.querySelectorAll('.panel-active')) el.classList.remove('panel-active');
   getActivePanelEl()?.classList.add('panel-active');
   const container = getActiveContainer();
   if (container) focusItemByPath(container, getFocusPath());

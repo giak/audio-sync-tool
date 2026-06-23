@@ -162,13 +162,13 @@ beforeEach(() => {
   stopPlayer();
 
   // Reset DOM visual state
-  document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+  for (const el of document.querySelectorAll('.modal')) el.classList.add('hidden');
   document.getElementById('player-bar')!.classList.add('hidden');
   document.querySelectorAll('.play-btn.playing').forEach(b => {
     b.classList.remove('playing');
     b.textContent = '▶';
   });
-  document.querySelectorAll('.led-playing').forEach(l => l.classList.remove('led-playing'));
+  for (const el of document.querySelectorAll('.led-playing')) el.classList.remove('led-playing');
   document.getElementById('epars-container')!.innerHTML = '';
   document.getElementById('source-container')!.innerHTML = '';
   document.getElementById('epars-header-count')!.textContent = '';
@@ -755,7 +755,7 @@ describe('Playlist mode', () => {
   function focusFirstPlaylistFile(): Element | null {
     const rows = document.querySelectorAll('#playlist-source-container .file-row');
     if (rows.length > 0) {
-      rows.forEach(r => r.classList.remove('focused'));
+      for (const el of rows) el.classList.remove('focused');
       rows[0].classList.add('focused');
     }
     return rows[0] || null;
@@ -1486,7 +1486,7 @@ describe('Keyboard gaps', () => {
     setActivePanel('source');
     await flush();
 
-    document.querySelectorAll('#source-container .focused').forEach(el => el.classList.remove('focused'));
+    for (const el of document.querySelectorAll('#source-container .focused')) el.classList.remove('focused');
 
     const rockDir = document.querySelector(
       '#source-container .directory[data-dirpath="/home/music/Rock"]',
@@ -1507,7 +1507,7 @@ describe('Keyboard gaps', () => {
     setActivePanel('source');
     await flush();
 
-    document.querySelectorAll('#source-container .focused').forEach(el => el.classList.remove('focused'));
+    for (const el of document.querySelectorAll('#source-container .focused')) el.classList.remove('focused');
 
     const rockDir = document.querySelector(
       '#source-container .directory[data-dirpath="/home/music/Rock"]',

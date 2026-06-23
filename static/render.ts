@@ -126,7 +126,7 @@ export function renderJournal(): void {
 // ── Éparpillé panel ───────────────────────────────────────────────────────
 
 function selectEparsFile(el: HTMLElement, filename: string, eparDir: string): void {
-  document.querySelectorAll('.file.selected').forEach(e => e.classList.remove('selected'));
+  for (const el of document.querySelectorAll('.file.selected')) el.classList.remove('selected');
   el.classList.add('selected');
   const statusText = document.getElementById('status-text');
   if (statusText) statusText.textContent = 'Appuie sur Tab → F5 pour copier.';

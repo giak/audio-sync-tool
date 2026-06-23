@@ -6,7 +6,7 @@ import { state } from './state.js';
 // ── Modals ─────────────────────────────────────────────────────────────────
 export function openModal(name: string): void {
   state.activeModal = name as typeof state.activeModal;
-  document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+  for (const el of document.querySelectorAll('.modal')) el.classList.add('hidden');
   const el = document.getElementById('modal-' + name);
   if (el) el.classList.remove('hidden');
   setTimeout(() => {
@@ -17,7 +17,7 @@ export function openModal(name: string): void {
 
 export function closeAllModals(): void {
   state.activeModal = null;
-  document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+  for (const el of document.querySelectorAll('.modal')) el.classList.add('hidden');
   revalidateFocus();
 }
 

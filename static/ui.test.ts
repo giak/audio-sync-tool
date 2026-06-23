@@ -71,7 +71,7 @@ beforeEach(() => {
   (mockState.sourceExpanded as Set<string>).clear();
   vi.clearAllMocks();
   // Hide all modals
-  document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+  for (const el of document.querySelectorAll('.modal')) el.classList.add('hidden');
   document.getElementById('filter-palette')!.classList.add('hidden');
   (document.getElementById('source-filter') as HTMLInputElement).value = '';
 });

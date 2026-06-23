@@ -334,7 +334,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
           idx = Array.from(tracks).indexOf(current);
           if (idx === -1) idx = 0;
         }
-        tracks.forEach(t => t.classList.remove('focused'));
+        for (const el of tracks) el.classList.remove('focused');
         const newIdx = Math.max(0, Math.min(tracks.length - 1, idx + (e.key === 'ArrowDown' ? 1 : -1)));
         tracks[newIdx].classList.add('focused');
         tracks[newIdx].scrollIntoView({ block: 'nearest' });

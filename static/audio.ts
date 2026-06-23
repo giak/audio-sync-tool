@@ -30,7 +30,7 @@ export function stopPlayer(): void {
     b.classList.remove('playing');
     b.textContent = '▶';
   });
-  document.querySelectorAll('.led-playing').forEach(l => l.classList.remove('led-playing'));
+  for (const el of document.querySelectorAll('.led-playing')) el.classList.remove('led-playing');
 }
 
 function showPlayer(filename: string, fullpath: string): void {
@@ -56,7 +56,7 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
       b.classList.remove('playing');
       b.textContent = '▶';
     });
-    document.querySelectorAll('.led-playing').forEach(l => l.classList.remove('led-playing'));
+    for (const el of document.querySelectorAll('.led-playing')) el.classList.remove('led-playing');
   }
   const audio = new Audio('/audio?path=' + encodeURIComponent(fullpath));
   let started = false;
@@ -95,7 +95,7 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
         b.classList.remove('playing');
         b.textContent = '▶';
       });
-      document.querySelectorAll('.led-playing').forEach(l => l.classList.remove('led-playing'));
+      for (const el of document.querySelectorAll('.led-playing')) el.classList.remove('led-playing');
       btn.classList.add('playing');
       btn.textContent = '⏹';
       showPlayer(filename, fullpath);
