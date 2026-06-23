@@ -143,20 +143,36 @@ audio-sync-tool/
 └── README.md
 ```
 
-## Tests
+## Développement
 
-### Backend (pytest)
+### Dev watcher (TypeScript → JS)
+
+```bash
+npm run dev
+```
+
+Compile automatiquement `state.ts`, `utils.ts`, `api.ts` vers `.js` à chaque
+sauvegarde. Laisse tourner en fond pendant que tu codes.
+
+```bash
+npm run build          # compilation unique
+npm run typecheck      # vérification des types (0 erreurs)
+```
+
+### Tests
+
+#### Backend (pytest)
 
 ```bash
 ./venv/bin/pip install pytest mutagen
 ./venv/bin/python -m pytest test_app.py -v
 ```
 
-### Frontend (vitest)
+#### Frontend (vitest)
 
 ```bash
 npm install
-./node_modules/.bin/vitest run
+npx vitest run
 ```
 
 Les deux suites tournent indépendamment. La CI peut les lancer en parallèle.
@@ -169,5 +185,5 @@ Les deux suites tournent indépendamment. La CI peut les lancer en parallèle.
 | Suite | Tests | Fichiers |
 |-------|-------|----------|
 | Pytest | 52 | test_app.py |
-| Vitest | 279 | 10 fichiers test |
-| **Total** | **331** | — |
+| Vitest | 282 | 10 fichiers test |
+| **Total** | **334** | — |
