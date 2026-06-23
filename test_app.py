@@ -12,6 +12,7 @@ def clean_state(monkeypatch, tmp_path):
     monkeypatch.setattr('app.JOURNAL_PATH', str(tmp_path / 'journal.json'))
     monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
     monkeypatch.setattr('app.PLAYLISTS_PATH', str(tmp_path / 'playlists.json'))
+    monkeypatch.setattr('app.RATINGS_PATH', str(tmp_path / 'ratings.json'))
 
 
 @pytest.fixture
@@ -796,6 +797,79 @@ def test_playlists_export_cross_device_fallback(client):
             assert os.path.exists(os.path.join(export_dir, 'track.mp3'))
     finally:
         app_module.os.link = original_link
+
+
+# ── Ratings tests ────────────────────────────────────────────────────────────
+
+
+def test_ratings_default_empty(client):
+    """GET /ratings returns empty object when no ratings exist."""
+    rv = client.get('/ratings')
+    assert rv.status_code == 200
+    assert rv.json == {}
+
+
+def test_ratings_save_and_read(client):
+    """PUT /ratings saves a rating, GET /ratings reads it back."""
+    rv = client.put('/ratings', json={
+        '/home/giak/Music/song.mp3': 85,
+    })
+    assert rv.status_code == 200
+    assert rv.json == {'ok': True}
+
+    rv = client.get('/ratings')
+    assert rv.status_code == 200
+    assert rv.json['/home/giak/Music/song.mp3'] == 85
+
+
+def test_ratings_overwrite(client):
+    """PUT /ratings overwrites existing rating for same path."""
+    client.put('/ratings', json={'/path/song.mp3': 50})
+    client.put('/ratings', json={'/path/song.mp3': 90})
+    rv = client.get('/ratings')
+    assert rv.json['/path/song.mp3'] == 90
+
+
+def test_ratings_multiple_files(client):
+    """PUT /ratings accepts multiple entries at once."""
+    client.put('/ratings', json={
+        '/path/a.mp3': 85,
+        '/path/b.mp3': 72,
+        '/path/c.mp3': 95,
+    })
+    rv = client.get('/ratings')
+    assert len(rv.json) == 3
+    assert rv.json['/path/a.mp3'] == 85
+    assert rv.json['/path/b.mp3'] == 72
+    assert rv.json['/path/c.mp3'] == 95
+
+
+def test_ratings_invalid_value(client):
+    """PUT /ratings returns 400 for out-of-range value."""
+    rv = client.put('/ratings', json={'/path/song.mp3': 150})
+    assert rv.status_code == 400
+
+    rv = client.put('/ratings', json={'/path/song.mp3': -5})
+    assert rv.status_code == 400
+
+    rv = client.put('/ratings', json={'/path/song.mp3': 'abc'})
+    assert rv.status_code == 400
+
+
+def test_ratings_null_value_removes_key(client):
+    """PUT /ratings with null value removes that key from ratings."""
+    client.put('/ratings', json={'/path/song.mp3': 85})
+    client.put('/ratings', json={'/path/song.mp3': None})
+    rv = client.get('/ratings')
+    assert '/path/song.mp3' not in rv.json
+
+
+def test_ratings_persistence_across_requests(client):
+    """Ratings persist between requests (no in-memory only)."""
+    client.put('/ratings', json={'/path/song.mp3': 42})
+    rv1 = client.get('/ratings')
+    rv2 = client.get('/ratings')
+    assert rv1.json == rv2.json
 
 
 def test_playlists_export_overwrite_existing(client):

@@ -66,6 +66,24 @@ export function closeFilterPalette(renderSource: () => void): void {
 /**
  * Show a red error message in the status bar that disappears after 5 seconds.
  */
+/**
+ * Show a brief toast message in the status bar that disappears after 3 seconds.
+ */
+export function showToast(msg: string): void {
+  const el = document.getElementById('status-text') as HTMLElement | null;
+  if (!el) return;
+  el.textContent = msg;
+  clearTimeout((el as unknown as { _toastTimer?: ReturnType<typeof setTimeout> })._toastTimer);
+  (el as unknown as { _toastTimer: ReturnType<typeof setTimeout> })._toastTimer = setTimeout(() => {
+    if (state.playlistMode) {
+      el.textContent = '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.';
+    }
+  }, 3000);
+}
+
+/**
+ * Show a red error message in the status bar that disappears after 5 seconds.
+ */
 export function showError(msg: string): void {
   const el = document.getElementById('status-text') as HTMLElement | null;
   if (!el) return;

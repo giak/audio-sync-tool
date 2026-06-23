@@ -18,6 +18,7 @@ CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
 JOURNAL_PATH = os.path.join(DATA_DIR, 'journal.json')
 CACHE_PATH = os.path.join(DATA_DIR, 'cache.json')
 PLAYLISTS_PATH = os.path.join(DATA_DIR, 'playlists.json')
+RATINGS_PATH = os.path.join(DATA_DIR, 'ratings.json')
 
 
 def load_json(path, default=None):
@@ -295,6 +296,32 @@ def serve_audio():
     ext = os.path.splitext(path)[1].lower()
     mimetype = AUDIO_EXT_MAP.get(ext, 'application/octet-stream')
     return send_file(path, mimetype=mimetype)
+
+
+# ── Ratings routes ─────────────────────────────────────────────────────────
+
+
+@app.route('/ratings', methods=['GET', 'PUT'])
+def ratings():
+    if request.method == 'PUT':
+        data = request.json
+        if not data or not isinstance(data, dict):
+            return jsonify({'ok': False, 'error': 'Body must be a JSON object'}), 400
+
+        ratings_data = load_json(RATINGS_PATH, {})
+
+        for path, value in data.items():
+            if value is None:
+                ratings_data.pop(path, None)
+            elif not isinstance(value, int) or value < 0 or value > 100:
+                return jsonify({'ok': False, 'error': f'Valeur invalide pour {path}: {value}'}), 400
+            else:
+                ratings_data[path] = value
+
+        save_json(RATINGS_PATH, ratings_data)
+        return jsonify({'ok': True})
+
+    return jsonify(load_json(RATINGS_PATH, {}))
 
 
 # ── Playlist routes ────────────────────────────────────────────────────────

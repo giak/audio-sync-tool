@@ -505,6 +505,36 @@ header h1 {
 .pl-track-remove { color: var(--text-muted); cursor: pointer; padding: 0 4px; font-size: 12px; flex-shrink: 0; border-radius: 2px; }
 .pl-track-remove:hover { color: var(--led-red); background: var(--bg-hover); }
 
+/* Ratings */
+.pl-track-rating {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.pl-track-rating-none { color: var(--text-dim); }
+.pl-track:hover .pl-track-rating { color: var(--text-primary); }
+
+.pl-rating-input {
+  width: 32px;
+  padding: 1px 4px;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: center;
+  background: var(--bg-focus);
+  color: var(--text-primary);
+  border: 1px solid var(--border-active);
+  border-radius: 2px;
+  outline: none;
+  flex-shrink: 0;
+}
+.pl-rating-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 /* Action buttons */
 #playlist-actions { display: flex; gap: 6px; padding-top: 8px; margin-top: auto; border-top: 1px solid var(--border-panel); }
 #playlist-actions button {

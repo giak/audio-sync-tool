@@ -14,8 +14,9 @@ import {
   savePlaylist,
   setPendingTracks,
 } from './playlist.js';
+import { getRating, saveRating, deleteRating } from './ratings.js';
 import { state } from './state.js';
-import { closeAllModals } from './ui.js';
+import { closeAllModals, showToast } from './ui.js';
 import {
   computeStatus,
   countAllEparsFiles,
@@ -712,6 +713,15 @@ function renderPlaylistTracks(): void {
         const s = track.duration % 60;
         html += `<span class="pl-track-duration">${m}:${s.toString().padStart(2, '0')}</span>`;
       }
+      // Rating display
+      const rating = getRating(track.fullPath);
+      html += `<span class="pl-track-rating" data-fullpath="${escapeHtml(track.fullPath)}">`;
+      if (rating !== undefined) {
+        html += `${rating}`;
+      } else {
+        html += `<span class="pl-track-rating-none">—</span>`;
+      }
+      html += `</span>`;
       html += `<span class="pl-track-remove" data-fullpath="${escapeHtml(track.fullPath)}">✕</span>`;
       html += '</div>';
     });
@@ -949,6 +959,87 @@ export function renderPlaylistManager(): void {
  * @param fullPath - The data-fullpath value to search for.
  * @param remove - true to remove the class, false to add it.
  */
+// ── Rating inline edit ────────────────────────────────────────────────────
+
+let _ratingEditActive = false;
+
+/**
+ * Enter inline edit mode for the rating of the currently focused track.
+ * Called when N is pressed in the sidebar.
+ * Re-renders the playlist panel when edit completes (Enter/Escape/blur).
+ */
+export function startRatingEdit(): void {
+  if (_ratingEditActive) return;
+  const focused = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
+  if (!focused) return;
+
+  const ratingSpan = focused.querySelector('.pl-track-rating') as HTMLElement | null;
+  if (!ratingSpan) return;
+
+  const fullPath = ratingSpan.dataset.fullpath || '';
+  if (!fullPath) return;
+
+  _ratingEditActive = true;
+
+  const currentRating = getRating(fullPath);
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'pl-rating-input';
+  input.maxLength = 3;
+  input.value = currentRating !== undefined ? String(currentRating) : '';
+  input.spellcheck = false;
+
+  ratingSpan.replaceWith(input);
+  input.focus();
+  input.select();
+
+  function commit(): void {
+    const val = input.value.trim();
+    if (val === '') {
+      deleteRating(fullPath).catch(() => showToast('⚠️ Note non supprimée'));
+    } else {
+      const num = parseInt(val, 10);
+      if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+        saveRating(fullPath, num).catch(() => showToast('⚠️ Note non sauvegardée'));
+      }
+    }
+    finish();
+  }
+
+  function cancel(): void {
+    finish();
+  }
+
+  function finish(): void {
+    _ratingEditActive = false;
+    renderPlaylistPanel();
+  }
+
+  input.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    if (!_ratingEditActive) return;
+    const val = input.value.trim();
+    if (val === '') {
+      deleteRating(fullPath).catch(() => showToast('⚠️ Note non supprimée'));
+    } else {
+      const num = parseInt(val, 10);
+      if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+        saveRating(fullPath, num).catch(() => showToast('⚠️ Note non sauvegardée'));
+      }
+    }
+    finish();
+  });
+}
+
 export function patchPlaylistSourceFile(fullPath: string, remove: boolean): void {
   const label = document.querySelector(`#playlist-source-container .file[data-fullpath="${CSS.escape(fullPath)}"]`);
   if (!label) return;

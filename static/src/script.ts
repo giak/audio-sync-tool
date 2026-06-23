@@ -22,6 +22,7 @@ import {
   renderPlaylistPanel,
   renderPlaylistSource,
   renderSource,
+  startRatingEdit,
 } from './render.js';
 import { state } from './state.js';
 import {
@@ -31,6 +32,7 @@ import {
   openFilterPalette,
   openModal,
   showError,
+  showToast,
 } from './ui.js';
 
 // ── Playlist mode helpers ─────────────────────────────────────────────────
@@ -160,18 +162,6 @@ function moveTrackInPlaylist(direction: number): void {
   if (index === -1) return;
   reorderTrack(name, index, index + direction);
   renderPlaylistPanel();
-}
-
-function showToast(msg: string): void {
-  const el = document.getElementById('status-text') as HTMLElement | null;
-  if (!el) return;
-  el.textContent = msg;
-  clearTimeout((el as unknown as { _toastTimer?: ReturnType<typeof setTimeout> })._toastTimer);
-  (el as unknown as { _toastTimer: ReturnType<typeof setTimeout> })._toastTimer = setTimeout(() => {
-    if (state.playlistMode) {
-      el.textContent = '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.';
-    }
-  }, 3000);
 }
 
 function escapeHtml(str: string): string {
@@ -312,6 +302,13 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !isInput) {
       e.preventDefault();
       moveTrackInPlaylist(e.key === 'ArrowUp' ? -1 : 1);
+      return;
+    }
+
+    // N — edit rating on focused track (sidebar only)
+    if ((e.key === 'n' || e.key === 'N') && !isInput && state.playlistFocus === 'sidebar') {
+      e.preventDefault();
+      startRatingEdit();
       return;
     }
 

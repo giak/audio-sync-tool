@@ -56,6 +56,7 @@ interface AppState {
   activePlaylistIndex: number | null;
   pendingPlaylists: Record<string, PlaylistTrack[]>;
   playlistFocus: PlaylistFocusZone;
+  ratings: Record<string, number>;
 }
 
 const VALID_PANELS = new Set<ActivePanel>(['epars', 'source']);
@@ -80,6 +81,7 @@ const _state: AppState = {
   activePlaylistIndex: null,
   pendingPlaylists: {},
   playlistFocus: 'source',
+  ratings: {},
 };
 
 export const state = new Proxy<AppState>(_state, {

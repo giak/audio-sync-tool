@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
 import { patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderAll, renderSource } from './render.js';
+import { loadRatings } from './ratings.js';
 import { state } from './state.js';
 import { closeAllModals, openModal, showError } from './ui.js';
 
@@ -266,6 +267,9 @@ export async function initApp(): Promise<void> {
       state.sourceFiles = (cache.source || {}) as typeof state.sourceFiles;
       state.eparsFiles = (cache.epars || {}) as typeof state.eparsFiles;
     }
+
+    // Load ratings in background (fire-and-forget to not block init)
+    loadRatings().catch(() => {/* ratings are optional */});
 
     renderAll();
     setActivePanel('epars');
