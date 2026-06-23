@@ -35,6 +35,35 @@ def save_json(path, data):
 
 MUSIC_EXTENSIONS = ('.mp3', '.flac', '.wav', '.ogg', '.m4a', '.wma')
 
+# ── Scan progress tracking ────────────────────────────────────────────────
+_scan_progress = {
+    'running': False,
+    'phase': '',
+    'current': 0,
+    'total': 0,
+    'current_dir': '',
+}
+
+
+def reset_scan_progress():
+    _scan_progress['running'] = True
+    _scan_progress['phase'] = ''
+    _scan_progress['current'] = 0
+    _scan_progress['total'] = 0
+    _scan_progress['current_dir'] = ''
+
+
+def update_scan_progress(phase, current_dir, current, total):
+    _scan_progress['phase'] = phase
+    _scan_progress['current_dir'] = current_dir
+    _scan_progress['current'] = current
+    _scan_progress['total'] = total
+
+
+@app.route('/scan-progress')
+def scan_progress():
+    return jsonify(_scan_progress)
+
 
 def get_audio_meta(path):
     """Return (year, duration_seconds, codec_str)."""
@@ -113,16 +142,29 @@ def index():
     return render_template('index.html')
 
 
-def index_files(directory):
+def index_files(directory, phase_label='source'):
     index = {}
     if not os.path.isdir(directory):
         return index
+    # Count total files first for progress
+    total = 0
     for root, dirs, files in os.walk(directory):
         for f in files:
             if f.lower().endswith(MUSIC_EXTENSIONS):
+                total += 1
+    update_scan_progress(phase_label, '🔍 Indexation…', 0, total)
+    current = 0
+    for root, dirs, files in os.walk(directory):
+        for f in files:
+            if f.lower().endswith(MUSIC_EXTENSIONS):
+                current += 1
                 rel = os.path.relpath(root, directory)
                 rel_path = os.path.join(rel, f) if rel != '.' else f
-                year, duration, codec = get_audio_meta(os.path.join(root, f))
+                full_path = os.path.join(root, f)
+                # Update progress every 10 files (perf: avoid string ops on every file)
+                if current % 10 == 0 or current == total:
+                    update_scan_progress(phase_label, f, current, total)
+                year, duration, codec = get_audio_meta(full_path)
                 index[f] = {'path': rel_path, 'year': year, 'duration': duration, 'codec': codec}
     return index
 
@@ -142,14 +184,18 @@ def scan():
     source_dir = active.get('source_data', '')
     epars_dirs = active.get('epars_dirs', [])
 
+    reset_scan_progress()
+
     result = {
         'source': {},
         'epars': {}
     }
     if source_dir:
-        result['source'][source_dir] = index_files(source_dir)
+        result['source'][source_dir] = index_files(source_dir, 'Source Data')
     for d in epars_dirs:
-        result['epars'][d] = index_files(d)
+        result['epars'][d] = index_files(d, 'Éparpillé')
+
+    _scan_progress['running'] = False
     save_json(CACHE_PATH, result)
 
     src_count = sum(len(v) for v in result['source'].values())
@@ -399,4 +445,4 @@ def update_or_delete_playlist(name):
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8765)
+    app.run(debug=True, threaded=True, port=8765)
