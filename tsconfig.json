@@ -5,7 +5,7 @@
     "moduleResolution": "bundler",
     "strict": true,
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true,
