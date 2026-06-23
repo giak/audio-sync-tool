@@ -47,7 +47,7 @@
     }
   },
   "files": {
-    "includes": ["**/static/**/*.ts"],
+    "includes": ["**/static/src/**/*.ts"],
     "ignoreUnknown": true
   }
 }

@@ -15,6 +15,6 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["static/**/*.ts"],
-  "exclude": ["node_modules", "static/**/*.test.ts"]
+  "include": ["static/src/**/*.ts"],
+  "exclude": ["node_modules", "static/src/**/*.test.ts"]
 }

@@ -5,17 +5,17 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "esbuild static/state.ts static/utils.ts static/api.ts static/render.ts static/focus.ts static/audio.ts static/ui.ts static/actions.ts static/playlist.ts static/script.ts --outdir=static --format=esm --sourcemap=inline 2>&1",
-    "dev": "esbuild static/state.ts static/utils.ts static/api.ts static/render.ts static/focus.ts static/audio.ts static/ui.ts static/actions.ts static/playlist.ts static/script.ts --outdir=static --format=esm --sourcemap=inline --watch 2>&1",
+    "build": "esbuild static/src/state.ts static/src/utils.ts static/src/api.ts static/src/render.ts static/src/focus.ts static/src/audio.ts static/src/ui.ts static/src/actions.ts static/src/playlist.ts static/src/script.ts --outdir=static/dist --format=esm --sourcemap=inline 2>&1",
+    "dev": "esbuild static/src/state.ts static/src/utils.ts static/src/api.ts static/src/render.ts static/src/focus.ts static/src/audio.ts static/src/ui.ts static/src/actions.ts static/src/playlist.ts static/src/script.ts --outdir=static/dist --format=esm --sourcemap=inline --watch 2>&1",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
-    "lint": "biome check static/",
-    "lint:write": "biome check --write static/",
-    "lint:unsafe": "biome check --write --unsafe static/",
-    "format": "biome format --write static/",
-    "format:check": "biome format static/",
+    "lint": "biome check static/src/",
+    "lint:write": "biome check --write static/src/",
+    "lint:unsafe": "biome check --write --unsafe static/src/",
+    "format": "biome format --write static/src/",
+    "format:check": "biome format static/src/",
     "coverage": "npm run coverage:clean && vitest run --coverage && npm run build",
-    "coverage:clean": "rm -f static/*.js"
+    "coverage:clean": "rm -rf static/dist"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.1",

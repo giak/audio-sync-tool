@@ -6,6 +6,5 @@ venv/
 node_modules/
 __pycache__/
 
-# Build artifacts — .ts sources compile to .js (keep test files)
-static/*.js
-!static/*.test.js
+# Build artifacts — .ts sources compile to .js in dist/
+static/dist/
