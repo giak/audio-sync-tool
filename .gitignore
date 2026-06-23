@@ -1,5 +1,7 @@
-data/config.json
-data/journal.json
+# Données utilisateur — ne JAMAIS versionner
+# (config, journal, cache, playlists, etc.)
+data/
+
 venv/
 node_modules/
 __pycache__/
