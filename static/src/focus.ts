@@ -146,6 +146,7 @@ export function navigateColumn(container: HTMLElement, direction: number): void 
 
 export function setActivePanel(panel: 'epars' | 'source'): void {
   state.activePanel = panel;
+  state.focusListId = panel as 'epars' | 'source';
   for (const el of document.querySelectorAll('.panel-active')) el.classList.remove('panel-active');
   getActivePanelEl()?.classList.add('panel-active');
   const container = getActiveContainer();

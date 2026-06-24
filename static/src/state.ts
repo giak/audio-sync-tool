@@ -1,6 +1,37 @@
-// ─── Single source of truth for all app state ──────────────────────────────
+// ─── Single source of truth for all app state with EventEmitter ────────────
 // State is wrapped in a Proxy that validates critical fields on write.
 // Invalid values are silently rejected (console.warn) to prevent corruption.
+// Emits `${prop}:changed` events automatically on write, batched via RAF.
+
+// ── EventEmitter (Phase 3) ─────────────────────────────────────────────────
+type Listener = () => void;
+const _listeners = new Map<string, Set<Listener>>();
+const _dirty = new Set<string>();
+let _rafScheduled = false;
+
+export function on(event: string, fn: Listener): () => void {
+  if (!_listeners.has(event)) _listeners.set(event, new Set());
+  _listeners.get(event)!.add(fn);
+  return () => _listeners.get(event)?.delete(fn);
+}
+
+function emit(event: string): void {
+  _dirty.add(event);
+  if (!_rafScheduled) {
+    _rafScheduled = true;
+    requestAnimationFrame(() => {
+      _rafScheduled = false;
+      for (const evt of _dirty) {
+        for (const fn of _listeners.get(evt) || []) {
+          fn();
+        }
+      }
+      _dirty.clear();
+    });
+  }
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────
 
 interface SourceFileEntry {
   path: string;
@@ -63,6 +94,7 @@ interface AppState {
   navHistory: Array<NavHistoryEntry>;
   navIndex: number;
   ratings: Record<string, number>;
+  focusListId: 'epars' | 'source' | 'playlist-source' | 'playlist-tracks';
 }
 
 interface EparsSelection {
@@ -105,6 +137,7 @@ const _state: AppState = {
   navHistory: [],
   navIndex: -1,
   ratings: {},
+  focusListId: 'epars',
 };
 
 export const state = new Proxy<AppState>(_state, {
@@ -121,7 +154,9 @@ export const state = new Proxy<AppState>(_state, {
       console.warn(`state.playlistFocus invalide: ${value}`);
       return true;
     }
+    const old = (target as unknown as Record<string, unknown>)[prop as string];
     (target as unknown as Record<string, unknown>)[prop as string] = value;
+    if (old !== value) emit(`${String(prop)}:changed`);
     return true;
   },
 });
