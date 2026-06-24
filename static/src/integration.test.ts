@@ -157,10 +157,14 @@ function dispatchKey(key: string, opts: Record<string, unknown> = {}): KeyboardE
 }
 
 function flush(): Promise<void> {
-  return new Promise(r => setTimeout(r, 0));
+  return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 }
 
-beforeEach(() => {
+async function flushRaf(): Promise<void> {
+  await new Promise(r => requestAnimationFrame(r));
+}
+
+beforeEach(async () => {
   // Reset audio player state (module-level currentAudio in audio.js)
   stopPlayer();
 
@@ -186,6 +190,8 @@ beforeEach(() => {
 
   // Reset state
   setupTestState();
+  // Flush EventEmitter deferred renders from setupTestState state changes
+  await flushRaf();
   // Blur any focused element to prevent isFilterInputFocused leakage
   (document.activeElement as HTMLElement | null)?.blur();
   vi.clearAllMocks();

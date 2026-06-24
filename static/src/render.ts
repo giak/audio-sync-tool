@@ -5,7 +5,7 @@
 import { stopPlayer, togglePlay } from './audio.js';
 import { focusItemByElement, revalidateFocus, setActivePanel } from './focus.js';
 import { computeStatus, countAllEparsFiles, formatDuration } from './utils.js';
-import { state } from './state.js';
+import { state, on } from './state.js';
 import { getRating } from './ratings.js';
 
 import { renderJournal } from './render/journalUI.js';
@@ -213,8 +213,19 @@ export function renderAll(): void {
   requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
 }
 
-// ── Event subscriptions (Phase 3) ────────────────────────────────────────
-// The Proxy + EventEmitter infrastructure is active (state.ts).
-// Set/Map full replacements now trigger `${prop}:changed` events.
-// Subscribe renders here when async rendering is stable in tests.
-// Example: on('sourceFiles:changed', renderSource); on('eparsFiles:changed', renderEpars);
+// ── Event subscriptions (Phase 3: auto-render on state change) ───────────
+
+/** Wire up EventEmitter state changes to auto-renders. Called once at boot. */
+export function setupRenderSubscriptions(): void {
+  // Auto-render panels when their data changes
+  on('eparsFiles:changed', () => {
+    const container = document.getElementById('epars-container');
+    if (container && !container.classList.contains('hidden')) renderEpars();
+  });
+  on('sourceFiles:changed', () => {
+    const container = document.getElementById('source-container');
+    if (container && !container.classList.contains('hidden')) renderSource();
+  });
+}
+
+
