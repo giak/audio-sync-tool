@@ -1456,6 +1456,11 @@ describe('setupRenderSubscriptions', () => {
     expect(on).toHaveBeenCalledWith('eparsPlaylist:changed', expect.any(Function));
   });
 
+  it('registers an activePlaylistIndex:changed listener', () => {
+    setupRenderSubscriptions();
+    expect(on).toHaveBeenCalledWith('activePlaylistIndex:changed', expect.any(Function));
+  });
+
   it('registers eparsFiles:changed listener (existing Phase 3)', () => {
     setupRenderSubscriptions();
     expect(on).toHaveBeenCalledWith('eparsFiles:changed', expect.any(Function));
@@ -1466,8 +1471,8 @@ describe('setupRenderSubscriptions', () => {
     expect(on).toHaveBeenCalledWith('sourceFiles:changed', expect.any(Function));
   });
 
-  it('calls on() exactly 4 times (2 Phase 3 + 2 Phase 4)', () => {
+  it('calls on() exactly 5 times (2 Phase 3 + 3 Phase 4)', () => {
     setupRenderSubscriptions();
-    expect(on).toHaveBeenCalledTimes(4);
+    expect(on).toHaveBeenCalledTimes(5);
   });
 });

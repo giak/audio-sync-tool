@@ -92,13 +92,15 @@ describe('event subscriptions end-to-end', () => {
     setupRenderSubscriptions();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     document.body.innerHTML = '';
     state.pendingPlaylists = {};
     state.playlists = [];
     state.activePlaylistIndex = null;
     state.playlistMode = false;
+    // Flush any batched emits from the state resets above (e.g. activePlaylistIndex:changed)
+    await new Promise(r => requestAnimationFrame(r));
   });
 
   afterEach(() => {
@@ -190,6 +192,40 @@ describe('event subscriptions end-to-end', () => {
     }).not.toThrow();
 
     await tick();
+  });
+
+  // ── activePlaylistIndex:changed → renderPlaylistPanel ──────────────
+
+  it('activePlaylistIndex:changed triggers renderPlaylistPanel when layout is visible', async () => {
+    const layout = document.createElement('div');
+    layout.id = 'playlist-layout';
+    layout.classList.remove('hidden');
+    const tabs = document.createElement('div');
+    tabs.id = 'playlist-tabs';
+    layout.appendChild(tabs);
+    const panel = document.createElement('div');
+    panel.id = 'playlist-panel';
+    layout.appendChild(panel);
+    document.body.appendChild(layout);
+
+    state.activePlaylistIndex = 0;
+    await tick();
+    expect(renderPlaylistPanel).toHaveBeenCalled();
+
+    layout.remove();
+  });
+
+  it('activePlaylistIndex:changed does NOT trigger renderPlaylistPanel when layout is hidden', async () => {
+    const layout = document.createElement('div');
+    layout.id = 'playlist-layout';
+    layout.classList.add('hidden');
+    document.body.appendChild(layout);
+
+    state.activePlaylistIndex = 1;
+    await tick();
+    expect(renderPlaylistPanel).not.toHaveBeenCalled();
+
+    layout.remove();
   });
 
   // ── Batched emission ─────────────────────────────────────────────────
