@@ -6,6 +6,11 @@ import { showToast } from '../ui.js';
 
 let _ratingEditActive = false;
 
+/** Reset internal state (for tests). */
+export function resetRatingEditState(): void {
+  _ratingEditActive = false;
+}
+
 /** Shared onclick handler for .pl-track-rating spans.
  *  Focuses the parent track, then opens the inline rating input. */
 export function _ratingClickHandler(e: MouseEvent): void {
