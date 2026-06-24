@@ -215,6 +215,28 @@ export function setupRenderSubscriptions(): void {
     const container = document.getElementById('source-container');
     if (container && !container.classList.contains('hidden')) renderSource();
   });
+
+  // ── Phase 4: Playlist mode event subscriptions ────────────────────────
+
+  // When audio starts/stops, update the playlist track indicator if visible
+  on('audio:changed', () => {
+    const sidebarEl = document.getElementById('playlist-sidebar');
+    if (sidebarEl && !sidebarEl.classList.contains('hidden')) {
+      const container = document.getElementById('playlist-panel');
+      if (container) {
+        // Remove .led-playing from all playlist tracks
+        container.querySelectorAll('.led-playing').forEach(el => el.classList.remove('led-playing'));
+      }
+    }
+  });
+
+  // When playlist tracks are added/removed/reordered, auto-update panel
+  on('eparsPlaylist:changed', () => {
+    const layout = document.getElementById('playlist-layout');
+    if (layout && !layout.classList.contains('hidden')) {
+      renderPlaylistPanel();
+    }
+  });
 }
 
 

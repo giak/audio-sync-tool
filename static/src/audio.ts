@@ -1,5 +1,6 @@
 // ─── Audio player + player bar UI ──────────────────────────────────────────
 import { formatTime } from './utils.js';
+import { emit } from './state.js';
 
 let currentAudio: HTMLAudioElement | null = null;
 let _playerFilename = '';
@@ -31,6 +32,7 @@ export function stopPlayer(): void {
     b.textContent = '▶';
   });
   for (const el of document.querySelectorAll('.led-playing')) el.classList.remove('led-playing');
+  emit('audio:changed');
 }
 
 function showPlayer(filename: string, fullpath: string): void {
@@ -77,6 +79,7 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
       });
       currentAudio = null;
       if (playerBar) playerBar.classList.add('hidden');
+      emit('audio:changed');
     }
   };
   audio.onerror = () => {
@@ -85,6 +88,7 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
     if (currentAudio === audio) {
       currentAudio = null;
       if (playerBar) playerBar.classList.add('hidden');
+      emit('audio:changed');
     }
   };
 
@@ -105,6 +109,7 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
         const fileSpan = row.querySelector('.file');
         if (fileSpan) fileSpan.classList.add('led-playing');
       }
+      emit('audio:changed');
     })
     .catch((err: unknown) => {
       console.error('Audio play failed:', err instanceof Error ? err.message : String(err));

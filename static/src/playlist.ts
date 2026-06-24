@@ -1,7 +1,7 @@
 // ─── Playlist business logic: CRUD, export, drag-drop state ─────────────
 
 import { api } from './api.js';
-import { state } from './state.js';
+import { state, emit } from './state.js';
 
 interface PlaylistTrack {
   filename: string;
@@ -100,6 +100,7 @@ export function addTrack(name: string, track: PlaylistTrack): boolean {
   if (tracks.some(t => t.fullPath === track.fullPath)) return false;
   tracks.push(track);
   setPendingTracks(name, tracks);
+  emit('eparsPlaylist:changed');
   return true;
 }
 
@@ -110,6 +111,7 @@ export function removeTrack(name: string, fullPath: string): void {
   let tracks = getPendingTracks(name);
   tracks = tracks.filter(t => t.fullPath !== fullPath);
   setPendingTracks(name, tracks);
+  emit('eparsPlaylist:changed');
 }
 
 /**
@@ -122,6 +124,7 @@ export function reorderTrack(name: string, oldIndex: number, newIndex: number): 
   const [moved] = tracks.splice(oldIndex, 1);
   tracks.splice(newIndex, 0, moved);
   setPendingTracks(name, tracks);
+  emit('eparsPlaylist:changed');
 }
 
 /**

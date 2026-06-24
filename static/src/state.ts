@@ -15,7 +15,7 @@ export function on(event: string, fn: Listener): () => void {
   return () => _listeners.get(event)?.delete(fn);
 }
 
-function emit(event: string): void {
+export function emit(event: string): void {
   _dirty.add(event);
   if (!_rafScheduled) {
     _rafScheduled = true;
