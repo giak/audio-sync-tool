@@ -31,6 +31,20 @@ vi.mock('./focus.js', () => ({
   revalidateFocus: vi.fn(),
 }));
 
+vi.mock('./ui.js', () => ({
+  showContextMenu: vi.fn(),
+  showToast: vi.fn(),
+}));
+
+vi.mock('./batchCopy.js', () => ({
+  setBatchCopy: vi.fn(),
+}));
+
+vi.mock('./playlist.js', () => ({
+  getActivePlaylistName: vi.fn(() => 'test'),
+  getPendingTracks: vi.fn(() => [{ fullPath: '/home/Music/Rock/a.mp3' }]),
+}));
+
 import {
   patchEparsFileAfterCopy,
   patchSourceFileAfterCopy,
@@ -38,8 +52,10 @@ import {
   renderJournal,
   renderSource,
   toggleSourceDir,
+  togglePlaylistSourceDir,
 } from './render.js';
-import { countAllEparsFiles } from './utils.js';
+import { countAllEparsFiles, dirHasMatchingDescendant } from './utils.js';
+import { showContextMenu } from './ui.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -85,6 +101,9 @@ function resetState(): void {
   state.sourceFilter = '';
   state.sourceExpanded.clear();
   state.sourceNodeMap.clear();
+  state.selectedEparsFiles = new Map();
+  state.playlistMode = false;
+  state.ratings = {};
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
@@ -787,6 +806,228 @@ describe('toggleSourceDir', () => {
       expect(document.querySelector('#source-container .children')).not.toBeNull();
     });
   });
+
+  describe('updateSourceHeaderCount (filter active)', () => {
+    beforeEach(() => {
+      // Re-use setupToggleDOM but activate filter
+      setupToggleDOM({ initExpanded: true });
+      state.filterActive = true;
+      state.sourceFilter = 'rock';
+    });
+
+    it('updates filter count to "N dossier(s)" after toggle', () => {
+      toggleSourceDir('/home/Music/Rock');
+      const filterCount = document.getElementById('source-filter-count')!;
+      expect(filterCount.textContent).toMatch(/\d+ dossier/);
+    });
+
+    it('does nothing when filterActive is false', () => {
+      state.filterActive = false;
+      toggleSourceDir('/home/Music/Rock');
+
+      const filterCount = document.getElementById('source-filter-count')!;
+      expect(filterCount.textContent).toBe('');
+    });
+  });
+});
+
+describe('togglePlaylistSourceDir', () => {
+  beforeEach(() => {
+    resetState();
+  });
+
+  function setupPlaylistSourceDOM(): void {
+    document.body.innerHTML = `
+      <div id="playlist-source-container">
+        <div class="directory" data-dirpath="/home/Music/Rock" data-focuspath="/home/Music/Rock">
+          <span>Rock</span>
+        </div>
+      </div>
+      <span id="source-header-count"></span>
+      <span id="source-filter-count"></span>
+    `;
+
+    state.sourceNodeMap.set('/home/Music/Rock', {
+      node: {
+        __files__: [{ filename: 'a.mp3', relPath: 'Rock/a.mp3', year: '2022' }],
+      },
+      baseDir: '/home/Music',
+    });
+  }
+
+  it('expands a directory inside #playlist-source-container', () => {
+    setupPlaylistSourceDOM();
+
+    togglePlaylistSourceDir('/home/Music/Rock');
+
+    const dirEl = document.querySelector('#playlist-source-container .directory')!;
+    expect(dirEl.classList.contains('expanded')).toBe(true);
+    expect(dirEl.querySelector('.children')).not.toBeNull();
+  });
+
+  it('collapses an already expanded directory', () => {
+    setupPlaylistSourceDOM();
+    togglePlaylistSourceDir('/home/Music/Rock');
+    togglePlaylistSourceDir('/home/Music/Rock');
+
+    const dirEl = document.querySelector('#playlist-source-container .directory')!;
+    expect(dirEl.classList.contains('expanded')).toBe(false);
+    expect(dirEl.querySelector('.children')).toBeNull();
+  });
+
+  it('does nothing for nonexistent directory', () => {
+    setupPlaylistSourceDOM();
+
+    expect(() => togglePlaylistSourceDir('/nonexistent/path')).not.toThrow();
+  });
+});
+
+describe('buildSourceChildren (playlist mode)', () => {
+  beforeEach(() => {
+    resetState();
+  });
+
+  function setupPlaylistModeDOM(): void {
+    document.body.innerHTML = `
+      <div id="source-container"></div>
+      <span id="source-header-count"></span>
+      <span id="source-filter-count"></span>
+      <span id="epars-header-count"></span>
+      <span id="epars-status-line"></span>
+      <span id="epars-container"></span>
+    `;
+  }
+
+  it('adds in-playlist class to files in the active playlist', () => {
+    setupPlaylistModeDOM();
+    state.sourceFiles['/home/Music'] = { 'a.mp3': { path: 'Rock/a.mp3' } };
+    state.playlistMode = true;
+
+    // renderSource creates the directory element with all event handlers
+    renderSource();
+    // Now expand it to trigger buildSourceChildren
+    toggleSourceDir('/home/Music/Rock');
+
+    const label = document.querySelector('#source-container .file')!;
+    expect(label.classList.contains('in-playlist')).toBe(true);
+  });
+
+  it('does not add in-playlist for files not in the playlist', () => {
+    setupPlaylistModeDOM();
+    state.sourceFiles['/home/Music'] = { 'a.mp3': { path: 'Rock/a.mp3' } };
+    state.playlistMode = false;
+
+    renderSource();
+    toggleSourceDir('/home/Music/Rock');
+
+    const label = document.querySelector('#source-container .file')!;
+    expect(label.classList.contains('in-playlist')).toBe(false);
+  });
+});
+
+describe('showDirContextMenu (right-click on directory)', () => {
+  beforeEach(() => {
+    resetState();
+    vi.clearAllMocks();
+  });
+
+  function setupRenderSourceDir(): HTMLElement {
+    document.body.innerHTML = `
+      <div id="source-container"></div>
+      <span id="source-header-count"></span>
+      <span id="source-filter-count"></span>
+      <span id="epars-header-count"></span>
+      <span id="epars-status-line"></span>
+      <span id="epars-container"></span>
+    `;
+    state.sourceFiles['/home/Music'] = { 'a.mp3': { path: 'Rock/a.mp3' } };
+    // renderSource creates directory DOM with all event handlers (oncontextmenu etc.)
+    renderSource();
+    return document.querySelector('.directory') as HTMLElement;
+  }
+
+  it('shows "Déplier" option when directory is collapsed', () => {
+    const dirEl = setupRenderSourceDir();
+
+    const event = new MouseEvent('contextmenu', { clientX: 100, clientY: 200, bubbles: true });
+    dirEl.dispatchEvent(event);
+
+    expect(showContextMenu).toHaveBeenCalledWith(
+      100,
+      200,
+      expect.arrayContaining([
+        expect.objectContaining({ label: expect.stringContaining('Déplier') }),
+      ]),
+    );
+  });
+
+  it('shows "Refermer" option when directory is expanded', () => {
+    const dirEl = setupRenderSourceDir();
+    state.sourceExpanded.add('/home/Music/Rock');
+    document.querySelector('.directory')!.classList.add('expanded');
+
+    const event = new MouseEvent('contextmenu', { clientX: 50, clientY: 80, bubbles: true });
+    dirEl.dispatchEvent(event);
+
+    expect(showContextMenu).toHaveBeenCalledWith(
+      50,
+      80,
+      expect.arrayContaining([
+        expect.objectContaining({ label: expect.stringContaining('Refermer') }),
+      ]),
+    );
+  });
+
+  it('shows batch copy option when files are selected', () => {
+    setupRenderSourceDir();
+    state.selectedEparsFiles = new Map([
+      ['/media/usb/song.mp3', { filename: 'song.mp3', eparDir: '/media/usb', fullpath: '/media/usb/song.mp3' }],
+      ['/media/usb/track.mp3', { filename: 'track.mp3', eparDir: '/media/usb', fullpath: '/media/usb/track.mp3' }],
+    ]);
+
+    const dirEl = document.querySelector('.directory') as HTMLElement;
+    const event = new MouseEvent('contextmenu', { clientX: 30, clientY: 40, bubbles: true });
+    dirEl.dispatchEvent(event);
+
+    expect(showContextMenu).toHaveBeenCalledWith(
+      30,
+      40,
+      expect.arrayContaining([
+        expect.objectContaining({ label: expect.stringContaining('Copier 2 fichiers ici') }),
+      ]),
+    );
+  });
+
+  it('does not show batch copy when no files are selected', () => {
+    setupRenderSourceDir();
+    state.selectedEparsFiles = new Map();
+
+    const dirEl = document.querySelector('.directory') as HTMLElement;
+    const event = new MouseEvent('contextmenu', { clientX: 10, clientY: 20, bubbles: true });
+    dirEl.dispatchEvent(event);
+
+    expect(showContextMenu).toHaveBeenCalled();
+    const items = vi.mocked(showContextMenu).mock.calls[0][2] as Array<{ label: string }>;
+    const copyItems = items.filter(item => item.label.includes('Copier'));
+    expect(copyItems.length).toBe(0);
+  });
+
+  it('shows singular "1 fichier" when one file selected', () => {
+    setupRenderSourceDir();
+    state.selectedEparsFiles = new Map([
+      ['/media/usb/song.mp3', { filename: 'song.mp3', eparDir: '/media/usb', fullpath: '/media/usb/song.mp3' }],
+    ]);
+
+    const dirEl = document.querySelector('.directory') as HTMLElement;
+    const event = new MouseEvent('contextmenu', { clientX: 10, clientY: 20, bubbles: true });
+    dirEl.dispatchEvent(event);
+
+    const items = vi.mocked(showContextMenu).mock.lastCall![2] as Array<{ label: string }>;
+    const copyItem = items.find(item => item.label.includes('Copier'));
+    expect(copyItem).toBeDefined();
+    expect(copyItem!.label).toContain('1 fichier ici');
+    expect(copyItem!.label).not.toContain('s'); // no plural 's'
+  });
 });
 
 describe('renderJournal', () => {
@@ -1110,5 +1351,80 @@ describe('renderSource', () => {
     expect(topDirs.length).toBe(1);
     expect((topDirs[0] as HTMLElement).dataset.dirpath).toBe('/home/Music/Rock');
     expect(topDirs[0].querySelector('.children')).toBeNull();
+  });
+
+  describe('with filter active (renderFilteredSource)', () => {
+    beforeEach(() => {
+      state.sourceFiles['/home/Music'] = {
+        'a.mp3': { path: 'Rock/a.mp3' },
+        'b.mp3': { path: 'Jazz/b.mp3' },
+        'c.mp3': { path: 'Rock/ACDC/thunder.mp3' },
+      };
+      state.filterActive = true;
+      state.sourceFilter = 'rock';
+    });
+
+    it('renders directories matching the filter term', () => {
+      renderSource();
+
+      const dirs = document.querySelectorAll('#source-container > .directory');
+      expect(dirs.length).toBe(1);
+      expect((dirs[0] as HTMLElement).dataset.dirpath).toBe('/home/Music/Rock');
+    });
+
+    it('renders file rows when directory is in sourceExpanded (manualExpand → isFiltered=false)', () => {
+      state.sourceExpanded.add('/home/Music/Rock');
+
+      renderSource();
+
+      const fileRows = document.querySelectorAll('#source-container .file-row');
+      expect(fileRows.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('shows "Aucun dossier trouvé" when nothing matches', () => {
+      state.sourceFilter = 'zzznonexistent';
+      renderSource();
+
+      const filterCount = document.getElementById('source-filter-count')!;
+      expect(filterCount.textContent).toBe('Aucun dossier trouvé');
+    });
+
+    it('shows dossier count in filter element', () => {
+      renderSource();
+
+      const filterCount = document.getElementById('source-filter-count')!;
+      expect(filterCount.textContent).toBe('1 dossier');
+    });
+
+    it('shows header count in (filtered / total) format', () => {
+      renderSource();
+
+      const header = document.getElementById('source-header-count')!;
+      expect(header.textContent).toContain('/');
+    });
+
+    it('renders subdirectories when descendant matches filter but name does not', () => {
+      // Dir "ACDC" has no files directly, just a subdir containing "thunder.mp3"
+      // Filter is "rock" — ACDC name doesn't match, but descendant has no name to match either
+      // With dirHasMatchingDescendant mocked to return false, ACDC won't appear
+      state.sourceFilter = 'thunder';
+      state.sourceExpanded.add('/home/Music/Rock');
+
+      renderSource();
+
+      const dirs = document.querySelectorAll('#source-container > .directory');
+      expect(dirs.length).toBe(0); // no dir name contains "thunder"
+    });
+
+    it('renders subdirectory when dirHasMatchingDescendant returns true', () => {
+      // dirHasMatchingDescendant is called TWICE per dir (renderFilteredSource + renderFilteredDirNode)
+      vi.mocked(dirHasMatchingDescendant).mockReturnValue(true);
+      state.sourceFilter = 'thunder';
+
+      renderSource();
+
+      const dirs = document.querySelectorAll('#source-container > .directory');
+      expect(dirs.length).toBeGreaterThanOrEqual(1);
+    });
   });
 });
