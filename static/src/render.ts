@@ -1,25 +1,40 @@
 // ─── Render assembler: imports from sub-modules, re-exports + renderAll ───
 // Phase 2: Component Factories. render.ts is now a thin shell.
+// All exports use local bindings (import + export) to avoid pass-through conflicts.
 
 import { stopPlayer, togglePlay } from './audio.js';
 import { focusItemByElement, revalidateFocus, setActivePanel } from './focus.js';
 import { computeStatus, countAllEparsFiles, formatDuration } from './utils.js';
 import { state } from './state.js';
 import { getRating } from './ratings.js';
+
+import { renderJournal } from './render/journalUI.js';
 import { renderEpars } from './render/eparsUI.js';
-import { renderSource } from './render/sourceTree.js';
+import { renderSource, toggleSourceDir, renderDirTree, togglePlaylistSourceDir } from './render/sourceTree.js';
+import { renderPlaylistPanel, renderPlaylistSource, renderPlaylistManager, patchPlaylistSourceFile } from './render/playlistUI.js';
+import { startRatingEdit, startSourceRatingEdit, _ratingClickHandler } from './render/ratingEdit.js';
+import { getBatchCopy } from './render/batchCopy.js';
+import { doDragCopy } from './render/dragDrop.js';
 
-// ── Sub-module imports ───────────────────────────────────────────────────
-export { renderJournal } from './render/journalUI.js';
-export { renderEpars } from './render/eparsUI.js';
-export { renderSource, toggleSourceDir, renderDirTree, togglePlaylistSourceDir } from './render/sourceTree.js';
-export { renderPlaylistPanel, renderPlaylistSource, renderPlaylistManager, patchPlaylistSourceFile } from './render/playlistUI.js';
-export { startRatingEdit, startSourceRatingEdit, _ratingClickHandler } from './render/ratingEdit.js';
-export { getBatchCopy } from './render/batchCopy.js';
+export {
+  renderJournal,
+  renderEpars,
+  renderSource,
+  toggleSourceDir,
+  renderDirTree,
+  togglePlaylistSourceDir,
+  renderPlaylistPanel,
+  renderPlaylistSource,
+  renderPlaylistManager,
+  patchPlaylistSourceFile,
+  startRatingEdit,
+  startSourceRatingEdit,
+  _ratingClickHandler,
+  getBatchCopy,
+  doDragCopy,
+};
 
-export { doDragCopy } from './render/dragDrop.js';
-
-// ── Targeted DOM patches (kept here — depend on local makeFileEl) ────────
+// ── Targeted DOM patches (kept here — depend on inline makeFileEl) ────────
 
 export function patchEparsFileAfterCopy(filename: string, eparDir: string): void {
   const fileSpan = document.querySelector(
@@ -122,7 +137,6 @@ export function patchSourceFileAfterCopy(
 
     const children = dirEl.querySelector('.children');
     if (children) {
-      // Inline makeFileEl for patching (avoids circular import)
       const newRow = document.createElement('div');
       newRow.className = 'file-row';
       newRow.dataset.focuspath = `${destDir}/${filename}`;
@@ -151,14 +165,6 @@ export function patchSourceFileAfterCopy(
       ratingSpan.className = 'file-rating';
       ratingSpan.dataset.fullpath = `${destDir}/${filename}`;
       if (ratingVal !== undefined) ratingSpan.textContent = String(ratingVal);
-      ratingSpan.onclick = (e: MouseEvent) => {
-        e.stopPropagation();
-        const cont = newRow.closest('#epars-container, #source-container, #playlist-source-container') as HTMLElement | null;
-        if (!cont) return;
-        for (const el of cont.querySelectorAll('.focused')) el.classList.remove('focused');
-        newRow.classList.add('focused');
-        if (cont.id === 'playlist-source-container') { /* import would be circular; startSourceRatingEdit called via fileRow */ }
-      };
       newRow.appendChild(ratingSpan);
 
       newRow.onclick = (e: MouseEvent) => {
