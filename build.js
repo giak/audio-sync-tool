@@ -24,6 +24,7 @@ const ctx = await esbuild.context({
   format: 'esm',
   sourcemap: isWatch ? 'inline' : 'linked',
   target: 'es2022',
+  minify: !isWatch,  // production build = minifié, watch = lisible
   logLevel: 'info',
 });
 

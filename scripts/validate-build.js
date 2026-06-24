@@ -53,20 +53,27 @@ try {
   fail(`script.js has syntax errors: ${e.message}`);
 }
 
-// 3. Key exports are present (fuzzy string search in bundle)
-const requiredSymbols = [
-  'function renderEpars',
-  'function renderSource',
-  'function renderAll',
-  'function initApp',
-  'function executeCopy',
-  'function runScan',
+// 3. Key module signatures are present (string literals → survivent à la minification)
+// Chaque module critique laisse une trace textuelle unique dans le bundle.
+const moduleSignatures = [
+  // eparsUI.ts → renderEpars()
+  { label: 'renderEpars (éparpillé)', sig: 'epars-container' },
+  // sourceTree.ts → renderSource()
+  { label: 'renderSource (source data)', sig: 'source-container' },
+  // actions.ts → executeCopy()
+  { label: 'executeCopy (F5)', sig: '"F5"' },
+  // actions.ts → runScan()
+  { label: 'runScan (scan button)', sig: 'btn-scan' },
+  // actions.ts → initApp()
+  { label: 'initApp (API /load)', sig: '"/load"' },
+  // playlistUI.ts → renderPlaylistPanel()
+  { label: 'renderPlaylistPanel', sig: 'playlist-panel' },
 ];
-for (const sym of requiredSymbols) {
-  if (src.includes(sym)) {
-    ok(`"${sym}" found in bundle`);
+for (const { label, sig } of moduleSignatures) {
+  if (src.includes(sig)) {
+    ok(`✅ "${sig}" — ${label}`);
   } else {
-    fail(`"${sym}" NOT found in bundle — module may be missing`);
+    fail(`"${sig}" NOT found — ${label} may be missing`);
   }
 }
 
