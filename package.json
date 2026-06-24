@@ -5,9 +5,9 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "rm -rf static/dist && mkdir -p static/dist/commands static/dist/render && esbuild static/src/state.ts static/src/utils.ts static/src/api.ts static/src/render.ts static/src/focus.ts static/src/audio.ts static/src/ui.ts static/src/actions.ts static/src/playlist.ts static/src/ratings.ts static/src/script.ts static/src/commands/registry.ts static/src/commands/navigation.ts static/src/commands/audio.ts static/src/commands/copy.ts static/src/commands/filter.ts static/src/commands/rating.ts static/src/commands/playlist.ts static/src/commands/modals.ts static/src/render/index.ts static/src/render/fileRow.ts static/src/render/batchCopy.ts static/src/render/journalUI.ts static/src/render/ratingEdit.ts static/src/render/dragDrop.ts static/src/render/eparsUI.ts static/src/render/sourceTree.ts static/src/render/playlistUI.ts --outdir=static/dist --format=esm --sourcemap=inline 2>&1 && python3 scripts/bust-cache.py 2>&1",
+    "build": "node build.js && node scripts/validate-build.js",
     "start": "fuser -k 8765/tcp 2>/dev/null; npm run build && ./venv/bin/python app.py",
-    "dev": "mkdir -p static/dist/commands static/dist/render && esbuild static/src/state.ts static/src/utils.ts static/src/api.ts static/src/render.ts static/src/focus.ts static/src/audio.ts static/src/ui.ts static/src/actions.ts static/src/playlist.ts static/src/ratings.ts static/src/script.ts static/src/commands/registry.ts static/src/commands/navigation.ts static/src/commands/audio.ts static/src/commands/copy.ts static/src/commands/filter.ts static/src/commands/rating.ts static/src/commands/playlist.ts static/src/commands/modals.ts static/src/render/index.ts static/src/render/fileRow.ts static/src/render/batchCopy.ts static/src/render/journalUI.ts static/src/render/ratingEdit.ts static/src/render/dragDrop.ts static/src/render/eparsUI.ts static/src/render/sourceTree.ts static/src/render/playlistUI.ts --outdir=static/dist --format=esm --sourcemap=inline --watch 2>&1",
+    "dev": "node build.js --watch",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
     "lint": "biome check static/src/",
