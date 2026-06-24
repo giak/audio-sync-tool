@@ -89,6 +89,7 @@ export function getPendingTracks(name: string): PlaylistTrack[] {
  */
 export function setPendingTracks(name: string, tracks: PlaylistTrack[]): void {
   state.pendingPlaylists[name] = tracks;
+  emit('eparsPlaylist:changed');
 }
 
 /**
@@ -136,6 +137,7 @@ export function createNewPlaylist(name: string): string {
   if (!state.pendingPlaylists[name]) {
     state.pendingPlaylists[name] = [];
   }
+  emit('eparsPlaylist:changed');
   return name;
 }
 
@@ -144,6 +146,7 @@ export function createNewPlaylist(name: string): string {
  */
 export function removePendingPlaylist(name: string): void {
   delete state.pendingPlaylists[name];
+  emit('eparsPlaylist:changed');
 }
 
 /**

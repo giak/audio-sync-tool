@@ -1,7 +1,7 @@
 // ─── Playlist commands: Tab, Espace, Ctrl+S, Ctrl+E, Delete, Ctrl+↑↓, Enter, ←→ ──
 import { registry } from './registry.js';
 import { navigateFocus, navigateColumn, getFocusedItem } from '../focus.js';
-import { renderPlaylistPanel, renderPlaylistSource, patchPlaylistSourceFile } from '../render/index.js';
+import { renderPlaylistSource, patchPlaylistSourceFile } from '../render/index.js';
 import { addTrack, getActivePlaylistName, getPendingTracks, removeTrack, reorderTrack, savePlaylist, exportPlaylist } from '../playlist.js';
 import { openModal, showToast, showError, openFilterPalette, closeAllModals } from '../ui.js';
 import { state } from '../state.js';
@@ -52,7 +52,7 @@ function toggleTrackInPlaylist(): void {
     label?.classList.remove('in-playlist');
     showToast(`➖ ${filename} retiré`);
   }
-  renderPlaylistPanel();
+  // renderPlaylistPanel auto-déclenché par eparsPlaylist:changed
 }
 
 async function saveCurrentPlaylist(): Promise<void> {
@@ -197,7 +197,7 @@ registry.bind({
     const index = items.indexOf(focused);
     if (index === -1) return;
     reorderTrack(name, index, index - 1);
-    renderPlaylistPanel();
+    // auto-rendered via eparsPlaylist:changed
   },
 });
 
@@ -214,7 +214,7 @@ registry.bind({
     const index = items.indexOf(focused);
     if (index === -1) return;
     reorderTrack(name, index, index + 1);
-    renderPlaylistPanel();
+    // auto-rendered via eparsPlaylist:changed
   },
 });
 

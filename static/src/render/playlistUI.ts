@@ -163,7 +163,7 @@ function renderPlaylistTracks(): void {
     (btn as HTMLElement).onclick = () => {
       const fullPath = (btn as HTMLElement).dataset.fullpath || '';
       removeTrack(getActivePlaylistName(), fullPath);
-      renderPlaylistPanel();
+      // renderPlaylistPanel() is triggered automatically by eparsPlaylist:changed
       patchPlaylistSourceFile(fullPath, true);
     };
   });
@@ -199,7 +199,7 @@ function renderPlaylistTracks(): void {
       const filename = trackEl.querySelector('.pl-track-name')?.textContent || '';
       const items: Array<{ label: string; action: () => void; danger?: boolean }> = [
         { label: '▶ Jouer', action: () => togglePlay(filename, fullPath, trackEl.querySelector('.play-btn') || trackEl) },
-        { label: '✕ Retirer', action: () => { removeTrack(getActivePlaylistName(), fullPath); renderPlaylistPanel(); patchPlaylistSourceFile(fullPath, true); }, danger: true },
+        { label: '✕ Retirer', action: () => { removeTrack(getActivePlaylistName(), fullPath); /* auto-rendered via eparsPlaylist:changed */ patchPlaylistSourceFile(fullPath, true); }, danger: true },
       ];
       showContextMenu(e.clientX, e.clientY, items);
     };
@@ -230,7 +230,7 @@ function renderPlaylistTracks(): void {
       const toIdx = parseInt(trackEl.dataset.index || '', 10);
       if (!Number.isNaN(fromIdx) && !Number.isNaN(toIdx)) {
         reorderTrack(getActivePlaylistName(), fromIdx, toIdx);
-        renderPlaylistPanel();
+        // auto-rendered via eparsPlaylist:changed
       }
     };
   });
