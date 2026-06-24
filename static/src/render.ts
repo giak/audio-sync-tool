@@ -230,21 +230,16 @@ export function setupRenderSubscriptions(): void {
     }
   });
 
-  // When playlist tracks are added/removed/reordered, auto-update panel
-  on('eparsPlaylist:changed', () => {
+  // When playlist tracks or active tab change, auto-update the panel
+  const autoRenderPlaylistPanel = (): void => {
     const layout = document.getElementById('playlist-layout');
     if (layout && !layout.classList.contains('hidden')) {
       renderPlaylistPanel();
     }
-  });
+  };
 
-  // When the active playlist tab changes, auto-update the panel
-  on('activePlaylistIndex:changed', () => {
-    const layout = document.getElementById('playlist-layout');
-    if (layout && !layout.classList.contains('hidden')) {
-      renderPlaylistPanel();
-    }
-  });
+  on('eparsPlaylist:changed', autoRenderPlaylistPanel);
+  on('activePlaylistIndex:changed', autoRenderPlaylistPanel);
 }
 
 
