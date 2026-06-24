@@ -97,7 +97,7 @@ interface AppState {
   focusListId: 'epars' | 'source' | 'playlist-source' | 'playlist-tracks';
 }
 
-interface EparsSelection {
+export interface EparsSelection {
   filename: string;
   eparDir: string;
   fullpath: string;

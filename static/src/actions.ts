@@ -131,6 +131,8 @@ export async function runScan(): Promise<void> {
     state.sourceFiles = (data.source || {}) as typeof state.sourceFiles;
     state.eparsFiles = (data.epars || {}) as typeof state.eparsFiles;
     state.journal = await api<Array<Record<string, unknown>>>('/journal');
+    // Phase 3 sync render: EventEmitter will also auto-render, but we keep this
+    // synchronous call for immediate DOM population in tests and init.
     renderAll();
   } catch (err) {
     scanFailed = true;
@@ -196,7 +198,7 @@ export function executeCopy(): void {
           } catch (_) { /* continue */ }
         }
         state.journal = await api('/journal');
-        state.selectedEparsFiles.clear();
+        state.selectedEparsFiles = new Map();
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
         if (statusText) statusText.textContent = `✓ ${copied}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}`;
       };
@@ -259,7 +261,7 @@ export function executeCopy(): void {
         if (!patchSourceFileAfterCopy(destDir, filename, { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null })) {
           renderSource();
         }
-        state.selectedEparsFiles.clear();
+        state.selectedEparsFiles = new Map();
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
         if (statusText) statusText.textContent = `✓ ${filename} copié vers ${destDir}`;
       } catch (err) {
@@ -293,6 +295,8 @@ export async function initApp(): Promise<void> {
 
     loadRatings().catch(() => {/* ratings are optional */});
 
+    // Phase 3 sync render: EventEmitter also fires, but synchronous renderAll
+    // ensures DOM is ready before setActivePanel + status text.
     renderAll();
     setActivePanel('epars');
     const statusText = document.getElementById('status-text');

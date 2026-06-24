@@ -1,7 +1,7 @@
 // ─── Éparpillé panel rendering ────────────────────────────────────────────
 
 import { focusItemByElement, setActivePanel } from '../focus.js';
-import { state } from '../state.js';
+import { state, type EparsSelection } from '../state.js';
 import { computeStatus, countAllEparsFiles, type FileStatus } from '../utils.js';
 import { makeFileEl } from './fileRow.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
@@ -25,10 +25,12 @@ function selectEparsFile(
 
   if (opts?.ctrl) {
     if (state.selectedEparsFiles.has(key)) {
-      state.selectedEparsFiles.delete(key);
+      const next = new Map(state.selectedEparsFiles);
+      next.delete(key);
+      state.selectedEparsFiles = next;
       el.classList.remove('selected');
     } else {
-      state.selectedEparsFiles.set(key, { filename, eparDir, fullpath });
+      state.selectedEparsFiles = new Map([...state.selectedEparsFiles, [key, { filename, eparDir, fullpath }]]);
       el.classList.add('selected');
     }
     if (container) {
@@ -40,8 +42,9 @@ function selectEparsFile(
     const currentIdx = Array.from(items).indexOf(el);
     const start = Math.min(state.lastSelectedEparsIndex, currentIdx);
     const end = Math.max(state.lastSelectedEparsIndex, currentIdx);
-    state.selectedEparsFiles.clear();
+    state.selectedEparsFiles = new Map();
     for (const f of document.querySelectorAll('#epars-container .file.selected')) f.classList.remove('selected');
+    const nextMap = new Map<string, EparsSelection>();
     for (let i = start; i <= end; i++) {
       const item = items[i] as HTMLElement | null;
       const fl = item?.querySelector('.file.nouveau') as HTMLElement | null;
@@ -49,15 +52,16 @@ function selectEparsFile(
         const fn = fl.dataset.filename || '';
         const ed = fl.dataset.epardir || '';
         const fp = fl.dataset.fullpath || '';
-        state.selectedEparsFiles.set(`${ed}/${fn}`, { filename: fn, eparDir: ed, fullpath: fp });
+        nextMap.set(`${ed}/${fn}`, { filename: fn, eparDir: ed, fullpath: fp });
         fl.classList.add('selected');
       }
     }
+    state.selectedEparsFiles = nextMap;
     state.lastSelectedEparsIndex = currentIdx;
   } else {
-    state.selectedEparsFiles.clear();
+    state.selectedEparsFiles = new Map();
     for (const f of document.querySelectorAll('#epars-container .file.selected')) f.classList.remove('selected');
-    state.selectedEparsFiles.set(key, { filename, eparDir, fullpath });
+    state.selectedEparsFiles = new Map([...state.selectedEparsFiles, [key, { filename, eparDir, fullpath }]]);
     el.classList.add('selected');
     if (container) {
       const items = getItemsForSelection(container);

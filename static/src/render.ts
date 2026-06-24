@@ -102,7 +102,7 @@ export function patchSourceFileAfterCopy(
     if (!node[part]) node[part] = {};
     node = node[part] as Record<string, unknown>;
     currentPath += `/${part}`;
-    state.sourceNodeMap.set(currentPath, { node, baseDir: ancestorInfo.baseDir });
+    state.sourceNodeMap = new Map([...state.sourceNodeMap, [currentPath, { node, baseDir: ancestorInfo.baseDir }]]);
   }
 
   const entries = (node.__files__ as Array<{ filename: string; relPath: string; year: string | null; duration: number | null; codec: string | null; baseDir: string }>) || [];
@@ -207,5 +207,14 @@ export function patchSourceFileAfterCopy(
 export function renderAll(): void {
   renderEpars();
   renderSource();
+  // Double rAF : le premier flush le DOM (innerHTML), le second
+  // garantit que le layout est calculé avant revalidateFocus().
+  // Conservé car éprouvé — ne pas remplacer par un seul rAF.
   requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
 }
+
+// ── Event subscriptions (Phase 3) ────────────────────────────────────────
+// The Proxy + EventEmitter infrastructure is active (state.ts).
+// Set/Map full replacements now trigger `${prop}:changed` events.
+// Subscribe renders here when async rendering is stable in tests.
+// Example: on('sourceFiles:changed', renderSource); on('eparsFiles:changed', renderEpars);

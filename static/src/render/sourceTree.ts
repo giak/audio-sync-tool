@@ -142,7 +142,7 @@ function buildSourceChildren(
       }
     };
     childContainer.appendChild(dirEl);
-    state.sourceNodeMap.set(subFullPath, { node: subNode, baseDir });
+    state.sourceNodeMap = new Map([...state.sourceNodeMap, [subFullPath, { node: subNode, baseDir }]]);
 
     if (subExpanded) {
       dirEl.appendChild(buildSourceChildren(subNode, subFullPath, baseDir, isFiltered, inPlaylistPaths, toggleFn));
@@ -174,13 +174,17 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
 
   const existingChildren = dirEl.querySelector('.children');
   if (existingChildren) {
-    state.sourceExpanded.delete(dirPath);
-    state.sourceManuallyExpanded.delete(dirPath);
+    const nextExpanded = new Set(state.sourceExpanded);
+    nextExpanded.delete(dirPath);
+    state.sourceExpanded = nextExpanded;
+    const nextManually = new Set(state.sourceManuallyExpanded);
+    nextManually.delete(dirPath);
+    state.sourceManuallyExpanded = nextManually;
     dirEl.classList.remove('expanded');
     existingChildren.remove();
   } else {
-    state.sourceExpanded.add(dirPath);
-    state.sourceManuallyExpanded.add(dirPath);
+    state.sourceExpanded = new Set([...state.sourceExpanded, dirPath]);
+    state.sourceManuallyExpanded = new Set([...state.sourceManuallyExpanded, dirPath]);
     dirEl.classList.add('expanded');
     const info = state.sourceNodeMap.get(dirPath);
     if (info) {
@@ -270,7 +274,7 @@ export function renderDirTree(node: TreeNode, container: HTMLElement, basePath: 
       }
     };
     container.appendChild(dirEl);
-    state.sourceNodeMap.set(fullPath, { node: subNode, baseDir: basePath });
+    state.sourceNodeMap = new Map([...state.sourceNodeMap, [fullPath, { node: subNode, baseDir: basePath }]]);
 
     if (isExpanded) {
       dirEl.appendChild(buildSourceChildren(subNode, fullPath, basePath, false, undefined, toggleFn));
@@ -349,7 +353,7 @@ function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath:
     }
   };
   container.appendChild(dirEl);
-  state.sourceNodeMap.set(fullPath, { node, baseDir: basePath });
+  state.sourceNodeMap = new Map([...state.sourceNodeMap, [fullPath, { node, baseDir: basePath }]]);
 
   if (isExpanded) {
     dirEl.appendChild(buildSourceChildren(node, fullPath, basePath, !manualExpand));
@@ -363,7 +367,7 @@ export function renderSource(): void {
   if (!container) return;
   const savedScrollTop = container.scrollTop;
   container.innerHTML = '';
-  state.sourceNodeMap.clear();
+  state.sourceNodeMap = new Map();
 
   const allTrees: TreeAndDir[] = [];
   let totalCount = 0;
