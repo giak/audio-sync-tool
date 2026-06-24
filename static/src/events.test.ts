@@ -52,9 +52,12 @@ vi.mock('./render/sourceTree.js', () => ({
 }));
 
 // Partially mock playlistUI — spy on renderPlaylistPanel, keep other exports real
+// The spy calls through to the real function so we can test DOM effects too.
 vi.mock('./render/playlistUI.js', async (importOriginal) => {
   const mod = await importOriginal();
-  return { ...mod, renderPlaylistPanel: vi.fn() };
+  const spy = vi.fn();
+  spy.mockImplementation((...args: unknown[]) => (mod as any).renderPlaylistPanel(...args));
+  return { ...mod, renderPlaylistPanel: spy };
 });
 
 vi.mock('./render/ratingEdit.js', () => ({
@@ -145,6 +148,63 @@ describe('event subscriptions end-to-end', () => {
     emit('eparsPlaylist:changed');
     await tick();
     expect(renderPlaylistPanel).not.toHaveBeenCalled();
+  });
+
+  it('eparsPlaylist:changed renders real track and tab content into the DOM', async () => {
+    // Set up real playlist-layout with tabs + panel containers
+    const layout = document.createElement('div');
+    layout.id = 'playlist-layout';
+    layout.classList.remove('hidden');
+
+    const tabs = document.createElement('div');
+    tabs.id = 'playlist-tabs';
+    layout.appendChild(tabs);
+
+    const panel = document.createElement('div');
+    panel.id = 'playlist-panel';
+    layout.appendChild(panel);
+
+    document.body.appendChild(layout);
+
+    // Seed real track data
+    state.pendingPlaylists['piste-test'] = [
+      { filename: 'son.mp3', fullPath: '/src/son.mp3', relPath: 'son.mp3', year: '2024', duration: 180, codec: 'MP3' },
+    ];
+    state.activePlaylistIndex = 0;
+
+    // Clear the spy call count from the activePlaylistIndex:changed emission
+    vi.clearAllMocks();
+
+    emit('eparsPlaylist:changed');
+    await tick();
+
+    // -- DOM assertions on real renderPlaylistPanel output --
+
+    // Tab rendered with the playlist name
+    const tabEl = tabs.querySelector('.pl-tab');
+    expect(tabEl).not.toBeNull();
+    expect(tabEl!.textContent).toContain('piste-test');
+
+    // Track row rendered with filename
+    const trackName = panel.querySelector('.pl-track-name');
+    expect(trackName).not.toBeNull();
+    expect(trackName!.textContent).toBe('son.mp3');
+
+    // Track metadata rendered
+    const trackYear = panel.querySelector('.pl-track-year');
+    expect(trackYear?.textContent).toBe('2024');
+
+    const trackCodec = panel.querySelector('.pl-track-codec');
+    expect(trackCodec?.textContent).toBe('MP3');
+
+    const trackDuration = panel.querySelector('.pl-track-duration');
+    expect(trackDuration?.textContent).toBe('3:00');
+
+    // Info line shows track count
+    const info = panel.querySelector('.pl-info');
+    expect(info?.textContent).toContain('1 morceau');
+
+    layout.remove();
   });
 
   // ── audio:changed → cleanup ──────────────────────────────────────────
