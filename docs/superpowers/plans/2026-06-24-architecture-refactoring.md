@@ -33,22 +33,22 @@ actions.ts (mutations state pures, 0 import render)
 
 ## Pre-flight Checklist (lecture obligatoire avant d'implémenter)
 
-- [ ] Lire `docs/superpowers/specs/2026-06-24-architecture-refactoring.md` — spec complète
-- [ ] Lire `static/src/script.ts` — le keydown handler monolithique à découper
-- [ ] Lire `static/src/render.ts` — le god module à éclater
-- [ ] Lire `static/src/state.ts` — le Proxy à enrichir d'un EventEmitter
-- [ ] Lire `static/src/focus.ts` — le système de focus à stabiliser
-- [ ] Lire `static/src/actions.ts` — la logique métier à découpler du rendu
-- [ ] Lire `static/src/ui.ts` — les modales et le filtre
-- [ ] Lire `static/src/audio.ts` — le player audio
-- [ ] Lire `static/src/playlist.ts` — la logique playlist à enrichir
-- [ ] Lire `static/src/ratings.ts` — le CRUD notation
-- [ ] Lire `static/src/utils.ts` — les utilitaires purs
-- [ ] Lire `static/src/api.ts` — le wrapper fetch
-- [ ] Lire `static/src/focus.test.ts` — tests focus existants
-- [ ] Lire `static/src/render.test.ts` — tests render existants
-- [ ] Lire `static/src/actions.test.ts` — tests actions existants
-- [ ] Lire `static/src/integration.test.ts` — tests d'intégration
+- [x] Lire `docs/superpowers/specs/2026-06-24-architecture-refactoring.md` — spec complète
+- [x] Lire `static/src/script.ts` — le keydown handler monolithique à découper
+- [x] Lire `static/src/render.ts` — le god module à éclater
+- [x] Lire `static/src/state.ts` — le Proxy à enrichir d'un EventEmitter
+- [x] Lire `static/src/focus.ts` — le système de focus à stabiliser
+- [x] Lire `static/src/actions.ts` — la logique métier à découpler du rendu
+- [x] Lire `static/src/ui.ts` — les modales et le filtre
+- [x] Lire `static/src/audio.ts` — le player audio
+- [x] Lire `static/src/playlist.ts` — la logique playlist à enrichir
+- [x] Lire `static/src/ratings.ts` — le CRUD notation
+- [x] Lire `static/src/utils.ts` — les utilitaires purs
+- [x] Lire `static/src/api.ts` — le wrapper fetch
+- [x] Lire `static/src/focus.test.ts` — tests focus existants
+- [x] Lire `static/src/render.test.ts` — tests render existants
+- [x] Lire `static/src/actions.test.ts` — tests actions existants
+- [x] Lire `static/src/integration.test.ts` — tests d'intégration
 
 ---
 
@@ -73,13 +73,13 @@ actions.ts (mutations state pures, 0 import render)
 **Fichiers de test créés :**
 - `static/src/commands/registry.test.ts` — tests unitaires registry
 
-- [ ] **Step 1: Créer le dossier `commands/`**
+- [x] **Step 1: Créer le dossier `commands/`**
 
 ```bash
 mkdir -p static/src/commands
 ```
 
-- [ ] **Step 2: Écrire `registry.ts` — CommandRegistry + buildContext**
+- [x] **Step 2: Écrire `registry.ts` — CommandRegistry + buildContext**
 
 Inclure :
 - `CommandContext` avec 12 champs (key, shiftKey, ctrlKey, altKey, isInput, playlistMode, playlistFocus, activePanel, activeModal, filterActive, isFilterInputFocused, isAudioPlaying)
@@ -88,7 +88,7 @@ Inclure :
 - ⚠️ Inclure `activeModal` et `isFilterInputFocused` — critiques pour l'isolation modale
 - `buildContext(e)` qui lit `state` et `document.activeElement`
 
-- [ ] **Step 3: Écrire `registry.test.ts`**
+- [x] **Step 3: Écrire `registry.test.ts`**
 
 Tester :
 - `dispatch` matche une commande simple (key match)
@@ -99,7 +99,7 @@ Tester :
 - `dispatch` ne matche pas si `playlistMode: true` et on est en Sync
 - `buildContext` retourne les bonnes valeurs depuis state
 
-- [ ] **Step 4: Écrire les 8 modules de commandes**
+- [x] **Step 4: Écrire les 8 modules de commandes**
 
 Chaque module :
 1. Importe `registry` depuis `./registry.js`
@@ -135,7 +135,7 @@ registry.bind({ key: 'Escape', filterActive: true, isFilterInputFocused: true, h
 registry.bind({ key: 'F5', activeModal: null, handler: executeCopy });
 ```
 
-- [ ] **Step 5: Déplacer les fonctions playlist de `script.ts` → `playlist.ts`**
+- [x] **Step 5: Déplacer les fonctions playlist de `script.ts` → `playlist.ts`**
 
 | Fonction | Statut |
 |----------|--------|
@@ -148,7 +148,7 @@ registry.bind({ key: 'F5', activeModal: null, handler: executeCopy });
 | `exitPlaylistMode()` | → `playlist.ts` export |
 | `escapeHtml()` | → `playlist.ts` (déjà dans `render.ts`, à déplacer ou partager) |
 
-- [ ] **Step 6: Réduire `script.ts` à l'orchestrateur**
+- [x] **Step 6: Réduire `script.ts` à l'orchestrateur**
 
 ```typescript
 // Après refactoring, script.ts :
@@ -187,19 +187,9 @@ initConfigUI();
 initApp();
 ```
 
-- [ ] **Step 7: Valider — build + typecheck + tests**
+- [x] **Step 7: Valider — build + typecheck + tests** ✅ 313/313 pass
 
-```bash
-cd /home/giak/projects/audio-sync-tool
-npm run build         # Build OK ?
-npx tsc --noEmit       # 0 errors ?
-npm test               # Tous les tests passent ?
-```
-
-⚠️ Les tests existants (`actions.test.ts`, `integration.test.ts`) peuvent échouer
-si les imports ont changé. Mettre à jour les mocks si nécessaire.
-
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit** (295b38c)
 
 ```bash
 git add static/src/commands/ static/src/script.ts static/src/playlist.ts
@@ -232,13 +222,13 @@ git commit -m "refactor(phase1): Command Pattern — replace monolithic keydown 
 - `static/src/render/sourceTree.test.ts`
 - `static/src/render/eparsUI.test.ts`
 
-- [ ] **Step 1: Créer le dossier `render/`**
+- [x] **Step 1: Créer le dossier `render/`**
 
 ```bash
 mkdir -p static/src/render
 ```
 
-- [ ] **Step 2: Extraire `fileRow.ts` — `makeFileEl()`**
+- [x] **Step 2: Extraire `fileRow.ts` — `makeFileEl()`** (avec callbacks optionnels `selectEparsFileFn`, `startSourceRatingEditFn`)
 
 **Principe :** `makeFileEl` reçoit des callbacks au lieu d'importer `focus.ts`, `audio.ts`, etc.
 
@@ -272,7 +262,7 @@ export function makeFileEl(
 }
 ```
 
-- [ ] **Step 3: Extraire `sourceTree.ts`**
+- [ ] **Step 3: Extraire `sourceTree.ts`** ⚠️ NON FAIT — renderSource() encore dans render.ts
 
 Fonctions à déplacer :
 - `renderSource()`
@@ -287,7 +277,7 @@ Fonctions à déplacer :
 Ces fonctions importent `makeFileEl` depuis `./fileRow.js` et passent les callbacks
 appropriés selon le conteneur (source-container vs playlist-source-container).
 
-- [ ] **Step 4: Extraire `eparsUI.ts`, `playlistUI.ts`, `journalUI.ts`**
+- [ ] **Step 4: Extraire `eparsUI.ts`, `playlistUI.ts`, `journalUI.ts`** ⚠️ NON FAIT
 
 Chaque module suit le même pattern : importer `makeFileEl` depuis `./fileRow.js`,
 passer les callbacks spécifiques au contexte.
@@ -295,7 +285,7 @@ passer les callbacks spécifiques au contexte.
 ⚠️ `eparsUI.ts` doit exposer `selectEparsFile()` qui gère la sélection simple/multiple
 (Ctrl+clic, Shift+clic). Cette fonction utilise `focusItemByElement` → callback.
 
-- [ ] **Step 5: Extraire `ratingEdit.ts`**
+- [ ] **Step 5: Extraire `ratingEdit.ts`** ⚠️ NON FAIT — `_startInlineRatingEdit()` encore dans render.ts
 
 Fonctions à déplacer :
 - `_startInlineRatingEdit()` (la fonction partagée)
@@ -304,7 +294,7 @@ Fonctions à déplacer :
 - `_ratingClickHandler()`
 - `_ratingEditActive` (module-level)
 
-- [ ] **Step 6: Extraire `contextMenu.ts`, `dragDrop.ts`, `batchCopy.ts`**
+- [x] **Step 6: Extraire `contextMenu.ts`, `dragDrop.ts`, `batchCopy.ts`** — batchCopy.ts ✅ extrait, contextMenu.ts et dragDrop.ts ⚠️ NON FAIT
 
 - `contextMenu.ts` : `showDirContextMenu`, `batchCopyToDir`
 - `dragDrop.ts` : `doDragCopy`
@@ -313,7 +303,7 @@ Fonctions à déplacer :
 ⚠️ `getBatchCopy()` doit rester accessible par `actions.ts` — soit via
 `render/index.ts` (ré-export), soit via un import direct de `batchCopy.ts`.
 
-- [ ] **Step 7: Écrire `render/index.ts` — assembleur**
+- [x] **Step 7: Écrire `render/index.ts` — assembleur** (ré-exporte depuis render.ts pour backward compat)
 
 ```typescript
 // render/index.ts
@@ -337,7 +327,7 @@ export { getBatchCopy } from './batchCopy.js';
 export { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from '../domPatches.js'; // Phase 5
 ```
 
-- [ ] **Step 8: Supprimer `render.ts`, mettre à jour tous les imports**
+- [ ] **Step 8: Supprimer `render.ts`, mettre à jour tous les imports** ⚠️ NON FAIT — render.ts conservé
 
 ```bash
 rm static/src/render.ts
@@ -359,21 +349,14 @@ export * from './render/index.js';
 
 Comme ça, aucun import existant ne casse.
 
-- [ ] **Step 9: Adapter les tests existants**
+- [ ] **Step 9: Adapter les tests existants** ⚠️ NON FAIT
 
 - `render.test.ts` → renommé `render/sourceTree.test.ts` (les tests de `patchSourceFileAfterCopy` seront déplacés dans `domPatches.test.ts` en Phase 5)
 - `render/eparsUI.test.ts` : extraire les tests de `renderEpars`
 - `render/fileRow.test.ts` : nouveau, tester `makeFileEl` avec des callbacks mockés
 
-- [ ] **Step 10: Valider — build + typecheck + tests**
-
-```bash
-npm run build         # Build OK ?
-npx tsc --noEmit       # 0 errors ?
-npm test               # Tous les tests passent ?
-```
-
-- [ ] **Step 11: Commit**
+- [x] **Step 10: Valider** ✅ 0 erreurs, build OK
+- [x] **Step 11: Commit** (295b38c, inclus dans le commit Phase 1)
 
 ```bash
 git add static/src/render/ static/src/render.ts
@@ -397,7 +380,7 @@ git commit -m "refactor(phase2): Component Factories — split render.ts (1500 l
 **Fichiers de test créés :**
 - `static/src/domPatches.test.ts` — extrait de `render.test.ts`
 
-- [ ] **Step 1: Créer `domPatches.ts`**
+- [x] **Step 1: Créer `domPatches.ts`** — puis supprimé (bdb1e8b) car non importé = dead code
 
 ```typescript
 // static/src/domPatches.ts
@@ -422,14 +405,14 @@ export function patchPlaylistSourceFile(fullPath: string, remove: boolean): void
 }
 ```
 
-- [ ] **Step 2: Mettre à jour `render/index.ts`**
+- [x] **Step 2: Mettre à jour `render/index.ts`**
 
 ```typescript
 // Ré-exporter depuis domPatches.ts pour backward compat
 export { patchEparsFileAfterCopy, patchSourceFileAfterCopy, patchPlaylistSourceFile } from '../domPatches.js';
 ```
 
-- [ ] **Step 3: Nettoyer `actions.ts`**
+- [ ] **Step 3: Nettoyer `actions.ts`** ⚠️ NON FAIT — actions.ts importe encore renderAll/renderSource
 
 Supprimer les imports de `render.ts` :
 ```diff
@@ -444,21 +427,14 @@ Ces appels seront supprimés en Phase 3 (EventEmitter). Pour l'instant, garder
 l'import de `renderAll` et `renderSource` depuis `render/index.ts` — le
 découplage complet viendra avec l'EventEmitter.
 
-- [ ] **Step 4: Déplacer les tests de patching dans `domPatches.test.ts`**
+- [ ] **Step 4: Déplacer les tests de patching dans `domPatches.test.ts`** ⚠️ NON FAIT — fichier supprimé
 
 Extraire de `render.test.ts` (maintenant `render/sourceTree.test.ts`) :
 - `describe('patchSourceFileAfterCopy')`
 - `describe('patchEparsFileAfterCopy')`
 
-- [ ] **Step 5: Valider — build + typecheck + tests**
-
-```bash
-npm run build
-npx tsc --noEmit
-npm test
-```
-
-- [ ] **Step 6: Commit**
+- [x] **Step 5: Valider** ✅
+- [x] **Step 6: Commit** (inclus dans 295b38c, puis supprimé dans bdb1e8b)
 
 ```bash
 git add static/src/domPatches.ts static/src/actions.ts static/src/render/index.ts
@@ -481,7 +457,7 @@ git commit -m "refactor(phase5): extract domPatches.ts — decouple actions.ts f
 **Fichiers de test créés :**
 - `static/src/state.test.ts` — tests event emitter
 
-- [ ] **Step 1: Écrire `state.test.ts` — tests EventEmitter**
+- [x] **Step 1: Écrire `state.test.ts` — tests EventEmitter** (7 tests : emit, unchanged, unsubscribe, RAF batcher, validation, focusListId)
 
 ```typescript
 // state.test.ts
@@ -536,7 +512,7 @@ describe('EventEmitter', () => {
 });
 ```
 
-- [ ] **Step 2: Ajouter l'EventEmitter + RAF batcher à `state.ts`**
+- [x] **Step 2: Ajouter l'EventEmitter + RAF batcher à `state.ts`**
 
 ```typescript
 // state.ts — ajouts
@@ -580,7 +556,7 @@ export const state = new Proxy<AppState>(_state, {
 });
 ```
 
-- [ ] **Step 3: Abonner les renders aux événements dans `render/index.ts`**
+- [ ] **Step 3: Abonner les renders aux événements dans `render/index.ts`** ⚠️ NON FAIT — render/index.ts n'a pas d'abonnements on()
 
 ```typescript
 // render/index.ts — ajouter au boot
@@ -604,7 +580,7 @@ function updatePanelActiveClass(): void {
 }
 ```
 
-- [ ] **Step 4: Remplacer les `Set.add()` / `Map.set()` par des remplacements complets**
+- [ ] **Step 4: Remplacer les `Set.add()` / `Map.set()` par des remplacements complets** ⚠️ NON FAIT
 
 ⚠️ Critique : `Set.add()` et `Map.set()` ne déclenchent pas le Proxy `set` trap.
 
@@ -631,7 +607,7 @@ state.sourceNodeMap.set(fullPath, info);
 state.sourceNodeMap = new Map([...state.sourceNodeMap, [fullPath, info]]);
 ```
 
-- [ ] **Step 5: Supprimer les appels `renderXxx()` manuels**
+- [ ] **Step 5: Supprimer les appels `renderXxx()` manuels** ⚠️ NON FAIT — renderAll/renderSource encore appelés directement
 
 Faire un search pour trouver tous les appels manuels :
 ```bash
@@ -647,18 +623,8 @@ Supprimer ceux qui sont redondants avec l'EventEmitter.
 ces derniers font des mutations batch (config, scan) qui doivent être
 déclenchées manuellement ou via un événement `'init:done'`.
 
-- [ ] **Step 6: Valider — build + typecheck + tests**
-
-```bash
-npm run build
-npx tsc --noEmit
-npm test
-```
-
-⚠️ Vérifier avec `console.count('renderAll')` qu'un scan (qui modifie
-`sourceFiles`, `eparsFiles`, et `journal`) ne déclenche qu'UN SEUL render.
-
-- [ ] **Step 7: Commit**
+- [x] **Step 6: Valider** ✅
+- [x] **Step 7: Commit** (inclus dans 295b38c)
 
 ```bash
 git add static/src/state.ts static/src/render/index.ts static/src/actions.ts static/src/commands/playlist.ts static/src/render/ratingEdit.ts
@@ -678,7 +644,7 @@ git commit -m "refactor(phase3): EventEmitter with RAF batcher — state emits o
 **Fichiers de test modifiés :**
 - `static/src/focus.test.ts` — mise à jour des tests
 
-- [ ] **Step 1: Ajouter `focusListId` à `state.ts`**
+- [x] **Step 1: Ajouter `focusListId` à `state.ts`**
 
 ```typescript
 // state.ts
@@ -693,7 +659,7 @@ export interface AppState {
 
 Valeur par défaut : `focusListId: 'epars'` (premier panneau affiché).
 
-- [ ] **Step 2: Mettre à jour `setActivePanel()` pour synchroniser `focusListId`**
+- [x] **Step 2: Mettre à jour `setActivePanel()` pour synchroniser `focusListId`**
 
 ```typescript
 // focus.ts
@@ -704,7 +670,7 @@ export function setActivePanel(panel: 'epars' | 'source'): void {
 }
 ```
 
-- [ ] **Step 3: Mettre à jour `focusItemByPath()`**
+- [ ] **Step 3: Mettre à jour `focusItemByPath()`** ⚠️ NON FAIT — utilise encore querySelector `[data-focuspath="..."]`
 
 Remplacer la recherche CSS `[data-focuspath="..."]` par une boucle sur
 `getItems()` — plus robuste, pas besoin de `CSS.escape()` :
@@ -740,7 +706,7 @@ export function focusItemByPath(container: HTMLElement, path: string | null): bo
 }
 ```
 
-- [ ] **Step 4: Documenter le double `requestAnimationFrame`**
+- [ ] **Step 4: Documenter le double `requestAnimationFrame`** ⚠️ NON FAIT
 
 Le double rAF dans `renderAll()` est conservé — il garantit que le DOM est
 prêt avant `revalidateFocus()`. Ajouter un commentaire :
@@ -757,15 +723,8 @@ export function renderAll(): void {
 }
 ```
 
-- [ ] **Step 5: Valider — build + typecheck + tests**
-
-```bash
-npm run build
-npx tsc --noEmit
-npm test
-```
-
-- [ ] **Step 6: Commit**
+- [x] **Step 5: Valider** ✅
+- [x] **Step 6: Commit** (inclus dans 295b38c, puis supprimé dans bdb1e8b)
 
 ```bash
 git add static/src/focus.ts static/src/state.ts static/src/render/index.ts
@@ -805,26 +764,13 @@ git commit -m "refactor(phase4): focus stabilized — focusPath conserved, focus
 
 ## Post-implementation
 
-- [ ] **Tag final**
+- [x] **Tag final** — `v0.2-clean-architecture` sur 295b38c
 
-```bash
-git tag -a v0.2-clean-architecture -m "v0.2-clean-architecture: 5-phase refactoring — Command Pattern, Component Factories, EventEmitter, Focus stabilized, domPatches"
-```
+- [ ] **Mise à jour de la spec** ⚠️ NON FAIT — documenter les divergences (domPatches supprimé, render.ts non éclaté, EventEmitter non abonné)
 
-- [ ] **Mise à jour de la spec**
+- [ ] **Mise à jour de l'interaction map** ⚠️ NON FAIT
 
-Si des divergences sont apparues entre la spec et l'implémentation réelle,
-mettre à jour `docs/superpowers/specs/2026-06-24-architecture-refactoring.md`.
-
-- [ ] **Mise à jour de l'interaction map**
-
-Vérifier que `docs/superpowers/specs/2026-06-23-interaction-map.md` reflète
-toujours l'état du code après refactoring (les tables d'événements n'ont pas
-changé — seuls les imports et la structure interne ont bougé).
-
-- [ ] **Mise à jour du README**
-
-Ajouter une section "Architecture" dans le README avec le diagramme cible.
+- [ ] **Mise à jour du README** ⚠️ NON FAIT
 
 ---
 
