@@ -226,11 +226,10 @@ describe('audio:changed event', () => {
     await flush();
 
     const mockAudioInstance = (globalThis as any).__lastMockAudio;
-    if (mockAudioInstance?.onended) {
-      vi.clearAllMocks();
-      mockAudioInstance.onended();
-      expect(emit).toHaveBeenCalledWith('audio:changed');
-    }
+    expect(mockAudioInstance?.onended).toBeDefined();
+    vi.clearAllMocks();
+    mockAudioInstance!.onended!();
+    expect(emit).toHaveBeenCalledWith('audio:changed');
     btn.remove();
   });
 
@@ -245,11 +244,10 @@ describe('audio:changed event', () => {
     await flush();
 
     const mockAudioInstance = (globalThis as any).__lastMockAudio;
-    if (mockAudioInstance?.onerror) {
-      vi.clearAllMocks();
-      mockAudioInstance.onerror();
-      expect(emit).toHaveBeenCalledWith('audio:changed');
-    }
+    expect(mockAudioInstance?.onerror).toBeDefined();
+    vi.clearAllMocks();
+    mockAudioInstance!.onerror!();
+    expect(emit).toHaveBeenCalledWith('audio:changed');
     btn.remove();
   });
 });
