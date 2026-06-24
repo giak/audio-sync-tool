@@ -1,0 +1,139 @@
+// ─── Éparpillé panel rendering ────────────────────────────────────────────
+
+import { focusItemByElement, setActivePanel } from '../focus.js';
+import { state } from '../state.js';
+import { computeStatus, countAllEparsFiles, type FileStatus } from '../utils.js';
+import { makeFileEl } from './fileRow.js';
+import { startSourceRatingEdit } from './ratingEdit.js';
+
+// ── File selection logic ─────────────────────────────────────────────────
+
+function getItemsForSelection(container: HTMLElement): NodeListOf<Element> {
+  return container.querySelectorAll('.file.nouveau');
+}
+
+function selectEparsFile(
+  el: HTMLElement,
+  filename: string,
+  eparDir: string,
+  opts?: { ctrl?: boolean; shift?: boolean },
+): void {
+  const row = el.closest('.file-row') as HTMLElement | null;
+  const container = document.getElementById('epars-container');
+  const fullpath = el.dataset.fullpath || '';
+  const key = `${eparDir}/${filename}`;
+
+  if (opts?.ctrl) {
+    if (state.selectedEparsFiles.has(key)) {
+      state.selectedEparsFiles.delete(key);
+      el.classList.remove('selected');
+    } else {
+      state.selectedEparsFiles.set(key, { filename, eparDir, fullpath });
+      el.classList.add('selected');
+    }
+    if (container) {
+      const items = getItemsForSelection(container);
+      state.lastSelectedEparsIndex = Array.from(items).indexOf(el);
+    }
+  } else if (opts?.shift && state.lastSelectedEparsIndex !== null && container) {
+    const items = getItemsForSelection(container);
+    const currentIdx = Array.from(items).indexOf(el);
+    const start = Math.min(state.lastSelectedEparsIndex, currentIdx);
+    const end = Math.max(state.lastSelectedEparsIndex, currentIdx);
+    state.selectedEparsFiles.clear();
+    for (const f of document.querySelectorAll('#epars-container .file.selected')) f.classList.remove('selected');
+    for (let i = start; i <= end; i++) {
+      const item = items[i] as HTMLElement | null;
+      const fl = item?.querySelector('.file.nouveau') as HTMLElement | null;
+      if (fl) {
+        const fn = fl.dataset.filename || '';
+        const ed = fl.dataset.epardir || '';
+        const fp = fl.dataset.fullpath || '';
+        state.selectedEparsFiles.set(`${ed}/${fn}`, { filename: fn, eparDir: ed, fullpath: fp });
+        fl.classList.add('selected');
+      }
+    }
+    state.lastSelectedEparsIndex = currentIdx;
+  } else {
+    state.selectedEparsFiles.clear();
+    for (const f of document.querySelectorAll('#epars-container .file.selected')) f.classList.remove('selected');
+    state.selectedEparsFiles.set(key, { filename, eparDir, fullpath });
+    el.classList.add('selected');
+    if (container) {
+      const items = getItemsForSelection(container);
+      state.lastSelectedEparsIndex = Array.from(items).indexOf(el);
+    }
+  }
+
+  const count = state.selectedEparsFiles.size;
+  const statusText = document.getElementById('status-text');
+  if (statusText) {
+    statusText.textContent = count > 1
+      ? `${count} fichiers sélectionnés. Tab → F5 pour copier.`
+      : 'Appuie sur Tab → F5 pour copier.';
+  }
+  setActivePanel('epars');
+  if (row && container) focusItemByElement(container, row);
+}
+
+// ── Render ───────────────────────────────────────────────────────────────
+
+export function renderEpars(): void {
+  const container = document.getElementById('epars-container');
+  if (!container) return;
+  const savedScrollTop = container.scrollTop;
+  container.innerHTML = '';
+
+  const totalFiles = countAllEparsFiles(state.eparsFiles);
+  const headerCount = document.getElementById('epars-header-count');
+  if (headerCount) headerCount.textContent = totalFiles > 0 ? `(${totalFiles.toLocaleString('fr')})` : '';
+
+  let countNouveau = 0,
+    countDoublon = 0,
+    countTraite = 0;
+
+  for (const [dirPath, files] of Object.entries(state.eparsFiles)) {
+    const dirDiv = document.createElement('div');
+    dirDiv.className = 'directory';
+    dirDiv.dataset.focuspath = `epars-dir:${dirPath}`;
+    const shortName = dirPath.split('/').filter(Boolean).pop() || dirPath;
+    dirDiv.textContent = shortName;
+    dirDiv.title = dirPath;
+    container.appendChild(dirDiv);
+
+    const fileList = document.createElement('div');
+    fileList.className = 'children';
+    container.appendChild(fileList);
+
+    const sorted = Object.entries(files).sort((a, b) => a[0].localeCompare(b[0]));
+    for (const [filename, data] of sorted) {
+      const relPath = data.path;
+      const fullpath = `${dirPath}/${relPath}`;
+      const status = computeStatus(filename, state.sourceFiles, state.journal as any);
+      if (status === 'nouveau') countNouveau++;
+      else if (status === 'doublon') countDoublon++;
+      else if (status === 'traite') countTraite++;
+
+      const row = makeFileEl(filename, relPath, status as FileStatus, fullpath, data.year, data.duration, data.codec, selectEparsFile, startSourceRatingEdit);
+      const label2 = row.querySelector('.file') as HTMLElement;
+      if (label2) {
+        label2.dataset.epardir = dirPath;
+        label2.onclick = (e: MouseEvent) => {
+          selectEparsFile(label2, filename, dirPath, { ctrl: e.ctrlKey, shift: e.shiftKey });
+        };
+      }
+      fileList.appendChild(row);
+    }
+  }
+
+  const statusLine = document.getElementById('epars-status-line');
+  if (statusLine) {
+    statusLine.innerHTML = `
+      <span class="s-traite">✓ ${countTraite.toLocaleString('fr')} traité</span>
+      <span class="s-reste">● ${countNouveau.toLocaleString('fr')} reste</span>
+      <span class="s-doublon">○ ${countDoublon.toLocaleString('fr')} doublon</span>
+    `;
+  }
+
+  requestAnimationFrame(() => { container.scrollTop = savedScrollTop; });
+}

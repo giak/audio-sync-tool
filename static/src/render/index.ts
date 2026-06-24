@@ -1,7 +1,5 @@
 // ─── Render assembler: re-exports for backward compatibility ──────────
-// Phase 2: Component Factories. When individual modules are created under
-// render/, this file will import from them. For now, re-export from the
-// monolithic render.ts at the same level.
+// Phase 2: Component Factories. All modules now under render/.
 
 export {
   renderAll,
@@ -12,10 +10,14 @@ export {
   renderPlaylistSource,
   renderPlaylistManager,
   toggleSourceDir,
+  renderDirTree,
+  togglePlaylistSourceDir,
   startRatingEdit,
   startSourceRatingEdit,
+  _ratingClickHandler,
   patchPlaylistSourceFile,
   patchEparsFileAfterCopy,
   patchSourceFileAfterCopy,
   getBatchCopy,
+  doDragCopy,
 } from '../render.js';
