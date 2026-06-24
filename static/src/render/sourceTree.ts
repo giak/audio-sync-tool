@@ -3,7 +3,7 @@
 import { focusItemByElement, setActivePanel } from '../focus.js';
 import { showContextMenu } from '../ui.js';
 import { getActivePlaylistName, getPendingTracks } from '../playlist.js';
-import { state } from '../state.js';
+import { state, type TreeNode } from '../state.js';
 import { dirHasMatchingDescendant, type FileStatus } from '../utils.js';
 import { makeFileEl } from './fileRow.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
@@ -20,11 +20,6 @@ interface FileEntry {
   duration: number | null;
   codec: string | null;
   baseDir: string;
-}
-
-interface TreeNode {
-  [key: string]: TreeNode | FileEntry[] | undefined;
-  __files__?: FileEntry[];
 }
 
 interface TreeAndDir {

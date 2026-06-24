@@ -40,7 +40,7 @@ interface SourceFileEntry {
   codec: string | null;
 }
 
-interface FileIndex {
+export interface FileIndex {
   [filename: string]: SourceFileEntry;
 }
 
@@ -60,8 +60,30 @@ interface SavedPlaylist {
   exportedDir?: string;
 }
 
+export interface SourceFiles {
+  [dir: string]: {
+    [filename: string]: { path: string };
+  };
+}
+
+export interface TreeNode {
+  [key: string]: TreeNode | unknown[] | undefined;
+  __files__?: unknown[];
+}
+
+export interface JournalEntry {
+  timestamp: string;
+  action: string;
+  details: string;
+  status: string;
+  filename?: string;
+  source?: string;
+  destination?: string;
+  [key: string]: unknown;
+}
+
 interface SourceNodeInfo {
-  node: Record<string, unknown>;
+  node: TreeNode;
   baseDir: string;
 }
 
@@ -72,7 +94,7 @@ type PlaylistFocusZone = 'source' | 'sidebar';
 interface AppState {
   sourceFiles: Record<string, FileIndex>;
   eparsFiles: Record<string, FileIndex>;
-  journal: Array<Record<string, unknown>>;
+  journal: JournalEntry[];
   activeModal: ActiveModal;
   activePanel: ActivePanel;
   eparsFocusPath: string | null;

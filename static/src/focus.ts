@@ -73,7 +73,7 @@ export function focusItemByElement(
     if (!prev || prev.panel !== entry.panel || prev.focusPath !== entry.focusPath) {
       // Truncate forward history when navigating from mid-stack
       state.navHistory = state.navHistory.slice(0, state.navIndex + 1);
-      state.navHistory.push(entry);
+      state.navHistory = [...state.navHistory, entry];
       state.navIndex = state.navHistory.length - 1;
       // Limit history to 200 entries
       if (state.navHistory.length > 200) {

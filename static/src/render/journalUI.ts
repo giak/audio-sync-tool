@@ -1,6 +1,6 @@
 // ─── Journal modal rendering ───────────────────────────────────────────────
 
-import { state } from '../state.js';
+import { state, type JournalEntry } from '../state.js';
 
 export function renderJournal(): void {
   const container = document.getElementById('journal-content');
@@ -11,7 +11,7 @@ export function renderJournal(): void {
   }
   container.innerHTML = [...state.journal]
     .reverse()
-    .map((e: Record<string, unknown>) => {
+    .map((e: JournalEntry) => {
       const ts = ((e.timestamp as string) || '').slice(0, 19).replace('T', ' ');
       if (e.status === 'copied') return `<div class="copied">[${ts}] 📋 ${e.filename} → ${e.destination}</div>`;
       if (e.status === 'scan') return `<div class="scanned">[${ts}] 🔍 ${e.action} — ${e.details}</div>`;

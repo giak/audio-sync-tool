@@ -156,6 +156,8 @@ header h1 {
 .file-row {
   display: flex; align-items: center;
   gap: 4px; padding: 2px 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 28px;
 }
 .file-row.focused { background: var(--bg-focus); outline: 1px solid var(--border-focus); }
 .file-row:active   { background: var(--bg-focus); opacity: 0.8; }

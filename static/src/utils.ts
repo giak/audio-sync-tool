@@ -1,16 +1,6 @@
 // Pure utility functions extracted from script.js for testability.
 
-interface JournalEntry {
-  status: string;
-  filename: string;
-  [key: string]: unknown;
-}
-
-interface SourceFiles {
-  [dir: string]: {
-    [filename: string]: { path: string };
-  };
-}
+import type { JournalEntry, SourceFiles } from './state.js';
 
 interface TreeNode {
   [key: string]: TreeNode | Array<unknown> | undefined;
@@ -43,7 +33,7 @@ export function formatDuration(sec: number | null | undefined): string {
 export function getJournalFiles(journal: JournalEntry[]): Set<string> {
   const set = new Set<string>();
   for (const entry of journal) {
-    if (entry.status === 'copied') set.add(entry.filename);
+    if (entry.status === 'copied' && entry.filename) set.add(entry.filename);
   }
   return set;
 }
@@ -72,7 +62,7 @@ export function computeStatus(filename: string, sourceFiles: SourceFiles, journa
 /**
  * Count total number of files across all epars directories.
  */
-export function countAllEparsFiles(eparsFiles: Record<string, Record<string, unknown>>): number {
+export function countAllEparsFiles(eparsFiles: Record<string, Record<string, { path: string }>>): number {
   let total = 0;
   for (const files of Object.values(eparsFiles)) {
     total += Object.keys(files).length;

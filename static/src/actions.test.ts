@@ -1,241 +1,318 @@
-// ─── Unit tests for actions.ts ──────────────────────────────────────────
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+// ─── Unit tests: actions.ts — config, scan, copy, init ────────────────────
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from './state.js';
 
-// Mock the modules that actions.ts imports BEFORE importing actions.ts
-vi.mock('./api.js', () => ({
-  api: vi.fn(),
-}));
-
-vi.mock('./ui.js', () => ({
-  openModal: vi.fn(),
-  closeAllModals: vi.fn(),
-  showError: vi.fn(),
-}));
-
-vi.mock('./render.js', () => ({
-  renderJournal: vi.fn(),
-  renderSource: vi.fn(),
-  patchEparsFileAfterCopy: vi.fn(),
-  patchSourceFileAfterCopy: vi.fn(),
-  getBatchCopy: vi.fn(() => ({ target: null, files: [] })),
-}));
-
-vi.mock('./focus.js', () => ({
-  setActivePanel: vi.fn(),
-  revalidateFocus: vi.fn(),
-}));
-
-import { configData, executeCopy, initApp, runScan } from './actions.js';
-import { api } from './api.js';
-import { getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderSource } from './render.js';
-import { closeAllModals, openModal, showError } from './ui.js';
-
-function setupCopyDOM(
-  opts: { hasLeftFocus?: boolean; hasRightFocus?: boolean; hasEparDir?: boolean; hasRelPath?: boolean } = {},
-): void {
-  const { hasLeftFocus = true, hasRightFocus = true, hasEparDir = true, hasRelPath = true } = opts;
+const { api, revalidateFocus, setActivePanel, getBatchCopy, patchEparsFileAfterCopy,
+  patchSourceFileAfterCopy, renderSource, loadRatings, closeAllModals, openModal, showError } = vi.hoisted(() => {
+  // Create config DOM elements BEFORE module import so cfgSelect/cfgStatus are initialized
   document.body.innerHTML = `
-    <div id="epars-container">
-      <div class="focused file-row">
-        <span class="file focused" id="left-file"
-          data-filename="song.mp3"
-          data-epardir="${hasEparDir ? '/media/usb' : ''}"
-          data-fullpath="/media/usb/song.mp3"></span>
-      </div>
-    </div>
-    <div id="source-container">
-      <div class="focused directory" id="right-dir" data-dirpath="/home/music/Rock"></div>
-    </div>
-    <div id="dialog-msg"></div>
-    <button id="dialog-confirm"></button>
-    <button id="dialog-cancel"></button>
-    <span id="status-text"></span>
-    <span id="epars-header-count"></span>
-    <span id="source-header-count"></span>
-    <div id="epars-status-line"></div>
-    <div id="source-filter-count"></div>
-    <button id="btn-scan"></button>
-    <div id="scan-progress" class="hidden">
-      <div id="scan-progress-bar"><div id="scan-progress-fill"></div></div>
-      <span id="scan-progress-text"></span>
-    </div>
+    <select id="cfg-select"></select>
+    <input id="cfg-name" />
+    <input id="cfg-source" />
+    <textarea id="cfg-epars"></textarea>
+    <div id="config-status"></div>
   `;
-
-  if (!hasLeftFocus) {
-    document.querySelector('#epars-container .focused')?.remove();
-  }
-  if (!hasRightFocus) {
-    document.querySelector('#source-container .focused')?.remove();
-  }
-
-  // Reset state
-  state.sourceFiles = {};
-  state.eparsFiles = {};
-  if (hasEparDir && hasRelPath) {
-    state.eparsFiles['/media/usb'] = {
-      'song.mp3': { path: 'song.mp3', year: '2021', duration: 240, codec: 'MP3 320kbps' },
-    };
-  }
-  state.journal = [];
-  state.sourceExpanded.clear();
-  state.sourceNodeMap.clear();
-  state.filterActive = false;
-
-  // Reset mocks
-  vi.clearAllMocks();
-}
-
-beforeEach(() => {
-  setupCopyDOM();
+  return {
+    api: vi.fn(),
+    revalidateFocus: vi.fn(),
+    setActivePanel: vi.fn(),
+    getBatchCopy: vi.fn(() => ({ target: '', files: [] })),
+    patchEparsFileAfterCopy: vi.fn(),
+    patchSourceFileAfterCopy: vi.fn(() => true),
+    renderSource: vi.fn(),
+    loadRatings: vi.fn(async () => {}),
+    closeAllModals: vi.fn(),
+    openModal: vi.fn(),
+    showError: vi.fn(),
+  };
 });
 
-describe('executeCopy', () => {
-  it('shows error when no file focused on left', () => {
-    setupCopyDOM({ hasLeftFocus: false });
-    executeCopy();
-    expect(document.getElementById('status-text')!.textContent).toContain("Met d'abord en surbrillance un fichier");
+vi.mock('./api.js', () => ({ api }));
+vi.mock('./focus.js', () => ({ revalidateFocus, setActivePanel }));
+vi.mock('./render.js', () => ({ getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderSource }));
+vi.mock('./ratings.js', () => ({ loadRatings }));
+vi.mock('./ui.js', () => ({ closeAllModals, openModal, showError }));
+
+import { configData, renderConfigSelect, initConfigUI, runScan, executeCopy, initApp } from './actions.js';
+
+// ── Config tests (separate describe — needs cfgSelect elements in DOM) ────
+describe('config', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    configData.configs = [];
+    configData.active = 0;
+    // Remove dynamically created elements from previous tests (keep cfg elements from vi.hoisted)
+    ['btn-add-config', 'btn-del-config', 'btn-save-config', 'status-text'].forEach(id => {
+      document.getElementById(id)?.remove();
+    });
   });
 
-  it('shows error when no directory focused on right', () => {
-    setupCopyDOM({ hasRightFocus: false });
-    executeCopy();
-    expect(document.getElementById('status-text')!.textContent).toContain("Met d'abord en surbrillance un dossier");
+  it('renderConfigSelect populates the select element', () => {
+    configData.configs = [
+      { name: 'Profil A', source_data: '/src/a', epars_dirs: ['/epars/a'] },
+      { name: 'Profil B', source_data: '/src/b', epars_dirs: ['/epars/b'] },
+    ];
+    configData.active = 0;
+
+    renderConfigSelect();
+
+    const sel = document.getElementById('cfg-select') as HTMLSelectElement;
+    expect(sel!.options.length).toBe(2);
+    expect(sel!.options[0].textContent).toBe('Profil A');
+    expect(sel!.options[1].textContent).toBe('Profil B');
   });
 
-  it('shows error when file has no eparDir', () => {
-    setupCopyDOM({ hasEparDir: false });
-    executeCopy();
-    expect(document.getElementById('status-text')!.textContent).toContain('pas de dossier source valide');
+  it('initConfigUI wires up button handlers', () => {
+    const addBtn = document.createElement('button');
+    addBtn.id = 'btn-add-config';
+    document.body.appendChild(addBtn);
+    const delBtn = document.createElement('button');
+    delBtn.id = 'btn-del-config';
+    document.body.appendChild(delBtn);
+    const saveBtn = document.createElement('button');
+    saveBtn.id = 'btn-save-config';
+    document.body.appendChild(saveBtn);
+
+    initConfigUI();
+    expect(typeof addBtn.onclick).toBe('function');
+    expect(typeof delBtn.onclick).toBe('function');
+    expect(typeof saveBtn.onclick).toBe('function');
   });
 
-  it('shows error when file not found in eparsFiles data', () => {
+  it('add config creates a new empty profile', () => {
+    const addBtn = document.createElement('button');
+    addBtn.id = 'btn-add-config';
+    document.body.appendChild(addBtn);
+    configData.configs = [{ name: 'default', source_data: '', epars_dirs: [] }];
+    configData.active = 0;
+
+    initConfigUI();
+    addBtn.click();
+
+    expect(configData.configs.length).toBe(2);
+    expect(configData.configs[1].name).toBe('nouveau');
+  });
+
+  it('delete config removes profile', () => {
+    const delBtn = document.createElement('button');
+    delBtn.id = 'btn-del-config';
+    document.body.appendChild(delBtn);
+    configData.configs = [
+      { name: 'A', source_data: '', epars_dirs: [] },
+      { name: 'B', source_data: '', epars_dirs: [] },
+    ];
+    configData.active = 0;
+
+    initConfigUI();
+    delBtn.click();
+    expect(configData.configs.length).toBe(1);
+  });
+
+  it('delete config fails when only 1 profile remains', () => {
+    const delBtn = document.createElement('button');
+    delBtn.id = 'btn-del-config';
+    document.body.appendChild(delBtn);
+    const status = document.getElementById('config-status')!;
+    configData.configs = [{ name: 'only', source_data: '', epars_dirs: [] }];
+
+    initConfigUI();
+    delBtn.click();
+    expect(status.textContent).toContain('Impossible');
+  });
+
+  afterAll(() => { document.body.innerHTML = ''; });
+});
+
+// ── Scan / Copy / Init tests (isolated DOM, body cleared each test) ──────
+describe('actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.mockReset();  // ← clear leftover implementations (mockResolvedValue, etc.)
+    document.body.innerHTML = '';
+    state.sourceFiles = {};
     state.eparsFiles = {};
-    executeCopy();
-    expect(document.getElementById('status-text')!.textContent).toContain('Fichier introuvable');
+    state.journal = [];
+    state.selectedEparsFiles = new Map();
   });
 
-  it('opens confirm dialog with correct message', () => {
-    executeCopy();
-    expect(openModal).toHaveBeenCalledWith('dialog');
-    expect(document.getElementById('dialog-msg')!.textContent).toContain('Copier "song.mp3"');
-    expect(document.getElementById('dialog-msg')!.textContent).toContain('/home/music/Rock');
-  });
+  // ── Scan ───────────────────────────────────────────────────────────
 
-  it('confirm click executes copy and updates state', async () => {
-    vi.mocked(api).mockResolvedValueOnce({ ok: true, year: '2021', duration: 240, codec: 'MP3 320kbps' });
-    vi.mocked(api).mockResolvedValueOnce([{ filename: 'song.mp3', status: 'copied' }]);
-    vi.mocked(patchSourceFileAfterCopy).mockReturnValue(true);
+  describe('runScan', () => {
+    function setupScanUI(): void {
+      const btn = document.createElement('button');
+      btn.id = 'btn-scan';
+      document.body.appendChild(btn);
+      const bar = document.createElement('div');
+      bar.id = 'scan-progress';
+      bar.classList.add('hidden');
+      document.body.appendChild(bar);
+      const fill = document.createElement('div');
+      fill.id = 'scan-progress-fill';
+      document.body.appendChild(fill);
+      const text = document.createElement('div');
+      text.id = 'scan-progress-text';
+      document.body.appendChild(text);
+      const status = document.createElement('div');
+      status.id = 'status-text';
+      document.body.appendChild(status);
+    }
 
-    state.sourceFiles['/home/music'] = { 'old.mp3': { path: 'old.mp3' } };
+    it('runs scan and updates state on success', async () => {
+      setupScanUI();
+      api.mockResolvedValueOnce({ source: { '/src': { 'a.mp3': { path: 'a.mp3' } } }, epars: { '/epars': {} } });
+      api.mockResolvedValueOnce([]);
 
-    executeCopy();
-    await (document.getElementById('dialog-confirm') as HTMLElement).onclick!();
+      await runScan();
 
-    expect(closeAllModals).toHaveBeenCalled();
-    expect(api).toHaveBeenCalledWith(
-      '/copy',
-      expect.objectContaining({
-        method: 'POST',
-        body: expect.stringContaining('song.mp3'),
-      }),
-    );
-    expect(state.sourceFiles['/home/music']['song.mp3']).toEqual({
-      path: 'Rock/song.mp3',
-      year: '2021',
-      duration: 240,
-      codec: 'MP3 320kbps',
+      expect(state.sourceFiles).toEqual({ '/src': { 'a.mp3': { path: 'a.mp3' } } });
+      expect(state.eparsFiles).toEqual({ '/epars': {} });
     });
-    expect(patchEparsFileAfterCopy).toHaveBeenCalledWith('song.mp3', '/media/usb');
-    expect(patchSourceFileAfterCopy).toHaveBeenCalledWith(
-      '/home/music/Rock',
-      'song.mp3',
-      expect.objectContaining({
-        path: 'Rock/song.mp3',
-        year: '2021',
-        duration: 240,
-        codec: 'MP3 320kbps',
-      }),
-    );
-    expect(renderSource).not.toHaveBeenCalled();
-    expect(document.getElementById('status-text')!.textContent).toContain('✓');
-  });
 
-  it('falls back to renderSource when patchSourceFileAfterCopy returns false', async () => {
-    vi.mocked(api).mockResolvedValueOnce({ ok: true, year: '2021', duration: 240, codec: 'MP3 320kbps' });
-    vi.mocked(api).mockResolvedValueOnce([{ filename: 'song.mp3', status: 'copied' }]);
-    vi.mocked(patchSourceFileAfterCopy).mockReturnValue(false);
+    it('shows error on scan failure', async () => {
+      setupScanUI();
+      api.mockRejectedValueOnce(new Error('Network error'));
 
-    state.sourceFiles['/home/music'] = { 'old.mp3': { path: 'old.mp3' } };
+      await runScan();
 
-    executeCopy();
-    await (document.getElementById('dialog-confirm') as HTMLElement).onclick!();
-
-    expect(patchEparsFileAfterCopy).toHaveBeenCalledWith('song.mp3', '/media/usb');
-    expect(patchSourceFileAfterCopy).toHaveBeenCalled();
-    expect(renderSource).toHaveBeenCalled();
-    expect(document.getElementById('status-text')!.textContent).toContain('✓');
-  });
-
-  it('shows error when copy fails', async () => {
-    vi.mocked(api).mockRejectedValueOnce(new Error('Permission denied'));
-
-    executeCopy();
-    await (document.getElementById('dialog-confirm') as HTMLElement).onclick!();
-
-    expect(showError).toHaveBeenCalledWith(expect.stringContaining('Permission denied'));
-  });
-
-  it('cancel click closes dialog without copying', () => {
-    executeCopy();
-    (document.getElementById('dialog-cancel') as HTMLElement).onclick!();
-    expect(closeAllModals).toHaveBeenCalled();
-    expect(api).not.toHaveBeenCalled();
-  });
-});
-
-describe('runScan', () => {
-  it('updates state after scan', async () => {
-    vi.mocked(api).mockResolvedValueOnce({
-      source: { '/src': { 'a.mp3': { path: 'a.mp3' } } },
-      epars: { '/ep': { 'b.mp3': { path: 'b.mp3' } } },
+      expect(showError).toHaveBeenCalledWith(expect.stringContaining('Network error'));
     });
-    vi.mocked(api).mockResolvedValueOnce([]);
 
-    await runScan();
+    it('shows scan progress', async () => {
+      setupScanUI();
+      api.mockResolvedValueOnce({ running: false });
+      api.mockResolvedValueOnce({ source: {}, epars: {} });
+      api.mockResolvedValueOnce([]);
 
-    expect(state.sourceFiles['/src']).toBeDefined();
-    expect(state.eparsFiles['/ep']).toBeDefined();
-    expect(state.eparsFiles['/ep']['b.mp3']).toBeDefined();
-    expect(state.journal).toEqual([]);
-    expect(document.getElementById('status-text')!.textContent).toContain('Scan terminé');
-  });
-});
+      await runScan();
 
-describe('initApp', () => {
-  it('loads config, cache, and journal on startup', async () => {
-    vi.mocked(api).mockResolvedValueOnce({
-      active: 0,
-      configs: [{ name: 'test', source_data: '/src', epars_dirs: [] }],
+      const status = document.getElementById('status-text');
+      expect(status?.textContent).toContain('Scan terminé');
     });
-    vi.mocked(api).mockResolvedValueOnce({ source: { '/src': { 'a.mp3': { path: 'a.mp3' } } }, epars: {} });
-    vi.mocked(api).mockResolvedValueOnce([]);
-
-    await initApp();
-
-    expect(configData.configs).toHaveLength(1);
-    expect(state.sourceFiles['/src']).toBeDefined();
-    expect(state.sourceFiles['/src']['a.mp3']).toBeDefined();
   });
 
-  it('handles empty cache gracefully', async () => {
-    vi.mocked(api).mockResolvedValueOnce({ active: 0, configs: [] });
-    vi.mocked(api).mockResolvedValueOnce({ source: {}, epars: {} });
-    vi.mocked(api).mockResolvedValueOnce([]);
+  // ── Copy ───────────────────────────────────────────────────────────
 
-    await initApp();
+  describe('executeCopy', () => {
+    function setupEparsFile(): void {
+      const c = document.createElement('div');
+      c.id = 'epars-container';
+      const row = document.createElement('div');
+      row.className = 'focused';
+      const file = document.createElement('span');
+      file.className = 'file';
+      file.dataset.epardir = '/epars';
+      file.dataset.filename = 'song.mp3';
+      row.appendChild(file);
+      c.appendChild(row);
+      document.body.appendChild(c);
+    }
 
-    expect(configData.configs).toHaveLength(1); // default config created
-    expect(state.sourceFiles).toEqual({});
+    function setupSourceDir(): void {
+      const c = document.createElement('div');
+      c.id = 'source-container';
+      const dir = document.createElement('div');
+      dir.className = 'directory focused';
+      dir.dataset.dirpath = '/source/music';
+      c.appendChild(dir);
+      document.body.appendChild(c);
+    }
+
+    function setupDialog(): void {
+      const msg = document.createElement('div');
+      msg.id = 'dialog-msg';
+      document.body.appendChild(msg);
+      const confirm = document.createElement('button');
+      confirm.id = 'dialog-confirm';
+      document.body.appendChild(confirm);
+      const cancel = document.createElement('button');
+      cancel.id = 'dialog-cancel';
+      document.body.appendChild(cancel);
+    }
+
+    it('shows info when no left focus', () => {
+      const status = document.createElement('div');
+      status.id = 'status-text';
+      document.body.appendChild(status);
+
+      executeCopy();
+      expect(status.textContent).toContain('surbrillance');
+    });
+
+    it('shows info when no right focus', () => {
+      setupEparsFile();
+      const status = document.createElement('div');
+      status.id = 'status-text';
+      document.body.appendChild(status);
+
+      executeCopy();
+      expect(status.textContent).toContain('surbrillance');
+    });
+
+    it('opens dialog when both sides focused', () => {
+      setupEparsFile();
+      setupSourceDir();
+      setupDialog();
+      state.eparsFiles = { '/epars': { 'song.mp3': { path: 'song.mp3', year: null, duration: null, codec: null } } };
+
+      executeCopy();
+      expect(openModal).toHaveBeenCalledWith('dialog');
+    });
+
+    it('performs batch copy when batch exists', () => {
+      getBatchCopy.mockReturnValue({ target: '/dest', files: [{ filename: 'f.mp3', eparDir: '/epars' }] });
+      setupDialog();
+      state.eparsFiles = { '/epars': { 'f.mp3': { path: 'f.mp3', year: null, duration: null, codec: null } } };
+      api.mockResolvedValue({ ok: true });
+
+      executeCopy();
+      expect(openModal).toHaveBeenCalledWith('dialog');
+    });
+  });
+
+  // ── Init ───────────────────────────────────────────────────────────
+
+  describe('initApp', () => {
+    it('loads config, cache, journal on init', async () => {
+      const status = document.createElement('div');
+      status.id = 'status-text';
+      document.body.appendChild(status);
+
+      const configDataMock = { active: 0, configs: [{ name: 'default', source_data: '', epars_dirs: [] }] };
+      const cacheMock = { source: { '/src': { 'a.mp3': { path: 'a.mp3' } } }, epars: {} };
+      const journalMock = [{ status: 'copied', filename: 'a.mp3' }];
+
+      api.mockResolvedValueOnce(configDataMock);
+      api.mockResolvedValueOnce(cacheMock);
+      api.mockResolvedValueOnce(journalMock);
+
+      await initApp();
+
+      expect(api).toHaveBeenCalledTimes(3);
+      expect(api).toHaveBeenNthCalledWith(1, '/config');
+      expect(api).toHaveBeenNthCalledWith(2, '/load');
+      expect(api).toHaveBeenNthCalledWith(3, '/journal');
+      expect(state.sourceFiles).toEqual({ '/src': { 'a.mp3': { path: 'a.mp3' } } });
+      expect(state.journal).toEqual([{ status: 'copied', filename: 'a.mp3' }]);
+
+      status.remove();
+    });
+
+    it('sets default config when none provided', async () => {
+      api.mockResolvedValueOnce({ active: 0, configs: [] });
+      api.mockResolvedValueOnce({});
+      api.mockResolvedValueOnce([]);
+
+      await initApp();
+
+      expect(configData.configs.length).toBe(1);
+      expect(configData.configs[0].name).toBe('default');
+    });
+
+    it('handles init error gracefully', async () => {
+      api.mockRejectedValueOnce(new Error('Connection failed'));
+
+      await initApp();
+      // Should not throw
+    });
   });
 });

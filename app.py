@@ -1,6 +1,8 @@
 import os
 import json
 import shutil
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, send_file, abort
 
@@ -151,30 +153,53 @@ def ping():
     return jsonify({'ok': True, 'timestamp': datetime.now().isoformat()})
 
 
+def _scan_file(full_path, rel_path):
+    """Worker function — called in child process (must be top-level for pickle)."""
+    filename = os.path.basename(full_path)
+    year, duration, codec = get_audio_meta(full_path)
+    return (filename, {'path': rel_path, 'year': year, 'duration': duration, 'codec': codec})
+
+
 def index_files(directory, phase_label='source'):
     index = {}
     if not os.path.isdir(directory):
         return index
-    # Count total files first for progress
-    total = 0
+
+    # Collect file list
+    tasks = []
     for root, dirs, files in os.walk(directory):
         for f in files:
             if f.lower().endswith(MUSIC_EXTENSIONS):
-                total += 1
-    update_scan_progress(phase_label, '🔍 Indexation…', 0, total)
-    current = 0
-    for root, dirs, files in os.walk(directory):
-        for f in files:
-            if f.lower().endswith(MUSIC_EXTENSIONS):
-                current += 1
+                full_path = os.path.join(root, f)
                 rel = os.path.relpath(root, directory)
                 rel_path = os.path.join(rel, f) if rel != '.' else f
-                full_path = os.path.join(root, f)
-                # Update progress every 10 files (perf: avoid string ops on every file)
-                if current % 10 == 0 or current == total:
-                    update_scan_progress(phase_label, f, current, total)
-                year, duration, codec = get_audio_meta(full_path)
-                index[f] = {'path': rel_path, 'year': year, 'duration': duration, 'codec': codec}
+                tasks.append((full_path, rel_path))
+
+    total = len(tasks)
+    update_scan_progress(phase_label, '🔍 Indexation…', 0, total)
+
+    # Sequential fallback for small libraries — process pool overhead not worth it
+    if total < 100:
+        current = 0
+        for full_path, rel_path in tasks:
+            current += 1
+            filename, entry = _scan_file(full_path, rel_path)
+            index[filename] = entry
+            if current % 10 == 0 or current == total:
+                update_scan_progress(phase_label, filename, current, total)
+        return index
+
+    # Parallel scan via ProcessPoolExecutor
+    workers = max(1, multiprocessing.cpu_count() - 1)
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(_scan_file, full_path, rel_path) for full_path, rel_path in tasks]
+        current = 0
+        for future in as_completed(futures):
+            filename, entry = future.result()
+            index[filename] = entry
+            current += 1
+            if current % 10 == 0 or current == total:
+                update_scan_progress(phase_label, filename, current, total)
     return index
 
 
@@ -281,6 +306,51 @@ def copy_file():
     return _resp(True, _src=dst)
 
 
+@app.route('/delete', methods=['POST'])
+def delete_file():
+    """Delete a file from the source data directory + clean cache + log."""
+    data = request.json
+    if data is None:
+        return jsonify({'ok': False, 'error': 'Request body must be JSON'}), 400
+
+    path = data.get('path', '')
+    if not path:
+        return jsonify({'ok': False, 'error': 'Missing required key: path'}), 400
+
+    if not os.path.exists(path):
+        return jsonify({'ok': False, 'error': 'File not found'}), 404
+
+    if not is_path_allowed(path):
+        return jsonify({'ok': False, 'error': 'Path not within allowed directories'}), 403
+
+    filename = os.path.basename(path)
+    parent_dir = os.path.dirname(path)
+
+    try:
+        os.remove(path)
+    except OSError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+    log_journal({
+        'timestamp': datetime.now().isoformat(),
+        'action': 'Fichier supprimé',
+        'details': f'{path}',
+        'filename': filename,
+        'status': 'deleted'
+    })
+
+    # Remove from cache
+    cache = load_json(CACHE_PATH)
+    if cache:
+        for source_dir in list(cache.get('source', {}).keys()):
+            if parent_dir == source_dir or parent_dir.startswith(source_dir.rstrip('/') + '/'):
+                cache['source'][source_dir].pop(filename, None)
+                save_json(CACHE_PATH, cache)
+                break
+
+    return jsonify({'ok': True, 'filename': filename})
+
+
 @app.route('/journal')
 def journal():
     return jsonify(load_json(JOURNAL_PATH, []))
@@ -296,10 +366,43 @@ AUDIO_EXT_MAP = {
 }
 
 
+# ── Path traversal protection ─────────────────────────────────────────────
+
+def get_allowed_dirs():
+    """Return set of realpaths for all directories the user is allowed to read."""
+    active = get_active_config()
+    candidates = []
+    source = active.get('source_data', '')
+    if source:
+        candidates.append(source)
+    candidates.extend(active.get('epars_dirs', []))
+    allowed = set()
+    for d in candidates:
+        try:
+            allowed.add(os.path.realpath(d))
+        except OSError:
+            pass
+    return allowed
+
+
+def is_path_allowed(path):
+    """Check path is within allowed directories — prevents path traversal (CWE-22)."""
+    if not path:
+        return False
+    try:
+        real = os.path.realpath(path)
+    except OSError:
+        return False
+    for base in get_allowed_dirs():
+        if real == base or real.startswith(base + os.sep):
+            return True
+    return False
+
+
 @app.route('/audio')
 def serve_audio():
     path = request.args.get('path', '')
-    if not path or not os.path.exists(path):
+    if not path or not os.path.exists(path) or not is_path_allowed(path):
         abort(404)
     ext = os.path.splitext(path)[1].lower()
     mimetype = AUDIO_EXT_MAP.get(ext, 'application/octet-stream')

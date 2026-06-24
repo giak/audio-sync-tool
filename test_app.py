@@ -3,7 +3,7 @@ import os
 import struct
 import tempfile
 import pytest
-from app import app, get_audio_meta, log_journal, save_json, load_json, index_files, get_active_config
+from app import app, get_audio_meta, log_journal, save_json, load_json, index_files, get_active_config, is_path_allowed
 
 
 @pytest.fixture(autouse=True)
@@ -264,10 +264,47 @@ def test_index_files_no_music():
         assert idx == {}
 
 
-def test_index_files_nonexistent_directory():
-    """Returns empty dict for a non-existent directory."""
-    idx = index_files('/path/that/does/not/exist')
-    assert idx == {}
+def test_index_files_parallel_parity():
+    """Parallel scan (100+ files) produces correct results."""
+    with tempfile.TemporaryDirectory() as tmp:
+        # Create 110 dummy .mp3 files — triggers ProcessPoolExecutor path
+        for i in range(110):
+            open(os.path.join(tmp, f'track_{i:03d}.mp3'), 'w').close()
+        # Also add a non-music file — should be ignored
+        open(os.path.join(tmp, 'notes.txt'), 'w').close()
+
+        idx = index_files(tmp)
+        assert len(idx) == 110
+        for i in range(110):
+            fname = f'track_{i:03d}.mp3'
+            assert fname in idx
+            assert idx[fname]['path'] == fname
+            assert 'year' in idx[fname]
+            assert 'duration' in idx[fname]
+            assert 'codec' in idx[fname]
+            assert idx[fname]['codec'] == 'MP3'  # from extension
+        assert 'notes.txt' not in idx
+
+
+def test_index_files_parallel_with_subdirs():
+    """Parallel scan handles subdirectories and deduplication correctly."""
+    with tempfile.TemporaryDirectory() as tmp:
+        sub = os.path.join(tmp, 'sub')
+        nested = os.path.join(sub, 'nested')
+        os.makedirs(nested)
+        # 120 files total across directories — triggers parallel path
+        for i in range(40):
+            open(os.path.join(tmp, f'root_{i:03d}.mp3'), 'w').close()
+        for i in range(40):
+            open(os.path.join(sub, f'sub_{i:03d}.mp3'), 'w').close()
+        for i in range(40):
+            open(os.path.join(nested, f'deep_{i:03d}.mp3'), 'w').close()
+
+        idx = index_files(tmp)
+        assert len(idx) == 120
+        assert idx['root_000.mp3']['path'] == 'root_000.mp3'
+        assert idx['sub_000.mp3']['path'] == 'sub/sub_000.mp3'
+        assert idx['deep_000.mp3']['path'] == 'sub/nested/deep_000.mp3'
 
 
 # --- /config error case ---
@@ -353,6 +390,9 @@ def test_serve_audio_valid(client):
         open(mp3, 'w').close()
         open(flac, 'w').close()
 
+        # Register tmp as allowed dir (is_path_allowed requires config)
+        client.post('/config', json=make_cfg(source_data=tmp))
+
         rv = client.get('/audio?path=' + mp3)
         assert rv.status_code == 200
         assert rv.mimetype == 'audio/mpeg'
@@ -372,6 +412,16 @@ def test_serve_audio_nonexistent_file(client):
     """Non-existent file returns 404."""
     rv = client.get('/audio?path=/nonexistent/file.mp3')
     assert rv.status_code == 404
+
+
+def test_serve_audio_path_traversal_blocked(client):
+    """Path traversal via .. is blocked with 404."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        # ../ escape normalizes outside allowed dir → 404
+        traversal = os.path.join(tmp, '..', '..', 'etc', 'passwd')
+        rv = client.get('/audio?path=' + traversal)
+        assert rv.status_code == 404
 
 
 # --- get_audio_meta edge cases ---
@@ -566,6 +616,161 @@ def test_copy_updates_cache(client):
         assert dst_dir in cache['source']
         assert 'song.mp3' in cache['source'][dst_dir]
 
+
+
+def test_is_path_allowed_valid_path(client):
+    """Path inside source_data returns True."""
+    with tempfile.TemporaryDirectory() as tmp:
+        mp3 = os.path.join(tmp, 'song.mp3')
+        open(mp3, 'w').close()
+        client.post('/config', json=make_cfg(source_data=tmp))
+        assert is_path_allowed(mp3) is True
+
+
+def test_is_path_allowed_parent_blocked(client):
+    """Path outside allowed dirs returns False."""
+    with tempfile.TemporaryDirectory() as tmp:
+        allowed = os.path.join(tmp, 'allowed')
+        blocked = os.path.join(tmp, 'blocked')
+        os.makedirs(allowed)
+        os.makedirs(blocked)
+        mp3 = os.path.join(blocked, 'song.mp3')
+        open(mp3, 'w').close()
+        client.post('/config', json=make_cfg(source_data=allowed))
+        assert is_path_allowed(mp3) is False
+
+
+def test_is_path_allowed_symlink_outside(client):
+    """Symlink pointing outside allowed tree returns False."""
+    with tempfile.TemporaryDirectory() as tmp:
+        allowed = os.path.join(tmp, 'allowed')
+        os.makedirs(allowed)
+        # Symlink inside allowed dir pointing to /etc/passwd
+        symlink = os.path.join(allowed, 'escape')
+        os.symlink('/etc/passwd', symlink)
+        client.post('/config', json=make_cfg(source_data=allowed))
+        assert is_path_allowed(symlink) is False
+
+
+def test_is_path_allowed_symlink_inside(client):
+    """Symlink pointing inside allowed tree returns True."""
+    with tempfile.TemporaryDirectory() as tmp:
+        allowed = os.path.join(tmp, 'allowed')
+        sub = os.path.join(allowed, 'sub')
+        os.makedirs(sub)
+        mp3 = os.path.join(sub, 'song.mp3')
+        open(mp3, 'w').close()
+        # Symlink at allowed root pointing into sub/
+        symlink = os.path.join(allowed, 'link-to-song')
+        os.symlink(mp3, symlink)
+        client.post('/config', json=make_cfg(source_data=allowed))
+        assert is_path_allowed(symlink) is True
+
+
+def test_is_path_allowed_symlink_inside_relative(client):
+    """Symlink with relative target inside allowed tree returns True."""
+    with tempfile.TemporaryDirectory() as tmp:
+        allowed = os.path.join(tmp, 'allowed')
+        notes = os.path.join(allowed, 'notes')
+        os.makedirs(notes)
+        mp3 = os.path.join(notes, 'song.mp3')
+        open(mp3, 'w').close()
+        # Symlink at allowed root with relative target
+        symlink = os.path.join(allowed, 'link')
+        os.symlink('notes/song.mp3', symlink)
+        client.post('/config', json=make_cfg(source_data=allowed))
+        assert is_path_allowed(symlink) is True
+
+
+def test_is_path_allowed_empty_path(client):
+    """Empty path returns False."""
+    assert is_path_allowed('') is False
+
+
+def test_is_path_allowed_nonexistent_path(client):
+    """Non-existent path returns False."""
+    assert is_path_allowed('/tmp/definitely_does_not_exist_12345/song.mp3') is False
+
+
+def test_is_path_allowed_epars_dir(client):
+    """Path in an epars_dir is also allowed."""
+    with tempfile.TemporaryDirectory() as tmp:
+        ep = os.path.join(tmp, 'epars')
+        os.makedirs(ep)
+        mp3 = os.path.join(ep, 'lost.mp3')
+        open(mp3, 'w').close()
+        client.post('/config', json=make_cfg(epars_dirs=[ep]))
+        assert is_path_allowed(mp3) is True
+
+
+def test_is_path_allowed_traversal_attempt(client):
+    """Path traversal via .. is blocked (realpath normalizes it)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        allowed = os.path.join(tmp, 'allowed')
+        os.makedirs(allowed)
+        client.post('/config', json=make_cfg(source_data=allowed))
+        # Try to escape via .. 
+        traversal = os.path.join(allowed, '..', 'outside.mp3')
+        assert is_path_allowed(traversal) is False
+
+
+def test_delete_success(client):
+    """POST /delete removes a file from source data + cache + journal."""
+    with tempfile.TemporaryDirectory() as tmp:
+        mp3 = os.path.join(tmp, 'song.mp3')
+        open(mp3, 'w').close()
+        client.post('/config', json=make_cfg(source_data=tmp))
+        # Populate cache via scan
+        client.get('/scan')
+        assert os.path.exists(mp3)
+
+        rv = client.post('/delete', json={'path': mp3})
+        assert rv.status_code == 200
+        assert rv.json['ok'] is True
+        assert rv.json['filename'] == 'song.mp3'
+        assert not os.path.exists(mp3)
+
+        # Check cache was cleaned
+        rv = client.get('/load')
+        cache = rv.json
+        assert 'song.mp3' not in cache['source'][tmp]
+
+        # Check journal
+        rv = client.get('/journal')
+        assert any(e['status'] == 'deleted' for e in rv.json)
+
+
+def test_delete_nonexistent(client):
+    """POST /delete on non-existent file returns 404."""
+    rv = client.post('/delete', json={'path': '/tmp/does_not_exist.mp3'})
+    assert rv.status_code == 404
+
+
+def test_delete_outside_allowed(client):
+    """POST /delete on file outside allowed dirs returns 403."""
+    with tempfile.TemporaryDirectory() as tmp:
+        allowed = os.path.join(tmp, 'allowed')
+        outside = os.path.join(tmp, 'outside')
+        os.makedirs(allowed)
+        os.makedirs(outside)
+        mp3 = os.path.join(outside, 'blocked.mp3')
+        open(mp3, 'w').close()
+        client.post('/config', json=make_cfg(source_data=allowed))
+        rv = client.post('/delete', json={'path': mp3})
+        assert rv.status_code == 403
+        assert os.path.exists(mp3)  # file untouched
+
+
+def test_delete_missing_path_key(client):
+    """POST /delete with missing path returns 400."""
+    rv = client.post('/delete', json={})
+    assert rv.status_code == 400
+
+
+def test_delete_no_json_body(client):
+    """POST /delete with no body returns 400."""
+    rv = client.post('/delete', data='null', content_type='application/json')
+    assert rv.status_code == 400
 
 
 # ── Playlist tests ─────────────────────────────────────────────────────────

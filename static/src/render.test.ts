@@ -1471,8 +1471,8 @@ describe('setupRenderSubscriptions', () => {
     expect(on).toHaveBeenCalledWith('sourceFiles:changed', expect.any(Function));
   });
 
-  it('calls on() exactly 5 times (2 Phase 3 + 3 Phase 4)', () => {
+  it('calls on() exactly 7 times (5 original + journal + activePanel)', () => {
     setupRenderSubscriptions();
-    expect(on).toHaveBeenCalledTimes(5);
+    expect(on).toHaveBeenCalledTimes(7);
   });
 });

@@ -2,9 +2,10 @@
 
 import { api } from './api.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
-import { getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderAll, renderSource } from './render.js';
+import { getBatchCopy, renderSource } from './render.js';
+import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
 import { loadRatings } from './ratings.js';
-import { state } from './state.js';
+import { state, type FileIndex } from './state.js';
 import { closeAllModals, openModal, showError } from './ui.js';
 
 // ── Config types ───────────────────────────────────────────────────────────
@@ -127,13 +128,13 @@ export async function runScan(): Promise<void> {
 
   let scanFailed = false;
   try {
-    const data = await api<{ source: Record<string, unknown>; epars: Record<string, unknown> }>('/scan');
+    const data = await api<{ source: Record<string, FileIndex>; epars: Record<string, FileIndex> }>('/scan');
     state.sourceFiles = (data.source || {}) as typeof state.sourceFiles;
     state.eparsFiles = (data.epars || {}) as typeof state.eparsFiles;
-    state.journal = await api<Array<Record<string, unknown>>>('/journal');
-    // Phase 3 sync render: EventEmitter will also auto-render, but we keep this
-    // synchronous call for immediate DOM population in tests and init.
-    renderAll();
+    state.journal = await api<typeof state.journal>('/journal');
+    // EventEmitter auto-renders panels via subscriptions
+    // Double-RAF restores focus after EventEmitter's deferred render
+    requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
   } catch (err) {
     scanFailed = true;
     showError(`Scan échoué : ${err instanceof Error ? err.message : String(err)}`);
@@ -192,11 +193,11 @@ export function executeCopy(): void {
               state.sourceFiles[sourceDir][f.filename] = { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null };
             }
             patchEparsFileAfterCopy(f.filename, f.eparDir);
-            if (!patchSourceFileAfterCopy(destDir, f.filename, { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null })) {
-              renderSource();
-            }
+            patchSourceFileAfterCopy(destDir, f.filename, { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null });
           } catch (_) { /* continue */ }
         }
+        // Trigger EventEmitter for nested sourceFiles mutations
+        state.sourceFiles = { ...state.sourceFiles };
         state.journal = await api('/journal');
         state.selectedEparsFiles = new Map();
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
@@ -258,9 +259,9 @@ export function executeCopy(): void {
           state.sourceFiles[sourceDir][filename] = { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null };
         }
         patchEparsFileAfterCopy(filename, eparDir);
-        if (!patchSourceFileAfterCopy(destDir, filename, { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null })) {
-          renderSource();
-        }
+        patchSourceFileAfterCopy(destDir, filename, { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null });
+        // Trigger EventEmitter for nested sourceFiles mutations
+        state.sourceFiles = { ...state.sourceFiles };
         state.selectedEparsFiles = new Map();
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
         if (statusText) statusText.textContent = `✓ ${filename} copié vers ${destDir}`;
@@ -277,8 +278,8 @@ export async function initApp(): Promise<void> {
   try {
     const [config, cache, journal] = await Promise.all([
       api<ConfigData>('/config'),
-      api<{ source?: Record<string, unknown>; epars?: Record<string, unknown> }>('/load'),
-      api<Array<Record<string, unknown>>>('/journal'),
+      api<{ source?: Record<string, FileIndex>; epars?: Record<string, FileIndex> }>('/load'),
+      api<typeof state.journal>('/journal'),
     ]);
 
     configData = config;
@@ -295,9 +296,9 @@ export async function initApp(): Promise<void> {
 
     loadRatings().catch(() => {/* ratings are optional */});
 
-    // Phase 3 sync render: EventEmitter also fires, but synchronous renderAll
-    // ensures DOM is ready before setActivePanel + status text.
-    renderAll();
+    // EventEmitter auto-renders panels via subscriptions
+    // Focus restoration after EventEmitter's deferred render
+    requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
     setActivePanel('epars');
     const statusText = document.getElementById('status-text');
     if (statusText) statusText.textContent = 'Prêt. Configure les dossiers puis lance Scan.';

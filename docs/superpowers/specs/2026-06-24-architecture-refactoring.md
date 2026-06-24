@@ -31,25 +31,30 @@ plus cosmétique, avec zéro régression fonctionnelle à chaque étape.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                        script.ts (orchestrateur, ~60 lignes)      │
+│                        script.ts (orchestrateur, ~130 lignes)     │
 │                                                                   │
 │  init() → CommandRegistry.bind(...) → listen state events → boot │
 └──────────┬───────────────────────────────────────────────────────┘
            │
      ┌─────▼─────┐    ┌──────────┐    ┌──────────────┐
-     │ commands/ │    │  state   │    │   render/    │
-     │           │    │  (proxy  │    │              │
-     │ copyCmd   │◄───│  + Event │───▶│  sourceTree  │
-     │ navCmd    │    │  Emitter)│    │  fileRow     │
-     │ rateCmd   │    │          │    │  eparsUI     │
-     │ filterCmd │    └────┬─────┘    │  playlistUI  │
-     │           │         │          │  journalUI   │
-     └───────────┘         │          │  ratingEdit  │
-                           │          └──────────────┘
-                    ┌──────▼──────┐
-                    │  actions.ts │──▶ domPatches.ts
-                    └─────────────┘    (patching DOM ciblé)
+     │ commands/ │    │  state   │    │   render.ts  │
+     │           │    │  (proxy  │    │ (thin shell  │
+     │ copyCmd   │◄───│  + Event │───▶│  ~110 lignes)│
+     │ navCmd    │    │  Emitter)│    │   └─ render/ │
+     │ rateCmd   │    │          │    │      ├sourceTree
+     │ filterCmd │    └────┬─────┘    │      ├fileRow   │
+     │           │         │          │      ├eparsUI   │
+     └───────────┘         │          │      ├playlistUI│
+                           │          │      ├journalUI │
+                    ┌──────▼──────┐   │      └ratingEdit│
+                    │  actions.ts │──▶│ domPatches.ts   │
+                    └─────────────┘   └─────────────────┘
 ```
+
+**Réalité :** `render.ts` est conservé comme thin shell (~110 lignes) qui importe
+des sous-modules de `render/` et de `domPatches.ts`. `render/index.ts` est un
+simple fichier de ré-export backward-compat. `domPatches.ts` importe directement
+`audio.js`, `focus.js`, `utils.js`, `state.js` et `ratings.js` (pas `makeFileEl`).
 
 **Principes clés :**
 1. **Command Pattern** : chaque combinaison clavier est une commande enregistrée
@@ -362,29 +367,30 @@ export function makeFileEl(
 }
 ```
 
-### 3.4 Assembleur : `render/index.ts`
+### 3.4 Assembleur : `render.ts` (conservé comme thin shell)
+
+Contrairement au plan initial qui prévoyait de supprimer `render.ts`, il est
+conservé comme point d'entrée (~110 lignes). Il importe des sous-modules de
+`render/` et de `domPatches.ts`, puis ré-exporte. `render/index.ts` est un
+simple fichier de ré-export backward-compat (5 lignes).
 
 ```typescript
-// static/src/render/index.ts
+// static/src/render.ts — thin shell
+import { renderJournal } from './render/journalUI.js';
+import { renderEpars } from './render/eparsUI.js';
+import { renderSource, ... } from './render/sourceTree.js';
+import { renderPlaylistPanel, ... } from './render/playlistUI.js';
+import { ... } from './render/ratingEdit.js';
+import { getBatchCopy } from './render/batchCopy.js';
+import { doDragCopy } from './render/dragDrop.js';
+import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
 
-import { renderEpars } from './eparsUI.js';
-import { renderSource } from './sourceTree.js';
-import { revalidateFocus } from '../focus.js';
+export { renderJournal, renderEpars, renderSource, ..., patchEparsFileAfterCopy, patchSourceFileAfterCopy };
 
-export function renderAll(): void {
-  renderEpars();
-  renderSource();
-  requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
-}
-
-// Ré-export pour backward compatibility
-export { renderEpars, renderSource };
-export { renderJournal } from './journalUI.js';
-export { renderPlaylistSource, renderPlaylistPanel } from './playlistUI.js';
-// ... etc
+export function setupRenderSubscriptions(): void { /* 7 abonnements EventEmitter */ }
 ```
 
-**Gain :** `render.ts` passe de 1500 à ~100 lignes (assembleur). 9 nouveaux
+**Gain :** `render.ts` passe de 1500 à ~110 lignes (thin shell). 9 nouveaux
 modules de 80-200 lignes, chacun testable isolément.
 
 ---
@@ -485,39 +491,34 @@ Proxy `get` trap pour forcer une émission, mais c'est plus invasif.
 
 ### 4.4 Abonnements
 
+Les abonnements sont dans `setupRenderSubscriptions()` (appelée au boot depuis
+`script.ts`), dans `render.ts` :
+
 ```typescript
-// Dans render/index.ts (au init)
-on('eparsFiles:changed', renderEpars);
-on('sourceFiles:changed', renderSource);
-on('journal:changed', renderAll);
-on('ratings:changed', () => {
-  // Re-render uniquement les spans de rating, pas tout
-  revalidateAllRatingSpans();
-});
-on('playlistTrackFocusIndex:changed', renderPlaylistPanel);
-on('activePanel:changed', updatePanelActiveClass);
+// Dans render.ts → setupRenderSubscriptions()
+on('eparsFiles:changed', () => { if (visible) renderEpars(); });
+on('sourceFiles:changed', () => { if (visible) renderSource(); });
+on('journal:changed', () => { if (visible) renderEpars(); });
+on('activePanel:changed', () => { togglePanelActiveClass(); });
+on('audio:changed', () => { cleanupPlaylistLedPlaying(); });
+on('eparsPlaylist:changed', () => { if (visible) renderPlaylistPanel(); });
+on('activePlaylistIndex:changed', () => { if (visible) renderPlaylistPanel(); });
 ```
 
 ### 4.5 Nettoyage
 
-Supprimer les appels `renderXxx()` manuels devenus redondants :
+Les appels `renderXxx()` manuels redondants sont supprimés :
 
 ```diff
-- state.playlistTrackFocusIndex = newIdx;
-- renderPlaylistPanel();
-+ state.playlistTrackFocusIndex = newIdx;  // émet 'playlistTrackFocusIndex:changed'
+- renderSource();  // fallback quand patchSourceFileAfterCopy échoue
++ // L'EventEmitter déclenche renderSource() via sourceFiles:changed
++ state.sourceFiles = { ...state.sourceFiles };  // force l'émission
 ```
 
-**Gain :** Suppression de ~15 appels `renderXxx()` manuels dispersés.
-Découplage mutation↔render. Plus d'oublis de re-render. Le RAF batcher
-garantit qu'un seul frame de rendu est produit même après N mutations
-séquentielles (ex: un scan qui modifie `sourceFiles`, `eparsFiles`,
-et `journal` en séquence = 1 seul `renderAll()`).
-
-**Mise en garde :** les mutations de `Set`/`Map` doivent passer par le
-remplacement complet (`new Set([...old, value])`) pour déclencher l'émission.
-Une alternative plus robuste serait d'utiliser des tableaux (`string[]`)
-au lieu de `Set`, mais cela nécessiterait des vérifications de doublons.
+**Note :** `state.sourceFiles = { ...state.sourceFiles }` est nécessaire après
+les mutations imbriquées (`state.sourceFiles[dir][file] = ...`) car le Proxy
+trap ne détecte pas les mutations de propriétés imbriquées. Cette ligne force
+l'émission de `sourceFiles:changed`.
 
 ---
 
@@ -588,23 +589,19 @@ export function focusItemByPath(container: HTMLElement, path: string | null): bo
 }
 ```
 
-### 5.4 Suppression du double `requestAnimationFrame`
+### 5.4 Conservation du double `requestAnimationFrame`
 
-Actuellement `renderAll()` utilise `requestAnimationFrame(() => requestAnimationFrame(revalidateFocus))`.
-Avec le RAF batcher de la Phase 3, on peut simplifier :
+Le double rAF dans `renderAll()` est **conservé** car éprouvé. Il garantit que
+le DOM est prêt avant `revalidateFocus()`. Le pattern est documenté dans
+`actions.ts` (`runScan()` et `initApp()`) :
 
 ```typescript
-export function renderAll(): void {
-  renderEpars();
-  renderSource();
-  // Le RAF batcher de l'EventEmitter garantit que revalidateFocus()
-  // sera appelé APRÈS que le DOM soit prêt, sans double rAF
-  on('render:done', revalidateFocus);
-}
+// Double-RAF restores focus after EventEmitter's deferred render
+requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
 ```
 
-Ou, plus simplement, garder le double rAF (il fonctionne) mais le documenter
-comme solution éprouvée plutôt que hack.
+Le premier rAF flush le DOM (innerHTML), le second garantit que le layout est
+calculé avant `revalidateFocus()`.
 
 ### 5.5 Cas particulier : sidebar playlist
 
@@ -643,9 +640,11 @@ par l'EventEmitter (Phase 3). Les patches DOM sont dans `domPatches.ts`.
 ```typescript
 // static/src/domPatches.ts
 
+import { stopPlayer, togglePlay } from './audio.js';
+import { focusItemByElement, setActivePanel } from './focus.js';
+import { computeStatus, countAllEparsFiles, formatDuration } from './utils.js';
 import { state } from './state.js';
-import { makeFileEl } from './render/fileRow.js';
-import { computeStatus, countAllEparsFiles } from './utils.js';
+import { getRating } from './ratings.js';
 
 export function patchEparsFileAfterCopy(filename: string, eparDir: string): void {
   // ... (code existant, inchangé)
@@ -656,38 +655,42 @@ export function patchSourceFileAfterCopy(
   filename: string,
   fileData: { path: string; year: string | null; duration: number | null; codec: string | null },
 ): boolean {
-  // ... (code existant, inchangé)
-}
-
-export function patchPlaylistSourceFile(fullPath: string, remove: boolean): void {
-  // ... (code existant, inchangé)
+  // ... (code existant, inchangé — construit le DOM inline, n'utilise pas makeFileEl)
 }
 ```
+
+**Note :** `domPatches.ts` n'utilise pas `makeFileEl` — il construit le DOM
+inline (comme dans l'original `render.ts`) car il a besoin d'un contrôle fin
+sur les attributs (drag, focus, onclick avec stopPlayer).
 
 ### 6.3 Refactoring de `executeCopy()` dans `actions.ts`
 
 ```typescript
 // actions.ts — APRÈS refactoring
-// N'importe PLUS render.ts. Ne fait que muter state.
+import { getBatchCopy } from './render.js';           // batch copy state
+import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
 
-export async function executeCopy(): Promise<void> {
+export function executeCopy(): void {
   // ... validation ...
 
-  // Mutations state uniquement
+  // Mutations state
   state.sourceFiles[sourceDir][filename] = { path, year, duration, codec };
   state.journal = await api('/journal');
-  state.selectedEparsFiles.clear();
+  state.selectedEparsFiles = new Map();
 
-  // L'EventEmitter déclenche automatiquement :
-  //   'sourceFiles:changed' → patchSourceFileAfterCopy (via domPatches)
-  //   'journal:changed' → renderAll (si patch échoue)
-  //   'selectedEparsFiles:changed' → patchEparsFileAfterCopy
+  // Patches DOM ciblés (depuis domPatches.ts)
+  patchEparsFileAfterCopy(filename, eparDir);
+  patchSourceFileAfterCopy(destDir, filename, { ... });
+
+  // Force EventEmitter pour les mutations imbriquées
+  state.sourceFiles = { ...state.sourceFiles };  // → 'sourceFiles:changed'
 }
 ```
 
-**Note :** `getBatchCopy()` (le batch copy state) est déplacé dans
-`render/batchCopy.ts` en Phase 2. `actions.ts` n'y accède plus directement —
-le flux F5 → dialog → confirm passe par les commandes (Phase 1).
+**Note :** `actions.ts` importe encore `getBatchCopy` depuis `render.js` (le
+batch copy state), ainsi que `renderSource` pour le fallback de filtre dans
+`initFilterPalette`. Le découplage complet (0 import render) n'est pas atteint
+— voir §11 Divergences.
 
 ### 6.4 Nouveau graphe de dépendances
 
@@ -790,22 +793,24 @@ Chaque phase ajoute des tests unitaires pour les nouveaux modules :
 
 ## 9. Synthèse
 
-| Phase | Effort | Modules créés | Lignes supprimées | Impact | Risque |
-|-------|--------|--------------|-------------------|--------|--------|
-| 1. Command Pattern | 2-3h | 8 | ~250 (script.ts) | 🔴 Très élevé | Faible |
-| 2. Component Factories | 3-4h | 9 | ~1300 (render.ts) | 🔴 Très élevé | Moyen |
-| 3. EventEmitter | 1-2h | 0 (modif state.ts) | ~15 appels manuels | 🟡 Élevé | Faible |
-| 4. Focus stabilisé | 1-2h | 0 (modif focus.ts) | ~10 (double rAF) | 🟡 Élevé | Faible |
-| 5. domPatches | 30 min | 1 | ~80 (découplage actions.ts↔render.ts) | 🟢 Modéré | Nul |
+| Phase | Effort | Modules créés | Lignes supprimées | Impact | Risque | Statut |
+|-------|--------|--------------|-------------------|--------|--------|--------|
+| 1. Command Pattern | 2-3h | 8 | ~250 (script.ts) | 🔴 Très élevé | Faible | ✅ |
+| 2. Component Factories | 3-4h | 9 | ~1300 (render.ts) | 🔴 Très élevé | Moyen | ✅ |
+| 3. EventEmitter | 1-2h | 0 (modif state.ts) | ~2 appels manuels | 🟡 Élevé | Faible | ✅ |
+| 4. Focus stabilisé | 1-2h | 0 (modif focus.ts) | ~0 (double rAF conservé) | 🟡 Élevé | Faible | ✅ |
+| 5. domPatches | 30 min | 1 | ~80 (découplage actions.ts↔render.ts) | 🟢 Modéré | Nul | ✅ |
 
-**Total :** 8-12h, ~1700 lignes supprimées, 18 nouveaux modules, 0 régression.
+**Total :** 8-12h, ~1600 lignes supprimées, 18 nouveaux modules, 0 régression.
 
-**Résultat final :**
-- `script.ts` : 593 → ~60 lignes (orchestrateur pur)
-- `render.ts` : 1500 → ~100 lignes (assembleur)
-- `state.ts` : enrichi d'un EventEmitter (Proxy existant + 30 lignes)
-- `focus.ts` : focusPath conservé, focusItemByPath optimisé (boucle vs querySelector)
-- `actions.ts` : ne dépend plus d'aucun module de rendu — mutations state pures
+**Résultat final (réel) :**
+- `script.ts` : 593 → ~130 lignes (orchestrateur, +70 lignes de helpers playlist)
+- `render.ts` : 1500 → ~110 lignes (thin shell, conservé)
+- `state.ts` : enrichi d'un EventEmitter (Proxy existant + 40 lignes)
+- `focus.ts` : focusPath conservé, navHistory.push() → réassignation complète
+- `actions.ts` : importe patches depuis `domPatches.js`, dépend encore de `render.js` pour `getBatchCopy`
+
+Voir §11 pour les divergences détaillées.
 
 ---
 
@@ -820,3 +825,77 @@ Chaque phase ajoute des tests unitaires pour les nouveaux modules :
 | DI | Extraction domPatches.ts (pas de conteneur IoC) |
 | Clean Architecture | Non retenue — overkill pour 3000 lignes vanilla TS |
 | Framework | Aucun — rester en vanilla TypeScript |
+| Double rAF | Conservé (éprouvé), documenté dans runScan/initApp |
+| render.ts | Conservé comme thin shell (pas supprimé au profit de render/index.ts) |
+
+---
+
+## 11. Divergences par rapport au plan initial
+
+### 11.1 `render.ts` conservé (pas supprimé)
+
+Le plan prévoyait de supprimer `render.ts` et de le remplacer par `render/index.ts`.
+En pratique, `render.ts` est conservé comme thin shell (~110 lignes) qui importe
+des sous-modules et ré-exporte. `render/index.ts` est un simple fichier de
+ré-export backward-compat (5 lignes). Cette approche évite de casser tous les
+imports existants.
+
+### 11.2 `domPatches.ts` n'utilise pas `makeFileEl`
+
+Le plan prévoyait que `domPatches.ts` importerait `makeFileEl` depuis
+`render/fileRow.js`. En pratique, `patchSourceFileAfterCopy` construit le DOM
+inline (comme dans l'original `render.ts`) car il a besoin d'un contrôle fin
+sur les attributs spécifiques (drag, focus avec `stopPlayer`, rating spans).
+Les imports réels sont : `audio.js`, `focus.js`, `utils.js`, `state.js`,
+`ratings.js`.
+
+### 11.3 `actions.ts` pas complètement découplé de `render.ts`
+
+Le plan visait « `actions.ts` ne fait que muter state, 0 import render ».
+En pratique, `actions.ts` importe encore :
+- `getBatchCopy` depuis `render.js` (le batch copy state)
+- `renderSource` depuis `render.js` (utilisé par `initFilterPalette` callback)
+
+Les patches DOM (`patchEparsFileAfterCopy`, `patchSourceFileAfterCopy`) sont
+bien importés depuis `domPatches.js`. Le découplage est donc partiel (~80%).
+
+### 11.4 EventEmitter : 7 abonnements, pas 6
+
+Le plan listait 6 abonnements. L'implémentation réelle a 7 abonnements :
+`eparsFiles`, `sourceFiles`, `journal`, `activePanel`, `audio`, `eparsPlaylist`,
+`activePlaylistIndex`. Les abonnements `ratings` et `playlistTrackFocusIndex`
+n'ont pas été ajoutés car les re-renders associés sont gérés autrement (callbacks inline).
+
+### 11.5 Double rAF conservé (pas supprimé)
+
+Le plan suggérait de remplacer le double rAF par un événement `render:done`.
+En pratique, le double rAF est conservé car éprouvé et documenté dans `runScan()`
+et `initApp()`. La suppression n'apportait pas de gain mesurable.
+
+### 11.6 `navHistory.push()` → réassignation complète
+
+Le plan mentionnait le remplacement de `Set.add()`/`Map.set()` mais pas
+`Array.push()`. `state.navHistory.push(entry)` dans `focus.ts` a été remplacé
+par `state.navHistory = [...state.navHistory, entry]` pour déclencher le Proxy trap.
+
+### 11.7 `state.sourceFiles = { ...state.sourceFiles }` après mutations imbriquées
+
+Ajout non prévu dans le plan initial. Les mutations `state.sourceFiles[dir][file] = ...`
+ne déclenchent pas le Proxy trap (mutations de propriétés imbriquées). Pour
+forcer l'émission `sourceFiles:changed`, on ajoute une réassignation complète
+après les mutations. Cette ligne est présente dans `executeCopy()` (batch et
+single-file).
+
+### 11.8 Tests : 524 (pas 291)
+
+Le plan mentionnait 291 tests. Après les sessions de test post-refactoring
+(`commands/*.test.ts`, `render/*.test.ts`, `actions.test.ts`, `playlist.test.ts`,
+`eparsUI.test.ts`), le total est de 524 tests (22 fichiers).
+
+### 11.9 Reste à faire
+
+- **Phase 2 Step 9** : Adapter les tests existants (`render.test.ts` →
+  répartir entre `render/sourceTree.test.ts`, `domPatches.test.ts`)
+- **Phase 5 Step 4** : Créer `domPatches.test.ts` dédié (extrait de
+  `render.test.ts`)
+- **Post-implementation** : Mise à jour de l'interaction map et du README

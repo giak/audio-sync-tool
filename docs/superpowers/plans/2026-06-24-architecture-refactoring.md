@@ -412,7 +412,7 @@ export function patchPlaylistSourceFile(fullPath: string, remove: boolean): void
 export { patchEparsFileAfterCopy, patchSourceFileAfterCopy, patchPlaylistSourceFile } from '../domPatches.js';
 ```
 
-- [ ] **Step 3: Nettoyer `actions.ts`** ⚠️ NON FAIT — actions.ts importe encore renderAll/renderSource
+- [x] **Step 3: Nettoyer `actions.ts`** ✅ (2026-06-24) — `patchEparsFileAfterCopy` et `patchSourceFileAfterCopy` importés depuis `./domPatches.js` au lieu de `./render.js`. Les fallback `renderSource()` sont supprimés. `state.sourceFiles = { ...state.sourceFiles }` force l'EventEmitter après mutations imbriquées.
 
 Supprimer les imports de `render.ts` :
 ```diff
@@ -556,7 +556,7 @@ export const state = new Proxy<AppState>(_state, {
 });
 ```
 
-- [ ] **Step 3: Abonner les renders aux événements dans `render/index.ts`** ⚠️ NON FAIT — render/index.ts n'a pas d'abonnements on()
+- [x] **Step 3: Abonner les renders aux événements dans `render/index.ts`** ✅ (2026-06-24) — `setupRenderSubscriptions()` dans render.ts ajoute `journal:changed` (→ renderEpars) et `activePanel:changed` (→ toggle panel-active), en plus des 5 existants (eparsFiles, sourceFiles, audio, eparsPlaylist, activePlaylistIndex). Total 7 abonnements.
 
 ```typescript
 // render/index.ts — ajouter au boot
@@ -580,7 +580,7 @@ function updatePanelActiveClass(): void {
 }
 ```
 
-- [ ] **Step 4: Remplacer les `Set.add()` / `Map.set()` par des remplacements complets** ⚠️ NON FAIT
+- [x] **Step 4: Remplacer les `Set.add()` / `Map.set()` par des remplacements complets** ✅ (2026-06-24) — Le code de production était déjà propre (full reassignments dans sourceTree.ts, eparsUI.ts, render.ts). Seul restait `state.navHistory.push(entry)` dans focus.ts → remplacé par `state.navHistory = [...state.navHistory, entry]`. Les `.add()`/`.set()` restants sont uniquement dans les fichiers de test.
 
 ⚠️ Critique : `Set.add()` et `Map.set()` ne déclenchent pas le Proxy `set` trap.
 
@@ -607,7 +607,7 @@ state.sourceNodeMap.set(fullPath, info);
 state.sourceNodeMap = new Map([...state.sourceNodeMap, [fullPath, info]]);
 ```
 
-- [ ] **Step 5: Supprimer les appels `renderXxx()` manuels** ⚠️ NON FAIT — renderAll/renderSource encore appelés directement
+- [x] **Step 5: Supprimer les appels `renderXxx()` manuels** ✅ (2026-06-24) — Les 2 appels `renderSource()` en fallback dans `executeCopy()` (batch + single-file) sont supprimés. `state.sourceFiles = { ...state.sourceFiles }` force l'émission EventEmitter après mutations imbriquées. `runScan()` et `initApp()` conservent leurs commentaires sur le double-RAF pour revalidateFocus.
 
 Faire un search pour trouver tous les appels manuels :
 ```bash
@@ -670,7 +670,7 @@ export function setActivePanel(panel: 'epars' | 'source'): void {
 }
 ```
 
-- [ ] **Step 3: Mettre à jour `focusItemByPath()`** ⚠️ NON FAIT — utilise encore querySelector `[data-focuspath="..."]`
+- [x] **Step 3: Mettre à jour `focusItemByPath()`** ✅ (déjà fait) — utilise une boucle sur `getItems()` au lieu de `querySelector('[data-focuspath="..."]')`, pas besoin de `CSS.escape()`.
 
 Remplacer la recherche CSS `[data-focuspath="..."]` par une boucle sur
 `getItems()` — plus robuste, pas besoin de `CSS.escape()` :
@@ -706,7 +706,7 @@ export function focusItemByPath(container: HTMLElement, path: string | null): bo
 }
 ```
 
-- [ ] **Step 4: Documenter le double `requestAnimationFrame`** ⚠️ NON FAIT
+- [x] **Step 4: Documenter le double `requestAnimationFrame`** ✅ (2026-06-24) — Le pattern double rAF est documenté dans `actions.ts` (`runScan()` et `initApp()`) : « Double-RAF restores focus after EventEmitter's deferred render ».
 
 Le double rAF dans `renderAll()` est conservé — il garantit que le DOM est
 prêt avant `revalidateFocus()`. Ajouter un commentaire :
@@ -766,7 +766,15 @@ git commit -m "refactor(phase4): focus stabilized — focusPath conserved, focus
 
 - [x] **Tag final** — `v0.2-clean-architecture` sur 295b38c
 
-- [ ] **Mise à jour de la spec** ⚠️ NON FAIT — documenter les divergences (domPatches supprimé, render.ts non éclaté, EventEmitter non abonné)
+- [x] **Mise à jour de la spec** ✅ (2026-06-24) — Les divergences sont documentées :
+  - `domPatches.ts` créé (extrait de render.ts), contient `patchEparsFileAfterCopy` + `patchSourceFileAfterCopy`
+  - `render.ts` conservé comme thin shell (~110 lignes) qui importe de `render/` et `domPatches.ts`
+  - `actions.ts` importe les patchs depuis `domPatches.js` (découplé du module render complet)
+  - `setupRenderSubscriptions()` a 7 abonnements : eparsFiles, sourceFiles, journal, audio, eparsPlaylist, activePlaylistIndex, activePanel
+  - `renderSource()` redondants supprimés, `state.sourceFiles = { ...state.sourceFiles }` force l'EventEmitter
+  - `navHistory.push()` → réassignation complète dans focus.ts
+  - Double rAF documenté dans runScan() et initApp()
+  - Phase 2 Step 9 (adapter les tests) et Phase 5 Step 4 (domPatches.test.ts) restent NON FAIT — les tests de patching sont dans render.test.ts
 
 - [ ] **Mise à jour de l'interaction map** ⚠️ NON FAIT
 
