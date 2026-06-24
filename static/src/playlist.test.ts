@@ -279,14 +279,14 @@ describe('event emissions', () => {
     expect(emit).toHaveBeenCalledWith('eparsPlaylist:changed');
   });
 
-  it('addTrack emits eparsPlaylist:changed (twice — via setPendingTracks + explicit)', () => {
+  it('addTrack emits eparsPlaylist:changed (once — via setPendingTracks)', () => {
     createNewPlaylist('pl');
     vi.clearAllMocks(); // clear the emit from createNewPlaylist
     const track = { filename: 'a.mp3', fullPath: '/a.mp3', relPath: 'a.mp3', year: '2024', duration: 180, codec: 'MP3' } as any;
     addTrack('pl', track);
-    // setPendingTracks emits once, addTrack emits once → 2 total
+    // only setPendingTracks emits — addTrack no longer emits directly
     expect(emit).toHaveBeenCalledWith('eparsPlaylist:changed');
-    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit).toHaveBeenCalledTimes(1);
   });
 
   it('addTrack does NOT emit when duplicate (false return)', () => {
@@ -299,31 +299,31 @@ describe('event emissions', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it('removeTrack emits eparsPlaylist:changed (twice — via setPendingTracks + explicit)', () => {
+  it('removeTrack emits eparsPlaylist:changed (once — via setPendingTracks)', () => {
     createNewPlaylist('pl');
     addTrack('pl', { filename: 'a.mp3', fullPath: '/a.mp3', relPath: 'a.mp3' } as any);
     vi.clearAllMocks();
     removeTrack('pl', '/a.mp3');
     expect(emit).toHaveBeenCalledWith('eparsPlaylist:changed');
-    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit).toHaveBeenCalledTimes(1);
   });
 
-  it('removeTrack still emits (setPendingTracks + explicit) even when fullPath not found', () => {
+  it('removeTrack emits once (via setPendingTracks) even when fullPath not found', () => {
     createNewPlaylist('pl');
     vi.clearAllMocks();
     removeTrack('pl', '/nonexistent.mp3');
-    // setPendingTracks emits once, then removeTrack emits again → 2 calls
-    expect(emit).toHaveBeenCalledTimes(2);
+    // setPendingTracks emits once (array unchanged, but still called)
+    expect(emit).toHaveBeenCalledTimes(1);
   });
 
-  it('reorderTrack emits eparsPlaylist:changed (twice — via setPendingTracks + explicit)', () => {
+  it('reorderTrack emits eparsPlaylist:changed (once — via setPendingTracks)', () => {
     createNewPlaylist('pl');
     addTrack('pl', { filename: 'a.mp3', fullPath: '/a.mp3', relPath: 'a.mp3' } as any);
     addTrack('pl', { filename: 'b.mp3', fullPath: '/b.mp3', relPath: 'b.mp3' } as any);
     vi.clearAllMocks();
     reorderTrack('pl', 0, 1);
     expect(emit).toHaveBeenCalledWith('eparsPlaylist:changed');
-    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit).toHaveBeenCalledTimes(1);
   });
 
   it('reorderTrack does NOT emit when indices are out of bounds', () => {

@@ -100,8 +100,7 @@ export function addTrack(name: string, track: PlaylistTrack): boolean {
   const tracks = getPendingTracks(name);
   if (tracks.some(t => t.fullPath === track.fullPath)) return false;
   tracks.push(track);
-  setPendingTracks(name, tracks);
-  emit('eparsPlaylist:changed');
+  setPendingTracks(name, tracks); // emits eparsPlaylist:changed
   return true;
 }
 
@@ -111,8 +110,7 @@ export function addTrack(name: string, track: PlaylistTrack): boolean {
 export function removeTrack(name: string, fullPath: string): void {
   let tracks = getPendingTracks(name);
   tracks = tracks.filter(t => t.fullPath !== fullPath);
-  setPendingTracks(name, tracks);
-  emit('eparsPlaylist:changed');
+  setPendingTracks(name, tracks); // emits eparsPlaylist:changed
 }
 
 /**
@@ -124,8 +122,7 @@ export function reorderTrack(name: string, oldIndex: number, newIndex: number): 
   if (newIndex < 0 || newIndex >= tracks.length) return;
   const [moved] = tracks.splice(oldIndex, 1);
   tracks.splice(newIndex, 0, moved);
-  setPendingTracks(name, tracks);
-  emit('eparsPlaylist:changed');
+  setPendingTracks(name, tracks); // emits eparsPlaylist:changed
 }
 
 /**
