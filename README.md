@@ -136,10 +136,15 @@ audio-sync-tool/
 ├── templates/index.html   # Interface utilisateur
 ├── static/
 │   ├── style.css          # Thème SCADA (JetBrains Mono, LED glow)
-│   ├── src/               # Sources TypeScript (12 modules)
-│   ├── dist/              # Compilés par esbuild (gitignored)
-│   └── *.test.ts          # 9 fichiers de test (vitest)
+│   ├── src/               # Sources TypeScript (28 modules)
+│   │   ├── commands/      # Command Pattern (8 modules)
+│   │   ├── render/        # Component factories (3 modules extraits)
+│   │   ├── script.ts      # Orchestrateur (~120 lignes)
+│   │   ├── state.ts       # Proxy + EventEmitter + RAF batcher
+│   │   └── *.test.ts      # 14 fichiers de test (vitest)
+│   └── dist/              # Compilés par esbuild (gitignored)
 ├── data/                  # Config, journal, cache, playlists, ratings
+├── docs/superpowers/      # Specs + plans d'implémentation
 ├── biome.json             # Linter + formateur Biome
 ├── vitest.config.js       # Tests frontend + coverage
 ├── tsconfig.json          # TypeScript config
@@ -173,7 +178,7 @@ npm run format             # Formatage Biome
 #### Frontend (vitest)
 
 ```bash
-npm test                   # 291 tests, 10 fichiers
+npm test                   # 313 tests, 14 fichiers
 npm run coverage           # Clean → test → rapport (90% lignes)
 ```
 
@@ -182,4 +187,23 @@ npm run coverage           # Clean → test → rapport (90% lignes)
 | Suite | Tests | Couverture |
 |-------|-------|------------|
 | Pytest | 59 | — |
-| Vitest | 291 | 90% lignes, 79% branches |
+| Vitest | 313 | 90% lignes, 79% branches |
+
+## Architecture (v0.2)
+
+Le frontend utilise le **Command Pattern** pour router les entrées clavier.
+Un `CommandRegistry` déclaratif remplace l'ancien handler monolithique
+de 593 lignes. Les touches sont dispatchées vers 8 modules de commandes
+(`navigation`, `audio`, `copy`, `filter`, `rating`, `playlist`, `modals`).
+
+```
+script.ts (~120 lignes, orchestrateur)
+  └─▶ commands/ (8 modules, CommandRegistry)
+state.ts (Proxy + EventEmitter + RAF batcher)
+  └─▶ render/ (component factories — fileRow, batchCopy, index)
+actions.ts (mutations state pures)
+```
+
+**Tags git :**
+- `v0.1-functional` — appli fonctionnelle (291 tests)
+- `v0.2-clean-architecture` — Command Pattern + EventEmitter (313 tests)
