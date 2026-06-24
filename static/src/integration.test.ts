@@ -186,6 +186,8 @@ beforeEach(() => {
 
   // Reset state
   setupTestState();
+  // Blur any focused element to prevent isFilterInputFocused leakage
+  (document.activeElement as HTMLElement | null)?.blur();
   vi.clearAllMocks();
 });
 
