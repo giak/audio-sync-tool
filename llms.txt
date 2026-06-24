@@ -18,3 +18,14 @@ docs/superpowers/specs/2026-06-22-source-nav-and-filter-design.md
 docs/superpowers/specs/2026-06-23-phase1-resilience.md
 docs/superpowers/specs/2026-06-23-phase2-playlist-integrity.md
 docs/superpowers/specs/2026-06-23-phase3-contract-100.md
+
+# Cartographie des interactions (canonique — à lire avant toute modif)
+docs/superpowers/specs/2026-06-23-interaction-map.md
+
+# Audit de stabilisation UX (tous les bugs/frictions recensés)
+docs/superpowers/specs/2026-06-23-ux-stabilization-audit.md
+
+# Design des systèmes transverses
+docs/superpowers/specs/2026-06-23-ratings-design.md
+docs/superpowers/specs/2026-06-23-playlist-creation-design.md
+docs/superpowers/specs/2026-06-23-toolbar-pages-design.md

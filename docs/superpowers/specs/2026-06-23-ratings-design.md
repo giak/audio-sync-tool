@@ -50,15 +50,19 @@ La note est attachée au fichier (pas à la playlist), ce qui permet :
 | `data/ratings.json` | Stockage persistant des notes |
 | `app.py` — nouvelles routes | `GET /ratings`, `PUT /ratings` |
 
-### 2.3 Nouveaux composants frontend
+### 2.3 Composants frontend (implémentés)
 
 | Module | Rôle |
 |--------|------|
-| `static/ratings.ts` | Module CRUD des notes (loadRatings, saveRating, getRating) |
-| `render.js` — `renderPlaylistTracks` | Afficher la note inline + champ edit |
-| `script.js` — routage clavier | Touche **N** sur morceau focus → edit mode |
-| `audio.js` ou `focus.js` | Gestion du focus sidebar en mode Playlist |
-| `style.css` | Styles champ note inline |
+| `static/src/ratings.ts` | Module CRUD des notes (`loadRatings`, `saveRating`, `deleteRating`, `getRating`) |
+| `static/src/render.ts` — `makeFileEl()` | Affichage `.file-rating` sur tous les fichiers |
+| `static/src/render.ts` — `renderPlaylistTracks()` | Affichage `.pl-track-rating` dans le sidebar |
+| `static/src/render.ts` — `_startInlineRatingEdit()` | Fonction partagée d'édition inline (input, commit, blur) |
+| `static/src/render.ts` — `startRatingEdit()` | Édition sidebar (`.pl-track-rating` → input) |
+| `static/src/render.ts` — `startSourceRatingEdit()` | Édition arbre source (`.file-rating` → input) |
+| `static/src/script.ts` — routage clavier | Touche **N** (Sync + Playlist, source + sidebar) → edit mode |
+| `static/src/state.ts` | `ratings: Record<string, number>` |
+| `static/style.css` | Styles `.file-rating`, `.pl-track-rating`, `.pl-rating-input` |
 
 ### 2.4 Dépendances
 
@@ -246,19 +250,25 @@ Quand un morceau a le focus dans le panneau Playlist (sidebar focus) et que l'ut
 | Connexion perdue | La note reste dans `state.ratings` (optimistic). Au prochain `saveRating()`, retentative |
 | Morceau supprimé de la playlist | La note reste dans `ratings.json` (ne pas perdre les données — le fichier peut être ré-ajouté plus tard) |
 
-### 3.7 Affichage dans l'arborescence Source Data (mode normal)
+### 3.7 Affichage dans l'arborescence Source Data
 
-En mode normal (pas Playlist), les fichiers dans Source Data peuvent aussi afficher leur note si elle existe :
+La note est affichée sur **tous les fichiers** (mode Sync ET Playlist) via un
+span `.file-rating` créé dans `makeFileEl()`. En mode Sync, la note est en
+lecture seule (clic focus le row mais n'ouvre pas l'édition). En mode Playlist
+Source, le clic ouvre l'édition inline via `startSourceRatingEdit()`.
 
 ```
 📂 2024
-  ├─ Paradise City.mp3       2024  MP3  3:45  [85]
-  └─ Another Track.flac      2025  FLAC  5:12  [—]
+  ├─ Paradise City.mp3       2024  MP3  3:45  85
+  └─ Another Track.flac      2025  FLAC  5:12
 ```
 
-- La note apparaît entre crochets `[nn]` ou `[—]` après les métadonnées existantes
-- Pas d'édition possible dans ce mode (lecture seule)
-- **Décision** : implémenter ça dans une V2, pas dans la V1 (pour garder le focus sur le mode Playlist)
+- **Statut** : ✅ Implémenté (V1). Initialement prévu pour V2, mais intégré
+  en V1 car essentiel au workflow de notation.
+- Édition possible uniquement dans le panneau Source du mode Playlist
+  (touche N ou clic sur la zone `.file-rating`).
+- En mode Sync, la note est affichée mais non éditable (la touche N ne
+  déclenche rien, le clic focus le row sans ouvrir l'édition).
 
 ### 3.8 Future — Filtre par note + type
 

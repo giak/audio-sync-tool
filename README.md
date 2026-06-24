@@ -23,6 +23,16 @@ npm install                            # pour le frontend (vitest, biome, esbuil
 # → http://localhost:8765
 ```
 
+L'outil a **deux pages** accessibles depuis la toolbar :
+
+| Page | Bouton | Fonction |
+|------|--------|----------|
+| **Sync** | 📦 Sync | Copier des fichiers éparpillés vers la source data (F5) |
+| **Playlist** | 🎵 Playlist | Créer des playlists, noter les morceaux, exporter |
+
+Les **outils** (⚙️ Config, 🔄 Scan, 📋 Journal, ❓ Raccourcis) sont
+disponibles dans les deux pages.
+
 1. **Config** — renseigne le dossier source data et les dossiers éparpillés.
 2. **Scan** — analyse tous les dossiers et extrait les métadonnées.
 3. **Navigation** — au clavier uniquement : Tab, ↑↓, F5, F7.
@@ -41,8 +51,9 @@ npm install                            # pour le frontend (vitest, biome, esbuil
 | **F5** | Copier vers le dossier survolé (avec confirmation) | |
 | **F7** / **/** | — | Focus le filtre de dossiers |
 | **Échap** | Fermer modale / annuler le filtre / stopper l'audio | |
+| **N** | Noter le fichier focusé (0-100, clic sur la zone de note aussi possible) | |
 
-### Raccourcis clavier (mode Playlist)
+### Raccourcis clavier (page Playlist)
 
 | Touche | Panneau Source | Panneau Sidebar |
 |--------|----------------|-----------------|
@@ -55,7 +66,10 @@ npm install                            # pour le frontend (vitest, biome, esbuil
 | **Ctrl + S** | Sauvegarder la playlist | |
 | **Ctrl + E** | Exporter la playlist | |
 | **Ctrl + ↑↓** | — | Réorganiser les pistes |
-| **Échap** | Quitter le mode Playlist | |
+| **N** | Noter le fichier focusé (0-100, clic sur la zone de note aussi possible) | — |
+
+> **Note :** Échap ne quitte plus la page Playlist. Pour revenir à Sync,
+> cliquer sur **📦 Sync** dans la toolbar.
 
 ### Badges (LED)
 
@@ -78,12 +92,41 @@ Chaque fichier affiche : **Année** — **Codec** — **Durée**
 3. **↑↓** sur un dossier de destination
 4. **F5** → modale de confirmation (**Entrée** valide, **Échap** annule)
 
-### Mode Playlist
+### Page Playlist
 
-1. **🎵 Playlist** → deux panneaux : Source / Sidebar
+1. Cliquer **🎵 Playlist** dans la toolbar → deux panneaux : Source / Sidebar
 2. **Espace** sur un fichier → ajoute ✅ / retire
 3. **Ctrl + S** → sauvegarde persistante
 4. **Ctrl + E** → export par hard links vers `source_data/_playlists/<nom>/`
+5. Revenir à Sync → cliquer **📦 Sync** dans la toolbar
+
+### Notation (Ratings)
+
+Une note de 0 à 100 est visible sur **tous les fichiers** (mode Sync et
+Playlist), affichée à droite du row après la durée. La zone de note est
+cliquable (ouvre un edit inline en mode Playlist Source) et éditable au
+clavier via la touche **N**.
+
+Les notes sont stockées globalement (pas par playlist) dans
+`data/ratings.json`, avec la clé = chemin absolu du fichier.
+
+| Action | Raccourci / Gestuelle |
+|--------|----------------------|
+| **Éditer la note** | **N** sur fichier focusé (Sync ou Playlist) → input inline |
+| **Éditer la note** | **Clic** sur la zone de note (`.file-rating`) → input inline |
+| **Valider** | **Entrée** → sauvegarde immédiate |
+| **Annuler** | **Échap** → retour à la note précédente |
+| **Effacer** | Champ vide + **Entrée** → suppression de la note |
+| **Valider auto** | **Blur** → sauvegarde automatique |
+
+**Affichage :**
+- `85` — note en chiffres tabulaires
+- *vide* — pas encore noté
+- Dans le sidebar Playlist : `—` si pas noté
+
+**Implémentation :** fonction partagée `_startInlineRatingEdit()` dans render.ts,
+avec deux points d'entrée `startRatingEdit()` (sidebar tracks) et
+`startSourceRatingEdit()` (file-rows dans l'arbre source).
 
 ## Structure
 
@@ -93,10 +136,10 @@ audio-sync-tool/
 ├── templates/index.html   # Interface utilisateur
 ├── static/
 │   ├── style.css          # Thème SCADA (JetBrains Mono, LED glow)
-│   ├── *.ts               # 10 modules TypeScript source
-│   ├── *.js               # Compilés par esbuild (gitignored)
+│   ├── src/               # Sources TypeScript (12 modules)
+│   ├── dist/              # Compilés par esbuild (gitignored)
 │   └── *.test.ts          # 9 fichiers de test (vitest)
-├── data/                  # Config, journal, cache, playlists
+├── data/                  # Config, journal, cache, playlists, ratings
 ├── biome.json             # Linter + formateur Biome
 ├── vitest.config.js       # Tests frontend + coverage
 ├── tsconfig.json          # TypeScript config
@@ -130,7 +173,7 @@ npm run format             # Formatage Biome
 #### Frontend (vitest)
 
 ```bash
-npm test                   # 282 tests, 9 fichiers
+npm test                   # 291 tests, 10 fichiers
 npm run coverage           # Clean → test → rapport (90% lignes)
 ```
 
@@ -138,5 +181,5 @@ npm run coverage           # Clean → test → rapport (90% lignes)
 
 | Suite | Tests | Couverture |
 |-------|-------|------------|
-| Pytest | 52 | — |
-| Vitest | 282 | 90% lignes, 79% branches |
+| Pytest | 59 | — |
+| Vitest | 291 | 90% lignes, 79% branches |
