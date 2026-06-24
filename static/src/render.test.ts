@@ -45,12 +45,20 @@ vi.mock('./playlist.js', () => ({
   getPendingTracks: vi.fn(() => [{ fullPath: '/home/Music/Rock/a.mp3' }]),
 }));
 
+// Partially mock state.js to spy on on() without breaking state/emit
+vi.mock('./state.js', async (importOriginal) => {
+  const mod = await importOriginal();
+  return { ...mod, on: vi.fn() };
+});
+
+import { on } from './state.js';
 import {
   patchEparsFileAfterCopy,
   patchSourceFileAfterCopy,
   renderEpars,
   renderJournal,
   renderSource,
+  setupRenderSubscriptions,
   toggleSourceDir,
   togglePlaylistSourceDir,
 } from './render.js';
@@ -1426,5 +1434,40 @@ describe('renderSource', () => {
       const dirs = document.querySelectorAll('#source-container > .directory');
       expect(dirs.length).toBeGreaterThanOrEqual(1);
     });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Event subscription tests
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('setupRenderSubscriptions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('registers an audio:changed listener', () => {
+    setupRenderSubscriptions();
+    expect(on).toHaveBeenCalledWith('audio:changed', expect.any(Function));
+  });
+
+  it('registers an eparsPlaylist:changed listener', () => {
+    setupRenderSubscriptions();
+    expect(on).toHaveBeenCalledWith('eparsPlaylist:changed', expect.any(Function));
+  });
+
+  it('registers eparsFiles:changed listener (existing Phase 3)', () => {
+    setupRenderSubscriptions();
+    expect(on).toHaveBeenCalledWith('eparsFiles:changed', expect.any(Function));
+  });
+
+  it('registers sourceFiles:changed listener (existing Phase 3)', () => {
+    setupRenderSubscriptions();
+    expect(on).toHaveBeenCalledWith('sourceFiles:changed', expect.any(Function));
+  });
+
+  it('calls on() exactly 4 times (2 Phase 3 + 2 Phase 4)', () => {
+    setupRenderSubscriptions();
+    expect(on).toHaveBeenCalledTimes(4);
   });
 });

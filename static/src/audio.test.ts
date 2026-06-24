@@ -28,6 +28,7 @@ vi.hoisted(() => {
 
     constructor(url: string) {
       this.url = url;
+      (globalThis as any).__lastMockAudio = this;
     }
 
     play() {
@@ -54,6 +55,12 @@ vi.mock('./utils.js', () => ({
   }),
 }));
 
+// Partially mock state.js to spy on emit() while keeping real state
+vi.mock('./state.js', async (importOriginal) => {
+  const mod = await importOriginal();
+  return { ...mod, emit: vi.fn() };
+});
+
 beforeEach(() => {
   (globalThis as any).Audio = (globalThis as any).__MockAudio;
   (globalThis as any).__audioResolve = null;
@@ -70,6 +77,7 @@ afterEach(() => {
   delete (globalThis as any).Audio;
 });
 
+import { emit } from './state.js';
 import { initAudioUI, isAudioPlaying, seekAudio, stopPlayer, togglePlay } from './audio.js';
 
 /** Wait for pending microtasks (e.g. .then() callbacks from play promise) */
@@ -165,6 +173,83 @@ describe('togglePlay', () => {
     const filenameEl = document.getElementById('player-filename')!;
     expect(filenameEl.textContent!.length).toBeLessThanOrEqual(30);
     expect(filenameEl.textContent).toContain('...');
+    btn.remove();
+  });
+});
+
+describe('audio:changed event', () => {
+  it('stopPlayer emits audio:changed', () => {
+    stopPlayer();
+    expect(emit).toHaveBeenCalledWith('audio:changed');
+  });
+
+  it('togglePlay emits audio:changed on successful play', async () => {
+    const btn = document.createElement('span');
+    btn.className = 'play-btn';
+    btn.textContent = '▶';
+    document.body.appendChild(btn);
+
+    togglePlay('test.mp3', '/path/test.mp3', btn);
+    (globalThis as any).__audioResolve();
+    await flush();
+
+    // Emitted from the .then() success callback (no previous audio)
+    expect(emit).toHaveBeenCalledWith('audio:changed');
+    btn.remove();
+  });
+
+  it('togglePlay emits audio:changed when stopping same file', async () => {
+    const btn = document.createElement('span');
+    btn.className = 'play-btn';
+    btn.textContent = '▶';
+    document.body.appendChild(btn);
+
+    togglePlay('test.mp3', '/path/test.mp3', btn);
+    (globalThis as any).__audioResolve();
+    await flush();
+    vi.clearAllMocks();
+
+    // Second click on same file → stopPlayer → emits audio:changed
+    togglePlay('test.mp3', '/path/test.mp3', btn);
+    expect(emit).toHaveBeenCalledWith('audio:changed');
+    btn.remove();
+  });
+
+  it('onended callback emits audio:changed', async () => {
+    const btn = document.createElement('span');
+    btn.className = 'play-btn';
+    btn.textContent = '▶';
+    document.body.appendChild(btn);
+
+    togglePlay('end.mp3', '/path/end.mp3', btn);
+    (globalThis as any).__audioResolve();
+    await flush();
+
+    const mockAudioInstance = (globalThis as any).__lastMockAudio;
+    if (mockAudioInstance?.onended) {
+      vi.clearAllMocks();
+      mockAudioInstance.onended();
+      expect(emit).toHaveBeenCalledWith('audio:changed');
+    }
+    btn.remove();
+  });
+
+  it('onerror callback emits audio:changed', async () => {
+    const btn = document.createElement('span');
+    btn.className = 'play-btn';
+    btn.textContent = '▶';
+    document.body.appendChild(btn);
+
+    togglePlay('err.mp3', '/path/err.mp3', btn);
+    (globalThis as any).__audioResolve();
+    await flush();
+
+    const mockAudioInstance = (globalThis as any).__lastMockAudio;
+    if (mockAudioInstance?.onerror) {
+      vi.clearAllMocks();
+      mockAudioInstance.onerror();
+      expect(emit).toHaveBeenCalledWith('audio:changed');
+    }
     btn.remove();
   });
 });
