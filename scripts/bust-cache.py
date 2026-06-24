@@ -17,17 +17,17 @@ if not os.path.exists(SCRIPT_JS):
 
 cache_buster = str(int(os.path.getmtime(SCRIPT_JS)))
 
-# Match  from "./file.js"  or  from './file.js'
+# Match  from "./file.js"  or  from '../sub/file.js'  (any depth)
 # Also matches an existing ?v=NNNNN so we replace it idempotently
 pattern = re.compile(
-    r'''from\s+(["'])\./([^"']+\.js)(\?v=\d+)?\1'''
+    r'''from\s+(["'])((?:\.\.?/)+)([^"']+\.js)(\?v=\d+)?\1'''
 )
 
-for path in glob.glob('static/dist/*.js'):
+for path in glob.glob('static/dist/**/*.js', recursive=True):
     with open(path) as fh:
         original = fh.read()
     updated = pattern.sub(
-        lambda m: f'from {m.group(1)}./{m.group(2)}?v={cache_buster}{m.group(1)}',
+        lambda m: f'from {m.group(1)}{m.group(2)}{m.group(3)}?v={cache_buster}{m.group(1)}',
         original,
     )
     if updated != original:
