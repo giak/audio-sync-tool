@@ -56,7 +56,24 @@ interface AppState {
   activePlaylistIndex: number | null;
   pendingPlaylists: Record<string, PlaylistTrack[]>;
   playlistFocus: PlaylistFocusZone;
+  playlistTrackFocusIndex: number | null;
+  sourceManuallyExpanded: Set<string>;
+  selectedEparsFiles: Map<string, EparsSelection>;
+  lastSelectedEparsIndex: number | null;
+  navHistory: Array<NavHistoryEntry>;
+  navIndex: number;
   ratings: Record<string, number>;
+}
+
+interface EparsSelection {
+  filename: string;
+  eparDir: string;
+  fullpath: string;
+}
+
+interface NavHistoryEntry {
+  panel: ActivePanel;
+  focusPath: string | null;
 }
 
 const VALID_PANELS = new Set<ActivePanel>(['epars', 'source']);
@@ -81,6 +98,12 @@ const _state: AppState = {
   activePlaylistIndex: null,
   pendingPlaylists: {},
   playlistFocus: 'source',
+  playlistTrackFocusIndex: null,
+  sourceManuallyExpanded: new Set(),
+  selectedEparsFiles: new Map(),
+  lastSelectedEparsIndex: null,
+  navHistory: [],
+  navIndex: -1,
   ratings: {},
 };
 

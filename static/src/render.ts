@@ -1,7 +1,8 @@
 // ─── DOM building: file panels, journal, source tree toggle ──────────────
 
-import { togglePlay } from './audio.js';
+import { stopPlayer, togglePlay } from './audio.js';
 import { focusItemByElement, revalidateFocus, setActivePanel } from './focus.js';
+import { showContextMenu, closeContextMenu } from './ui.js';
 import {
   createNewPlaylist,
   deletePlaylist,
@@ -47,6 +48,67 @@ interface TreeAndDir {
 }
 
 type ToggleFn = (dirPath: string) => void;
+
+// ── Batch copy state (shared with actions.ts via getBatchCopy) ────────────
+
+let _batchCopyTarget: string | null = null;
+let _batchCopyFiles: Array<{ filename: string; eparDir: string; fullpath: string }> = [];
+
+export function getBatchCopy(): {
+  target: string | null;
+  files: Array<{ filename: string; eparDir: string; fullpath: string }>;
+} {
+  const result = { target: _batchCopyTarget, files: _batchCopyFiles };
+  _batchCopyTarget = null;
+  _batchCopyFiles = [];
+  return result;
+}
+
+// ── Context menu helpers (A7) ──────────────────────────────────────────
+
+function showDirContextMenu(x: number, y: number, dirPath: string): void {
+  const expanded = state.sourceExpanded.has(dirPath);
+  const hasSelection = state.selectedEparsFiles.size > 0;
+  const items: Array<{ label: string; action: () => void; danger?: boolean }> = [
+    { label: expanded ? '📁 Refermer' : '📂 Déplier', action: () => toggleSourceDir(dirPath) },
+  ];
+  if (hasSelection) {
+    items.push({
+      label: `📋 Copier ${state.selectedEparsFiles.size} fichier${state.selectedEparsFiles.size > 1 ? 's' : ''} ici`,
+      action: () => batchCopyToDir(dirPath),
+    });
+  }
+  showContextMenu(x, y, items);
+}
+
+function batchCopyToDir(destDir: string): void {
+  if (state.selectedEparsFiles.size === 0) return;
+  _batchCopyTarget = destDir;
+  _batchCopyFiles = [...state.selectedEparsFiles.values()];
+  const dirEl = document.querySelector(
+    `#source-container .directory[data-dirpath="${CSS.escape(destDir)}"]`,
+  ) as HTMLElement | null;
+  if (dirEl) {
+    const container = document.getElementById('source-container');
+    if (container) focusItemByElement(container, dirEl);
+    setActivePanel('source');
+  }
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F5', bubbles: true }));
+}
+
+// ── Drag & drop copy helper (A9) ───────────────────────────────────────
+
+function doDragCopy(filename: string, eparDir: string, destDir: string): void {
+  const relPath = state.eparsFiles[eparDir]?.[filename]?.path;
+  if (!relPath) {
+    const statusText = document.getElementById('status-text');
+    if (statusText) statusText.textContent = 'Fichier introuvable.';
+    return;
+  }
+  _batchCopyTarget = destDir;
+  _batchCopyFiles = [{ filename, eparDir, fullpath: `${eparDir}/${relPath}` }];
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F5', bubbles: true }));
+}
 
 // ── File element factory ──────────────────────────────────────────────────
 
@@ -99,6 +161,87 @@ function makeFileEl(
     span.textContent = formatDuration(duration);
     row.appendChild(span);
   }
+
+  // Rating display (visible in source tree + épars)
+  const ratingVal = getRating(fullpath);
+  const ratingSpan = document.createElement('span');
+  ratingSpan.className = 'file-rating';
+  ratingSpan.dataset.fullpath = fullpath;
+  if (ratingVal !== undefined) {
+    ratingSpan.textContent = String(ratingVal);
+  }
+  ratingSpan.onclick = (e: MouseEvent) => {
+    e.stopPropagation();
+    const cont = row.closest(
+      '#epars-container, #source-container, #playlist-source-container',
+    ) as HTMLElement | null;
+    if (!cont) return;
+    for (const el of cont.querySelectorAll('.focused')) el.classList.remove('focused');
+    row.classList.add('focused');
+    // Only open inline edit in playlist source tree
+    if (cont.id === 'playlist-source-container') {
+      startSourceRatingEdit();
+    }
+  };
+  row.appendChild(ratingSpan);
+
+  // ── Click-to-focus (C1): synchronise souris ↔ clavier ──────────────
+  row.onclick = (e: MouseEvent) => {
+    e.stopPropagation();
+    if ((e.target as HTMLElement).closest('.play-btn')) return;
+
+    const container = row.closest(
+      '#epars-container, #source-container, #playlist-source-container',
+    ) as HTMLElement | null;
+    if (!container) return;
+
+    focusItemByElement(container, row);
+
+    if (container.id !== 'playlist-source-container') {
+      setActivePanel(container.id === 'epars-container' ? 'epars' : 'source');
+    }
+
+    if (row.querySelector('.led-playing')) {
+      stopPlayer();
+    }
+  };
+
+  // Double-clic → play (I5)
+  row.ondblclick = () => {
+    (row.querySelector('.play-btn') as HTMLElement | null)?.click();
+  };
+
+  // Drag & drop (A9) : éparpillé → source
+  row.draggable = true;
+  row.ondragstart = (e: DragEvent) => {
+    const fileLabel = row.querySelector('.file') as HTMLElement | null;
+    const eparDir = fileLabel?.dataset?.epardir || '';
+    const fname = fileLabel?.dataset?.filename || '';
+    e.dataTransfer?.setData('application/x-epars-copy', JSON.stringify({ filename: fname, eparDir }));
+    row.classList.add('dragging-source');
+  };
+  row.ondragend = () => row.classList.remove('dragging-source');
+
+  // Context menu (A7)
+  row.oncontextmenu = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const fileLabel = row.querySelector('.file') as HTMLElement | null;
+    const isNouveau = fileLabel?.classList.contains('nouveau');
+    const items: Array<{ label: string; action: () => void; danger?: boolean }> = [
+      { label: '▶ Jouer', action: () => (row.querySelector('.play-btn') as HTMLElement)?.click() },
+    ];
+    if (isNouveau && fileLabel) {
+      const fname = fileLabel.dataset.filename || '';
+      const eparDir = fileLabel.dataset.epardir || '';
+      items.push({
+        label: '● Sélectionner pour copie',
+        action: () => selectEparsFile(fileLabel, fname, eparDir),
+      });
+    }
+    showContextMenu(e.clientX, e.clientY, items);
+  };
+
   return row;
 }
 
@@ -125,20 +268,81 @@ export function renderJournal(): void {
 
 // ── Éparpillé panel ───────────────────────────────────────────────────────
 
-function selectEparsFile(el: HTMLElement, _filename: string, _eparDir: string): void {
-  for (const el of document.querySelectorAll('.file.selected')) el.classList.remove('selected');
-  el.classList.add('selected');
-  const statusText = document.getElementById('status-text');
-  if (statusText) statusText.textContent = 'Appuie sur Tab → F5 pour copier.';
-  setActivePanel('epars');
+function selectEparsFile(
+  el: HTMLElement,
+  filename: string,
+  eparDir: string,
+  opts?: { ctrl?: boolean; shift?: boolean },
+): void {
   const row = el.closest('.file-row') as HTMLElement | null;
   const container = document.getElementById('epars-container');
+  const fullpath = el.dataset.fullpath || '';
+  const key = `${eparDir}/${filename}`;
+
+  if (opts?.ctrl) {
+    // Toggle individuel
+    if (state.selectedEparsFiles.has(key)) {
+      state.selectedEparsFiles.delete(key);
+      el.classList.remove('selected');
+    } else {
+      state.selectedEparsFiles.set(key, { filename, eparDir, fullpath });
+      el.classList.add('selected');
+    }
+    if (container) {
+      const items = getItemsForSelection(container);
+      state.lastSelectedEparsIndex = Array.from(items).indexOf(el);
+    }
+  } else if (opts?.shift && state.lastSelectedEparsIndex !== null && container) {
+    // Range select
+    const items = getItemsForSelection(container);
+    const currentIdx = Array.from(items).indexOf(el);
+    const start = Math.min(state.lastSelectedEparsIndex, currentIdx);
+    const end = Math.max(state.lastSelectedEparsIndex, currentIdx);
+    state.selectedEparsFiles.clear();
+    for (const f of document.querySelectorAll('#epars-container .file.selected')) f.classList.remove('selected');
+    for (let i = start; i <= end; i++) {
+      const item = items[i] as HTMLElement | null;
+      const fl = item?.querySelector('.file.nouveau') as HTMLElement | null;
+      if (fl) {
+        const fn = fl.dataset.filename || '';
+        const ed = fl.dataset.epardir || '';
+        const fp = fl.dataset.fullpath || '';
+        state.selectedEparsFiles.set(`${ed}/${fn}`, { filename: fn, eparDir: ed, fullpath: fp });
+        fl.classList.add('selected');
+      }
+    }
+    state.lastSelectedEparsIndex = currentIdx;
+  } else {
+    // Single select (or Shift without anchor)
+    state.selectedEparsFiles.clear();
+    for (const f of document.querySelectorAll('#epars-container .file.selected')) f.classList.remove('selected');
+    state.selectedEparsFiles.set(key, { filename, eparDir, fullpath });
+    el.classList.add('selected');
+    if (container) {
+      const items = getItemsForSelection(container);
+      state.lastSelectedEparsIndex = Array.from(items).indexOf(el);
+    }
+  }
+
+  const count = state.selectedEparsFiles.size;
+  const statusText = document.getElementById('status-text');
+  if (statusText) {
+    statusText.textContent = count > 1
+      ? `${count} fichiers sélectionnés. Tab → F5 pour copier.`
+      : 'Appuie sur Tab → F5 pour copier.';
+  }
+  setActivePanel('epars');
   if (row && container) focusItemByElement(container, row);
+}
+
+function getItemsForSelection(container: HTMLElement): NodeListOf<Element> {
+  return container.querySelectorAll('.file.nouveau');
 }
 
 export function renderEpars(): void {
   const container = document.getElementById('epars-container');
   if (!container) return;
+  const savedScrollTop = container.scrollTop;
   container.innerHTML = '';
 
   const totalFiles = countAllEparsFiles(state.eparsFiles);
@@ -175,9 +379,9 @@ export function renderEpars(): void {
       const label2 = row.querySelector('.file') as HTMLElement;
       if (label2) {
         label2.dataset.epardir = dirPath;
-        if (status === 'nouveau') {
-          label2.onclick = () => selectEparsFile(label2, filename, dirPath);
-        }
+        label2.onclick = (e: MouseEvent) => {
+          selectEparsFile(label2, filename, dirPath, { ctrl: e.ctrlKey, shift: e.shiftKey });
+        };
       }
       fileList.appendChild(row);
     }
@@ -191,6 +395,8 @@ export function renderEpars(): void {
       <span class="s-doublon">○ ${countDoublon.toLocaleString('fr')} doublon</span>
     `;
   }
+
+  requestAnimationFrame(() => { container.scrollTop = savedScrollTop; });
 }
 
 // ── Source Data panel ─────────────────────────────────────────────────────
@@ -207,8 +413,6 @@ function buildSourceChildren(
   const childContainer = document.createElement('div');
   childContainer.className = 'children';
 
-  // En mode Playlist, calculer les chemins de la playlist active pour
-  // appliquer le badge ✅ sur les fichiers dépliés dynamiquement.
   let inPlaylistPaths = _inPlaylistPaths;
   if (!inPlaylistPaths && state.playlistMode) {
     const name = getActivePlaylistName();
@@ -239,7 +443,38 @@ function buildSourceChildren(
       countSpan.textContent = `(${subFiles.length})`;
       dirEl.appendChild(countSpan);
     }
-    dirEl.onclick = () => toggle(subFullPath);
+    dirEl.onclick = () => {
+      const cont = dirEl.closest(
+        '#source-container, #playlist-source-container, #epars-container',
+      ) as HTMLElement | null;
+      if (cont) {
+        focusItemByElement(cont, dirEl);
+        if (cont.id === 'epars-container') setActivePanel('epars');
+        else if (cont.id !== 'playlist-source-container') setActivePanel('source');
+      }
+      toggle(subFullPath);
+    };
+    dirEl.oncontextmenu = (e: MouseEvent) => {
+      e.preventDefault();
+      showDirContextMenu(e.clientX, e.clientY, subFullPath);
+    };
+    dirEl.ondragover = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes('application/x-epars-copy')) return;
+      e.preventDefault();
+      dirEl.classList.add('drag-over');
+    };
+    dirEl.ondragleave = () => dirEl.classList.remove('drag-over');
+    dirEl.ondrop = (e: DragEvent) => {
+      e.preventDefault();
+      dirEl.classList.remove('drag-over');
+      const raw = e.dataTransfer?.getData('application/x-epars-copy');
+      if (raw) {
+        try {
+          const { filename, eparDir } = JSON.parse(raw);
+          doDragCopy(filename, eparDir, subFullPath);
+        } catch (_) { /* invalid data */ }
+      }
+    };
     childContainer.appendChild(dirEl);
     state.sourceNodeMap.set(subFullPath, { node: subNode, baseDir });
 
@@ -272,14 +507,22 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
   const existingChildren = dirEl.querySelector('.children');
   if (existingChildren) {
     state.sourceExpanded.delete(dirPath);
+    state.sourceManuallyExpanded.delete(dirPath);
     dirEl.classList.remove('expanded');
     existingChildren.remove();
   } else {
     state.sourceExpanded.add(dirPath);
+    state.sourceManuallyExpanded.add(dirPath);
     dirEl.classList.add('expanded');
     const info = state.sourceNodeMap.get(dirPath);
     if (info) {
-      dirEl.appendChild(buildSourceChildren(info.node as TreeNode, dirPath, info.baseDir, state.filterActive));
+      const childrenEl = buildSourceChildren(info.node as TreeNode, dirPath, info.baseDir, state.filterActive);
+      dirEl.appendChild(childrenEl);
+      requestAnimationFrame(() => {
+        const cont = dirEl.closest('#source-container, #playlist-source-container') as HTMLElement | null;
+        const firstChild = dirEl.querySelector('.children > .directory, .children > .file-row') as HTMLElement | null;
+        if (cont && firstChild) focusItemByElement(cont, firstChild);
+      });
     }
   }
   updateSourceHeaderCount();
@@ -324,7 +567,38 @@ function renderDirTree(node: TreeNode, container: HTMLElement, basePath: string,
       countSpan.textContent = `(${files.length})`;
       dirEl.appendChild(countSpan);
     }
-    dirEl.onclick = () => toggle(fullPath);
+    dirEl.onclick = () => {
+      const cont = dirEl.closest(
+        '#source-container, #playlist-source-container, #epars-container',
+      ) as HTMLElement | null;
+      if (cont) {
+        focusItemByElement(cont, dirEl);
+        if (cont.id === 'epars-container') setActivePanel('epars');
+        else if (cont.id !== 'playlist-source-container') setActivePanel('source');
+      }
+      toggle(fullPath);
+    };
+    dirEl.oncontextmenu = (e: MouseEvent) => {
+      e.preventDefault();
+      showDirContextMenu(e.clientX, e.clientY, fullPath);
+    };
+    dirEl.ondragover = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes('application/x-epars-copy')) return;
+      e.preventDefault();
+      dirEl.classList.add('drag-over');
+    };
+    dirEl.ondragleave = () => dirEl.classList.remove('drag-over');
+    dirEl.ondrop = (e: DragEvent) => {
+      e.preventDefault();
+      dirEl.classList.remove('drag-over');
+      const raw = e.dataTransfer?.getData('application/x-epars-copy');
+      if (raw) {
+        try {
+          const { filename, eparDir } = JSON.parse(raw);
+          doDragCopy(filename, eparDir, fullPath);
+        } catch (_) { /* invalid data */ }
+      }
+    };
     container.appendChild(dirEl);
     state.sourceNodeMap.set(fullPath, { node: subNode, baseDir: basePath });
 
@@ -342,7 +616,6 @@ function renderFilteredSource(container: HTMLElement, allTrees: TreeAndDir[]): n
       .filter(k => k !== '__files__')
       .sort();
     for (const name of dirNames) {
-      const _fullPath = `${dirPath}/${name}`;
       if (!name.toLowerCase().includes(term) && !dirHasMatchingDescendant(tree[name] as TreeNode, term)) continue;
       visibleCount++;
       renderFilteredDirNode(tree[name] as TreeNode, container, dirPath, name);
@@ -374,7 +647,35 @@ function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath:
     countSpan.textContent = `(${files.length})`;
     dirEl.appendChild(countSpan);
   }
-  dirEl.onclick = () => toggleSourceDir(fullPath);
+  dirEl.onclick = () => {
+    const cont = dirEl.closest('#source-container') as HTMLElement | null;
+    if (cont) {
+      focusItemByElement(cont, dirEl);
+      setActivePanel('source');
+    }
+    toggleSourceDir(fullPath);
+  };
+  dirEl.oncontextmenu = (e: MouseEvent) => {
+    e.preventDefault();
+    showDirContextMenu(e.clientX, e.clientY, fullPath);
+  };
+  dirEl.ondragover = (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes('application/x-epars-copy')) return;
+    e.preventDefault();
+    dirEl.classList.add('drag-over');
+  };
+  dirEl.ondragleave = () => dirEl.classList.remove('drag-over');
+  dirEl.ondrop = (e: DragEvent) => {
+    e.preventDefault();
+    dirEl.classList.remove('drag-over');
+    const raw = e.dataTransfer?.getData('application/x-epars-copy');
+    if (raw) {
+      try {
+        const { filename, eparDir } = JSON.parse(raw);
+        doDragCopy(filename, eparDir, fullPath);
+      } catch (_) { /* invalid data */ }
+    }
+  };
   container.appendChild(dirEl);
   state.sourceNodeMap.set(fullPath, { node, baseDir: basePath });
 
@@ -386,6 +687,7 @@ function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath:
 export function renderSource(): void {
   const container = document.getElementById('source-container');
   if (!container) return;
+  const savedScrollTop = container.scrollTop;
   container.innerHTML = '';
   state.sourceNodeMap.clear();
 
@@ -438,15 +740,12 @@ export function renderSource(): void {
       if (filterCount) filterCount.textContent = '';
     }
   }
+
+  requestAnimationFrame(() => { container.scrollTop = savedScrollTop; });
 }
 
 // ── Targeted DOM patches after copy (avoids full rebuild) ────────────────
 
-/**
- * Update a single file row in the éparpillé panel after a successful copy.
- * Changes the status classes (nouveau → doublon), removes the onclick
- * selection handler, and updates the status-line counters in-place.
- */
 export function patchEparsFileAfterCopy(filename: string, eparDir: string): void {
   const fileSpan = document.querySelector(
     `#epars-container .file[data-filename="${CSS.escape(filename)}"][data-epardir="${CSS.escape(eparDir)}"]`,
@@ -454,20 +753,17 @@ export function patchEparsFileAfterCopy(filename: string, eparDir: string): void
   if (!fileSpan) return;
 
   const newStatus = computeStatus(filename, state.sourceFiles, state.journal as any);
-  // Remove old led-* and status classes, add new ones
   fileSpan.className = fileSpan.className
     .replace(/\bled-(nouveau|doublon|traite)\b/g, '')
     .replace(/\b(nouveau|doublon|traite)\b/g, '')
     .trim();
   fileSpan.classList.add(newStatus, `led-${newStatus}`);
 
-  // Remove onclick if no longer selectable
   if (newStatus !== 'nouveau') {
     fileSpan.onclick = null;
     fileSpan.classList.remove('selected');
   }
 
-  // Recompute status counters from the existing DOM
   const allFileSpans = document.querySelectorAll('#epars-container .file');
   let countNouveau = 0,
     countDoublon = 0,
@@ -486,27 +782,16 @@ export function patchEparsFileAfterCopy(filename: string, eparDir: string): void
     `;
   }
 
-  // Update header count
   const totalFiles = countAllEparsFiles(state.eparsFiles);
   const headerCount = document.getElementById('epars-header-count');
   if (headerCount) headerCount.textContent = totalFiles > 0 ? `(${totalFiles.toLocaleString('fr')})` : '';
 }
 
-/**
- * Insert a newly copied file into the Source Data tree DOM without a full
- * rebuild.  Walks up the path to find the nearest ancestor registered in
- * sourceNodeMap, then traverses down building in-memory entries.  Only
- * touches the DOM when destDir is already visible (expanded).
- *
- * Returns true on success; false means the caller should fall back to
- * renderSource() (e.g. destDir is under a completely new base directory).
- */
 export function patchSourceFileAfterCopy(
   destDir: string,
   filename: string,
   fileData: { path: string; year: string | null; duration: number | null; codec: string | null },
 ): boolean {
-  // 1. Walk up to find the nearest registered ancestor in sourceNodeMap
   let curr = destDir;
   let ancestorInfo: { node: Record<string, unknown>; baseDir: string } | undefined;
   const missingParts: string[] = [];
@@ -520,9 +805,8 @@ export function patchSourceFileAfterCopy(
     curr = curr.substring(0, slashIdx);
   }
 
-  if (!ancestorInfo) return false; // no ancestor at all — fallback
+  if (!ancestorInfo) return false;
 
-  // 2. Traverse down to destDir, building in-memory tree + sourceNodeMap entries
   let node: TreeNode = ancestorInfo.node as unknown as TreeNode;
   let currentPath = curr;
 
@@ -536,7 +820,6 @@ export function patchSourceFileAfterCopy(
     });
   }
 
-  // 3. Add file to the leaf node
   node.__files__ = node.__files__ || [];
   const entries = node.__files__;
   entries.push({
@@ -548,7 +831,6 @@ export function patchSourceFileAfterCopy(
     baseDir: ancestorInfo.baseDir,
   } as FileEntry);
 
-  // 4. Update header count
   let totalSource = 0;
   for (const files of Object.values(state.sourceFiles)) {
     totalSource += Object.keys(files).length;
@@ -562,7 +844,6 @@ export function patchSourceFileAfterCopy(
     headerCount.textContent = `(${filtered.toLocaleString('fr')} / ${totalSource.toLocaleString('fr')})`;
   }
 
-  // 5. DOM update — only if destDir is currently visible (parent chain expanded)
   const dirEl = document.querySelector(
     `#source-container .directory[data-dirpath="${CSS.escape(destDir)}"]`,
   ) as HTMLElement | null;
@@ -610,9 +891,6 @@ export function patchSourceFileAfterCopy(
 // Playlist mode rendering (tabs, tracks, source tree)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Render the playlist sidebar: tabs + track list.
- */
 export function renderPlaylistPanel(): void {
   renderPlaylistTabs();
   renderPlaylistTracks();
@@ -680,6 +958,7 @@ function renderPlaylistTabs(): void {
 function renderPlaylistTracks(): void {
   const container = document.getElementById('playlist-panel');
   if (!container) return;
+  const savedScrollTop = container.scrollTop;
   const name = getActivePlaylistName();
   const tracks = getPendingTracks(name) || [];
   const savedPl = state.playlists.find(p => p.name === name);
@@ -713,7 +992,6 @@ function renderPlaylistTracks(): void {
         const s = track.duration % 60;
         html += `<span class="pl-track-duration">${m}:${s.toString().padStart(2, '0')}</span>`;
       }
-      // Rating display
       const rating = getRating(track.fullPath);
       html += `<span class="pl-track-rating" data-fullpath="${escapeHtml(track.fullPath)}">`;
       if (rating !== undefined) {
@@ -739,6 +1017,63 @@ function renderPlaylistTracks(): void {
     };
   });
 
+  // ── Rating inline edit on click (click-to-edit) ──────────────────
+  container.querySelectorAll('.pl-track-rating').forEach(el => {
+    (el as HTMLElement).onclick = _ratingClickHandler;
+  });
+
+  // ── Click-to-focus + context menu on playlist tracks ──────────────
+  container.querySelectorAll('.pl-track').forEach(el => {
+    const trackEl = el as HTMLElement;
+    trackEl.onclick = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest('.pl-track-remove, .pl-track-rating, .pl-drag-handle')) return;
+      const tracksContainer = document.getElementById('playlist-tracks');
+      if (tracksContainer) {
+        tracksContainer.querySelectorAll('.pl-track.focused').forEach(f => f.classList.remove('focused'));
+      }
+      trackEl.classList.add('focused');
+    };
+
+    trackEl.ondblclick = () => {
+      const removeBtn = trackEl.querySelector('.pl-track-remove') as HTMLElement | null;
+      const fullPath = removeBtn?.dataset.fullpath || '';
+      const filename = trackEl.querySelector('.pl-track-name')?.textContent || '';
+      if (fullPath) {
+        togglePlay(filename, fullPath, trackEl.querySelector('.play-btn') || trackEl);
+      }
+    };
+
+    // Context menu (A7) on playlist tracks
+    trackEl.oncontextmenu = (e: MouseEvent) => {
+      e.preventDefault();
+      const removeBtn = trackEl.querySelector('.pl-track-remove') as HTMLElement | null;
+      const fullPath = removeBtn?.dataset.fullpath || '';
+      const filename = trackEl.querySelector('.pl-track-name')?.textContent || '';
+      const items: Array<{ label: string; action: () => void; danger?: boolean }> = [
+        {
+          label: '▶ Jouer',
+          action: () => togglePlay(filename, fullPath, trackEl.querySelector('.play-btn') || trackEl),
+        },
+        {
+          label: '✕ Retirer',
+          action: () => {
+            removeTrack(getActivePlaylistName(), fullPath);
+            renderPlaylistPanel();
+            patchPlaylistSourceFile(fullPath, true);
+          },
+          danger: true,
+        },
+      ];
+      showContextMenu(e.clientX, e.clientY, items);
+    };
+  });
+
+  if (state.playlistTrackFocusIndex !== null && tracks.length > 0) {
+    const idx = Math.min(state.playlistTrackFocusIndex, tracks.length - 1);
+    const trackEls = container.querySelectorAll('.pl-track');
+    if (trackEls[idx]) trackEls[idx].classList.add('focused');
+  }
+
   container.querySelectorAll('.pl-track').forEach(el => {
     const trackEl = el as HTMLElement;
     trackEl.ondragstart = (e: DragEvent) => {
@@ -762,6 +1097,8 @@ function renderPlaylistTracks(): void {
       }
     };
   });
+
+  requestAnimationFrame(() => { container.scrollTop = savedScrollTop; });
 }
 
 function closePlaylistTab(name: string): void {
@@ -785,19 +1122,11 @@ function escapeHtml(str: string): string {
   return div.innerHTML;
 }
 
-/**
- * Render the playlist source panel as an expandable tree of Source Data
- * folders — identical in structure to the normal Source Data panel.
- * Files already in the current playlist get the ✅ (in-playlist) badge,
- * including when folders are expanded dynamically (handled internally by
- * buildSourceChildren via state.playlistMode).
- */
 export function renderPlaylistSource(): void {
   const container = document.getElementById('playlist-source-container');
   if (!container) return;
   container.innerHTML = '';
 
-  // Build trees from sourceFiles (same logic as renderSource)
   const allTrees: TreeAndDir[] = [];
   let totalCount = 0;
 
@@ -827,9 +1156,6 @@ export function renderPlaylistSource(): void {
     allTrees.push({ tree, dirPath });
   }
 
-  // Render trees with playlist-specific toggle
-  // buildSourceChildren checks state.playlistMode internally and applies
-  // in-playlist badges on both initial render and dynamic expands.
   for (const { tree, dirPath } of allTrees) {
     renderDirTree(tree, container, dirPath, togglePlaylistSourceDir);
   }
@@ -838,16 +1164,13 @@ export function renderPlaylistSource(): void {
   if (countEl) countEl.textContent = totalCount > 0 ? `(${totalCount.toLocaleString('fr')})` : '';
 }
 
-/**
- * Render the playlist manager modal content (list, stats, actions).
- */
 export function renderPlaylistManager(): void {
   const container = document.getElementById('pl-manager-content');
   if (!container) return;
 
   if (state.playlists.length === 0 && Object.keys(state.pendingPlaylists).length === 0) {
     container.innerHTML =
-      '<div style="color:var(--text-dim);padding:20px;text-align:center">Aucune playlist. Créez-en une depuis le mode Playlist.</div>';
+      '<div style="color:var(--text-dim);padding:20px;text-align:center">Aucune playlist.</div>';
     return;
   }
 
@@ -878,7 +1201,6 @@ export function renderPlaylistManager(): void {
   html += '</tbody></table>';
   container.innerHTML = html;
 
-  // Bind action buttons
   container.querySelectorAll('.pl-mgr-load').forEach(btn => {
     (btn as HTMLElement).onclick = () => {
       closeAllModals();
@@ -935,10 +1257,9 @@ export function renderPlaylistManager(): void {
   container.querySelectorAll('.pl-mgr-delete').forEach(btn => {
     (btn as HTMLElement).onclick = async () => {
       const name = (btn as HTMLElement).dataset.name || '';
-      if (!confirm(`Supprimer la playlist "${name}" ?\n(Cette action ne supprime pas les fichiers exportés.)`)) return;
+      if (!confirm(`Supprimer la playlist "${name}" ? (Les fichiers exportés ne sont pas affectés.)`)) return;
       await deletePlaylist(name);
       removePendingPlaylist(name);
-      // If active tab was deleted, switch to another
       const activeName = getActivePlaylistName();
       if (activeName === name) {
         state.activePlaylistIndex = 0;
@@ -949,33 +1270,94 @@ export function renderPlaylistManager(): void {
   });
 }
 
-// ── Targeted DOM patch for playlist source panel (avoids full rebuild) ────
-
-/**
- * Add or remove the `in-playlist` CSS class on a file label in the playlist
- * source panel.  Used when a track is removed from the sidebar so the source
- * panel stays in sync without a full re-render.
- *
- * @param fullPath - The data-fullpath value to search for.
- * @param remove - true to remove the class, false to add it.
- */
 // ── Rating inline edit ────────────────────────────────────────────────────
 
 let _ratingEditActive = false;
 
-/**
- * Enter inline edit mode for the rating of the currently focused track.
- * Called when N is pressed in the sidebar.
- * Re-renders the playlist panel when edit completes (Enter/Escape/blur).
- */
+/** Shared onclick handler for .pl-track-rating spans.
+ *  Focuses the parent track, then opens the inline rating input. */
+function _ratingClickHandler(e: MouseEvent): void {
+  e.stopPropagation();
+  const target = e.currentTarget as HTMLElement | null;
+  if (!target) return;
+  const trackEl = target.closest('.pl-track') as HTMLElement | null;
+  if (!trackEl) return;
+  const tracksContainer = document.getElementById('playlist-tracks');
+  if (tracksContainer) {
+    tracksContainer.querySelectorAll('.pl-track.focused').forEach(f => f.classList.remove('focused'));
+  }
+  trackEl.classList.add('focused');
+  const panel = document.getElementById('playlist-panel');
+  if (panel) {
+    const allTracks = Array.from(panel.querySelectorAll('.pl-track'));
+    state.playlistTrackFocusIndex = allTracks.indexOf(trackEl);
+  }
+  state.playlistFocus = 'sidebar';
+  startRatingEdit();
+}
+
 export function startRatingEdit(): void {
-  if (_ratingEditActive) return;
   const focused = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
   if (!focused) return;
-
   const ratingSpan = focused.querySelector('.pl-track-rating') as HTMLElement | null;
   if (!ratingSpan) return;
 
+  _startInlineRatingEdit(ratingSpan, (_fullPath, newRating) => {
+    const span = document.createElement('span');
+    span.className = 'pl-track-rating';
+    span.dataset.fullpath = _fullPath;
+    span.onclick = _ratingClickHandler;
+    if (newRating !== undefined) {
+      span.textContent = String(newRating);
+    } else {
+      const noneSpan = document.createElement('span');
+      noneSpan.className = 'pl-track-rating-none';
+      noneSpan.textContent = '—';
+      span.appendChild(noneSpan);
+    }
+    return span;
+  });
+}
+
+/** Inline rating edit on a focused file-row in the playlist source tree. */
+export function startSourceRatingEdit(): void {
+  const focused = document.querySelector('#playlist-source-container .file-row.focused') as HTMLElement | null;
+  if (!focused) {
+    showToast('ℹ️ ↑↓ pour focuser un fichier, puis N pour noter.');
+    return;
+  }
+  const ratingSpan = focused.querySelector('.file-rating') as HTMLElement | null;
+  if (!ratingSpan) return;
+
+  _startInlineRatingEdit(ratingSpan, (_fullPath, newRating) => {
+    const span = document.createElement('span');
+    span.className = 'file-rating';
+    span.dataset.fullpath = _fullPath;
+    if (newRating !== undefined) span.textContent = String(newRating);
+    span.onclick = (e: MouseEvent) => {
+      e.stopPropagation();
+      const cont = span.closest(
+        '#epars-container, #source-container, #playlist-source-container',
+      ) as HTMLElement | null;
+      if (!cont) return;
+      const row = span.closest('.file-row') as HTMLElement | null;
+      if (row) {
+        for (const el of cont.querySelectorAll('.focused')) el.classList.remove('focused');
+        row.classList.add('focused');
+        if (cont.id === 'playlist-source-container') startSourceRatingEdit();
+      }
+    };
+    return span;
+  });
+}
+
+/** Shared inline rating edit: replaces ratingSpan with input, handles
+ *  commit/cancel/blur, then calls rebuildSpan to recreate the display. */
+function _startInlineRatingEdit(
+  ratingSpan: HTMLElement,
+  rebuildSpan: (fullPath: string, newRating: number | undefined) => HTMLElement,
+): void {
+  if (_ratingEditActive) return;
   const fullPath = ratingSpan.dataset.fullpath || '';
   if (!fullPath) return;
 
@@ -1012,17 +1394,14 @@ export function startRatingEdit(): void {
 
   function finish(): void {
     _ratingEditActive = false;
-    renderPlaylistPanel();
+    const newRating = getRating(fullPath);
+    const span = rebuildSpan(fullPath, newRating);
+    input.replaceWith(span);
   }
 
   input.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      commit();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      cancel();
-    }
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
   });
 
   input.addEventListener('blur', () => {

@@ -15,7 +15,7 @@ export async function loadRatings(): Promise<void> {
  * Get the rating for a specific file. Returns number or undefined.
  */
 export function getRating(fullPath: string): number | undefined {
-  return state.ratings[fullPath];
+  return state.ratings?.[fullPath];
 }
 
 /**

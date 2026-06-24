@@ -67,11 +67,14 @@ describe('getItems', () => {
     expect(items[1].classList.contains('file-row')).toBe(true);
   });
 
-  it('returns only directory for source container', () => {
+  it('returns directory + file-row for source container', () => {
     const container = document.getElementById('source-container') as HTMLElement;
     const items = getItems(container);
-    expect(items.length).toBe(4); // 4 directories
-    expect([...items].every(el => el.classList.contains('directory'))).toBe(true);
+    expect(items.length).toBe(5); // 4 directories + 1 file-row in expanded Techno
+    const dirs = [...items].filter(el => el.classList.contains('directory'));
+    const files = [...items].filter(el => el.classList.contains('file-row'));
+    expect(dirs.length).toBe(4);
+    expect(files.length).toBe(1);
   });
 });
 
@@ -194,12 +197,14 @@ describe('navigateColumn', () => {
     const container = document.getElementById('source-container') as HTMLElement;
     const items = getItems(container);
 
-    // Mock getBoundingClientRect: 2-column layout
+    // Mock getBoundingClientRect: 2-column layout (5 items after C3)
+    // File-row in expanded Techno is placed far down to avoid interfering
     const rects: Array<Partial<DOMRect>> = [
       { left: 10, top: 10, width: 200, height: 20 },
       { left: 300, top: 10, width: 200, height: 20 },
       { left: 10, top: 40, width: 200, height: 60 },
       { left: 300, top: 110, width: 200, height: 20 },
+      { left: 30, top: 999, width: 180, height: 18 },
     ];
     [...items].forEach((el, i) => {
       (el as HTMLElement).getBoundingClientRect = vi.fn(() => rects[i] as DOMRect);
@@ -219,6 +224,7 @@ describe('navigateColumn', () => {
       { left: 300, top: 10, width: 200, height: 20 },
       { left: 10, top: 40, width: 200, height: 60 },
       { left: 300, top: 110, width: 200, height: 20 },
+      { left: 30, top: 999, width: 180, height: 18 },
     ];
     [...items].forEach((el, i) => {
       (el as HTMLElement).getBoundingClientRect = vi.fn(() => rects[i] as DOMRect);

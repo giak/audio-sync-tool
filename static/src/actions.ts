@@ -2,7 +2,7 @@
 
 import { api } from './api.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
-import { patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderAll, renderSource } from './render.js';
+import { getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderAll, renderSource } from './render.js';
 import { loadRatings } from './ratings.js';
 import { state } from './state.js';
 import { closeAllModals, openModal, showError } from './ui.js';
@@ -89,10 +89,7 @@ export function initConfigUI(): void {
       configData.configs[idx] = {
         name: (cfgName?.value || '').trim() || `config-${idx}`,
         source_data: (cfgSource?.value || '').trim(),
-        epars_dirs: (cfgEpars?.value || '')
-          .split('\n')
-          .map(s => s.trim())
-          .filter(Boolean),
+        epars_dirs: (cfgEpars?.value || '').split('\n').map(s => s.trim()).filter(Boolean),
       };
       configData.active = idx;
       await api('/config', { method: 'POST', body: JSON.stringify(configData) });
@@ -117,22 +114,15 @@ export async function runScan(): Promise<void> {
   if (progressText) progressText.textContent = '🔍 Préparation…';
   if (statusText) statusText.textContent = 'Scan en cours…';
 
-  // Poll progress every 400ms
   const pollTimer = setInterval(async () => {
     try {
       const p = await api<{ running: boolean; total: number; current: number; phase?: string }>('/scan-progress');
-      if (!p.running) {
-        clearInterval(pollTimer);
-        return;
-      }
+      if (!p.running) { clearInterval(pollTimer); return; }
       const pct = p.total > 0 ? Math.round((p.current / p.total) * 100) : 0;
       if (progressFill) progressFill.style.width = `${Math.min(pct, 100)}%`;
       if (progressText) progressText.textContent = `${p.phase || '…'} : ${p.current} / ${p.total} (${pct}%)`;
-      if (statusText)
-        statusText.textContent = `🔍 Scan ${p.phase ? p.phase.toLowerCase() : '…'} — ${p.current}/${p.total}`;
-    } catch (_) {
-      /* ignore polling errors */
-    }
+      if (statusText) statusText.textContent = `🔍 Scan ${p.phase ? p.phase.toLowerCase() : '…'} — ${p.current}/${p.total}`;
+    } catch (_) { /* ignore polling errors */ }
   }, 400);
 
   let scanFailed = false;
@@ -147,16 +137,11 @@ export async function runScan(): Promise<void> {
     showError(`Scan échoué : ${err instanceof Error ? err.message : String(err)}`);
   } finally {
     clearInterval(pollTimer);
-    if (btn) {
-      btn.disabled = false;
-      btn.classList.remove('scanning');
-    }
+    if (btn) { btn.disabled = false; btn.classList.remove('scanning'); }
     if (progressBar) progressBar.classList.add('hidden');
     if (progressFill) progressFill.style.width = '0%';
-
     if (!scanFailed) {
-      const totalFiles =
-        Object.values(state.sourceFiles).reduce((s, f) => s + Object.keys(f).length, 0) +
+      const totalFiles = Object.values(state.sourceFiles).reduce((s, f) => s + Object.keys(f).length, 0) +
         Object.values(state.eparsFiles).reduce((s, f) => s + Object.keys(f).length, 0);
       if (statusText) statusText.textContent = `Scan terminé — ${totalFiles.toLocaleString('fr')} fichiers`;
     }
@@ -165,9 +150,64 @@ export async function runScan(): Promise<void> {
 
 // ── Copy (F5) ─────────────────────────────────────────────────────────────
 export function executeCopy(): void {
+  const statusText = document.getElementById('status-text');
+
+  // ── Batch copy (A8/A9) : multi-select or drag-drop ──────────────────
+  const batch = getBatchCopy();
+  if (batch.target && batch.files.length > 0) {
+    const destDir = batch.target;
+    const files = batch.files;
+    const dialogMsg = document.getElementById('dialog-msg');
+    if (dialogMsg) {
+      dialogMsg.textContent = files.length === 1
+        ? `Copier "${files[0].filename}" vers "${destDir}" ?`
+        : `Copier ${files.length} fichiers vers "${destDir}" ?`;
+    }
+    openModal('dialog');
+    const confirmBtn = document.getElementById('dialog-confirm');
+    const cancelBtn = document.getElementById('dialog-cancel');
+    if (confirmBtn) {
+      confirmBtn.onclick = async () => {
+        closeAllModals();
+        let copied = 0;
+        for (const f of files) {
+          const relPath = state.eparsFiles[f.eparDir]?.[f.filename]?.path;
+          if (!relPath) continue;
+          const fullSrc = `${f.eparDir}/${relPath}`;
+          try {
+            const res = await api<{ ok: boolean; year?: string | null; duration?: number | null; codec?: string | null }>('/copy', {
+              method: 'POST',
+              body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename: f.filename }),
+            });
+            if (!res.ok) continue;
+            copied++;
+            let relPathNew = f.filename;
+            const sourceDir = Object.keys(state.sourceFiles).find(dir => destDir === dir || destDir.startsWith(`${dir}/`));
+            if (sourceDir && destDir.startsWith(sourceDir)) {
+              const rel = destDir.substring(sourceDir.length).replace(/^\/+/, '');
+              relPathNew = rel ? `${rel}/${f.filename}` : f.filename;
+              if (!state.sourceFiles[sourceDir]) state.sourceFiles[sourceDir] = {};
+              state.sourceFiles[sourceDir][f.filename] = { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null };
+            }
+            patchEparsFileAfterCopy(f.filename, f.eparDir);
+            if (!patchSourceFileAfterCopy(destDir, f.filename, { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null })) {
+              renderSource();
+            }
+          } catch (_) { /* continue */ }
+        }
+        state.journal = await api('/journal');
+        state.selectedEparsFiles.clear();
+        requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
+        if (statusText) statusText.textContent = `✓ ${copied}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}`;
+      };
+    }
+    if (cancelBtn) cancelBtn.onclick = () => closeAllModals();
+    return;
+  }
+
+  // ── Single-file copy (original F5 flow) ───────────────────────────
   const leftFocus = document.querySelector('#epars-container .focused .file') as HTMLElement | null;
   const rightFocus = document.querySelector('#source-container .focused.directory') as HTMLElement | null;
-  const statusText = document.getElementById('status-text');
 
   if (!leftFocus) {
     if (statusText) statusText.textContent = "Met d'abord en surbrillance un fichier à gauche (↑↓).";
@@ -202,40 +242,24 @@ export function executeCopy(): void {
     confirmBtn.onclick = async () => {
       closeAllModals();
       try {
-        const res = await api<{ ok: boolean; year?: string | null; duration?: number | null; codec?: string | null }>(
-          '/copy',
-          {
-            method: 'POST',
-            body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename }),
-          },
-        );
+        const res = await api<{ ok: boolean; year?: string | null; duration?: number | null; codec?: string | null }>('/copy', {
+          method: 'POST',
+          body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename }),
+        });
         state.journal = await api('/journal');
-        // Compute the relative path for both state update and DOM patch
         let relPathNew = filename;
         const sourceDir = Object.keys(state.sourceFiles).find(dir => destDir === dir || destDir.startsWith(`${dir}/`));
         if (sourceDir && destDir.startsWith(sourceDir)) {
           const rel = destDir.substring(sourceDir.length).replace(/^\/+/, '');
           relPathNew = rel ? `${rel}/${filename}` : filename;
           if (!state.sourceFiles[sourceDir]) state.sourceFiles[sourceDir] = {};
-          state.sourceFiles[sourceDir][filename] = {
-            path: relPathNew,
-            year: res.year ?? null,
-            duration: res.duration ?? null,
-            codec: res.codec ?? null,
-          };
+          state.sourceFiles[sourceDir][filename] = { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null };
         }
-        // Patch DOM without full rebuild — huge perf win on large libraries
         patchEparsFileAfterCopy(filename, eparDir);
-        if (
-          !patchSourceFileAfterCopy(destDir, filename, {
-            path: relPathNew,
-            year: res.year ?? null,
-            duration: res.duration ?? null,
-            codec: res.codec ?? null,
-          })
-        ) {
+        if (!patchSourceFileAfterCopy(destDir, filename, { path: relPathNew, year: res.year ?? null, duration: res.duration ?? null, codec: res.codec ?? null })) {
           renderSource();
         }
+        state.selectedEparsFiles.clear();
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
         if (statusText) statusText.textContent = `✓ ${filename} copié vers ${destDir}`;
       } catch (err) {
@@ -243,7 +267,6 @@ export function executeCopy(): void {
       }
     };
   }
-
   if (cancelBtn) cancelBtn.onclick = () => closeAllModals();
 }
 
@@ -268,7 +291,6 @@ export async function initApp(): Promise<void> {
       state.eparsFiles = (cache.epars || {}) as typeof state.eparsFiles;
     }
 
-    // Load ratings in background (fire-and-forget to not block init)
     loadRatings().catch(() => {/* ratings are optional */});
 
     renderAll();

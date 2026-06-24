@@ -76,7 +76,11 @@ vi.hoisted(() => {
       <button id="btn-scan">🔄 Scan</button>
       <button id="btn-journal">📋 Journal</button>
       <button id="btn-legend">❓ Raccourcis</button>
-      <button id="btn-playlist">🎵 Playlist</button>
+    </div>
+    <div id="page-nav">
+      <button id="page-sync" class="page-btn active">📦 Sync</button>
+      <button id="page-playlist" class="page-btn">🎵 Playlist</button>
+    </div>
     </div>
   </header>
   <div id="main-panels">
@@ -660,7 +664,7 @@ describe('Error resilience', () => {
 
   it('Ctrl+S shows error toast when network is unreachable', async () => {
     vi.mocked(api).mockResolvedValueOnce([]);
-    document.getElementById('btn-playlist')!.click();
+    document.getElementById('page-playlist')!.click();
     await flush();
 
     state.sourceExpanded.add('/home/music/Rock');
@@ -742,7 +746,7 @@ describe('State proxy', () => {
 describe('Playlist mode', () => {
   async function enterPlaylist(): Promise<void> {
     vi.mocked(api).mockResolvedValueOnce([]);
-    document.getElementById('btn-playlist')!.click();
+    document.getElementById('page-playlist')!.click();
     await flush();
 
     state.sourceExpanded.add('/home/music/Rock');
@@ -780,11 +784,24 @@ describe('Playlist mode', () => {
     expect(tabEl!.textContent).toContain('playlist-1');
   });
 
-  it('Escape quits playlist mode and returns to normal view', async () => {
+  it('Escape does NOT exit playlist mode (stays in playlist)', async () => {
     await enterPlaylist();
     expect(state.playlistMode).toBe(true);
 
     dispatchKey('Escape');
+    await flush();
+
+    // Playlist mode is still active, layout unchanged
+    expect(state.playlistMode).toBe(true);
+    expect(document.getElementById('playlist-layout')!.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('main-panels')!.classList.contains('hidden')).toBe(true);
+  });
+
+  it('Sync button exits playlist mode and returns to normal view', async () => {
+    await enterPlaylist();
+    expect(state.playlistMode).toBe(true);
+
+    document.getElementById('page-sync')!.click();
     await flush();
     await flush();
 
@@ -794,7 +811,7 @@ describe('Playlist mode', () => {
     expect(document.getElementById('status-text')!.textContent).toBe('Prêt.');
   });
 
-  it('Escape saves pending tracks before exiting playlist mode', async () => {
+  it('Sync button saves pending tracks before exiting playlist mode', async () => {
     await enterPlaylist();
     state.playlistFocus = 'source';
 
@@ -808,7 +825,7 @@ describe('Playlist mode', () => {
     vi.mocked(api).mockResolvedValueOnce({ ok: true, playlist: { name: 'playlist-1' } });
     vi.mocked(api).mockResolvedValueOnce([]);
 
-    dispatchKey('Escape');
+    document.getElementById('page-sync')!.click();
     await flush();
     await flush();
 
@@ -824,7 +841,7 @@ describe('Playlist mode', () => {
     expect(document.getElementById('main-panels')!.classList.contains('hidden')).toBe(false);
   });
 
-  it('Escape with empty pending tracks exits without calling save', async () => {
+  it('Sync button with empty pending tracks exits without calling save', async () => {
     await enterPlaylist();
     expect(state.playlistMode).toBe(true);
     expect(Object.keys(state.pendingPlaylists).length).toBe(1);
@@ -833,7 +850,7 @@ describe('Playlist mode', () => {
     vi.clearAllMocks();
     vi.mocked(api).mockResolvedValue({});
 
-    dispatchKey('Escape');
+    document.getElementById('page-sync')!.click();
     await flush();
     await flush();
 

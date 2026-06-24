@@ -23,8 +23,8 @@ function setFocusPath(path: string | null): void {
 }
 
 export function getItems(container: HTMLElement): NodeListOf<Element> {
-  if (container.id === 'source-container') return container.querySelectorAll('.directory');
-  return container.querySelectorAll('.file-row, .directory');
+  // Inclure les .file-row dans les dossiers dépliés (C3)
+  return container.querySelectorAll('.directory, .file-row');
 }
 
 export function focusItemByPath(container: HTMLElement, path: string | null): void {
@@ -54,11 +54,55 @@ export function getFocusedItem(container: HTMLElement): Element | null {
   return container.querySelector('.focused');
 }
 
-export function focusItemByElement(container: HTMLElement, el: Element): void {
+export function focusItemByElement(
+  container: HTMLElement,
+  el: Element,
+  opts?: { noHistory?: boolean },
+): void {
+  const focusPath = (el as HTMLElement).dataset.focuspath || null;
   for (const el of container.querySelectorAll('.focused')) el.classList.remove('focused');
   el.classList.add('focused');
   el.scrollIntoView({ block: 'nearest' });
-  setFocusPath((el as HTMLElement).dataset.focuspath || null);
+  setFocusPath(focusPath);
+
+  // Push to nav history (A12) — skip when restoring from history
+  if (!opts?.noHistory && focusPath) {
+    const entry = { panel: state.activePanel, focusPath };
+    // Dedup consecutive same entry
+    const prev = state.navHistory[state.navIndex];
+    if (!prev || prev.panel !== entry.panel || prev.focusPath !== entry.focusPath) {
+      // Truncate forward history when navigating from mid-stack
+      state.navHistory = state.navHistory.slice(0, state.navIndex + 1);
+      state.navHistory.push(entry);
+      state.navIndex = state.navHistory.length - 1;
+      // Limit history to 200 entries
+      if (state.navHistory.length > 200) {
+        state.navHistory = state.navHistory.slice(-200);
+        state.navIndex = state.navHistory.length - 1;
+      }
+    }
+  }
+}
+
+export function navigateHistory(direction: number): void {
+  const newIdx = state.navIndex + direction;
+  if (newIdx < 0 || newIdx >= state.navHistory.length) return;
+  state.navIndex = newIdx;
+  const entry = state.navHistory[newIdx];
+
+  // Switch panel if needed
+  state.activePanel = entry.panel;
+  for (const el of document.querySelectorAll('.panel-active')) el.classList.remove('panel-active');
+  getActivePanelEl()?.classList.add('panel-active');
+
+  // If in playlist mode, exit to sync first
+  if (state.playlistMode) {
+    // Can't navigate playlist history from sync; just restore focus in sync
+    // (Playlist mode nav history is not tracked — only sync panels)
+  }
+
+  const container = getActiveContainer();
+  if (container) focusItemByPath(container, entry.focusPath);
 }
 
 export function navigateFocus(container: HTMLElement, direction: number): void {

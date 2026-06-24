@@ -32,7 +32,7 @@ export function initFilterPalette(onFilterChange: () => void): void {
     filterDebounceTimer = setTimeout(() => {
       state.sourceFilter = filterInput.value;
       state.filterActive = !!state.sourceFilter;
-      if (!state.filterActive) state.sourceExpanded.clear();
+      if (!state.filterActive) state.sourceExpanded = new Set(state.sourceManuallyExpanded);
       onFilterChange();
     }, 150);
   });
@@ -55,7 +55,7 @@ export function openFilterPalette(setActivePanel: (panel: 'epars' | 'source') =>
 export function closeFilterPalette(renderSource: () => void): void {
   state.filterActive = false;
   state.sourceFilter = '';
-  state.sourceExpanded.clear();
+  state.sourceExpanded = new Set(state.sourceManuallyExpanded);
   if (filterInput) filterInput.value = '';
   document.getElementById('filter-palette')?.classList.add('hidden');
   renderSource();
@@ -96,4 +96,62 @@ export function showError(msg: string): void {
       ? '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.'
       : 'Prêt.';
   }, 5000);
+}
+
+// ── Context menu (A7) ────────────────────────────────────────────────────
+
+interface ContextMenuItem {
+  label: string;
+  action: () => void;
+  danger?: boolean;
+}
+
+let _ctxMenuEl: HTMLElement | null = null;
+
+export function showContextMenu(x: number, y: number, items: ContextMenuItem[]): void {
+  closeContextMenu();
+  if (items.length === 0) return;
+
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+
+  for (const item of items) {
+    const el = document.createElement('div');
+    el.className = `ctx-item${item.danger ? ' ctx-danger' : ''}`;
+    el.textContent = item.label;
+    el.onclick = (e: MouseEvent) => {
+      e.stopPropagation();
+      closeContextMenu();
+      item.action();
+    };
+    menu.appendChild(el);
+  }
+
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+
+  // Ajuster si le menu dépasse de l'écran
+  requestAnimationFrame(() => {
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = `${x - rect.width}px`;
+    if (rect.bottom > window.innerHeight) menu.style.top = `${y - rect.height}px`;
+  });
+
+  // Fermer au clic extérieur
+  setTimeout(() => {
+    document.addEventListener('click', _closeOnOutsideClick, { once: true });
+  }, 0);
+}
+
+function _closeOnOutsideClick(): void {
+  closeContextMenu();
+}
+
+export function closeContextMenu(): void {
+  if (_ctxMenuEl) {
+    _ctxMenuEl.remove();
+    _ctxMenuEl = null;
+  }
 }

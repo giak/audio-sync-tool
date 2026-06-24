@@ -19,6 +19,7 @@ vi.mock('./render.js', () => ({
   renderSource: vi.fn(),
   patchEparsFileAfterCopy: vi.fn(),
   patchSourceFileAfterCopy: vi.fn(),
+  getBatchCopy: vi.fn(() => ({ target: null, files: [] })),
 }));
 
 vi.mock('./focus.js', () => ({
@@ -28,7 +29,7 @@ vi.mock('./focus.js', () => ({
 
 import { configData, executeCopy, initApp, runScan } from './actions.js';
 import { api } from './api.js';
-import { patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderAll, renderSource } from './render.js';
+import { getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderAll, renderSource } from './render.js';
 import { closeAllModals, openModal, showError } from './ui.js';
 
 function setupCopyDOM(

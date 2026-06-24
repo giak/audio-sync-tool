@@ -2,7 +2,7 @@
 
 import { executeCopy, initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI, isAudioPlaying, seekAudio, stopPlayer } from './audio.js';
-import { getFocusedItem, getItems, navigateColumn, navigateFocus, revalidateFocus, setActivePanel } from './focus.js';
+import { focusItemByElement, getFocusedItem, getItems, navigateColumn, navigateFocus, navigateHistory, revalidateFocus, setActivePanel } from './focus.js';
 import {
   addTrack,
   createNewPlaylist,
@@ -23,10 +23,12 @@ import {
   renderPlaylistSource,
   renderSource,
   startRatingEdit,
+  startSourceRatingEdit,
 } from './render.js';
 import { state } from './state.js';
 import {
   closeAllModals,
+  closeContextMenu,
   closeFilterPalette,
   initFilterPalette,
   openFilterPalette,
@@ -59,7 +61,10 @@ function toggleTrackInPlaylist(): void {
   const container = document.getElementById('playlist-source-container') as HTMLElement | null;
   if (!container) return;
   const focused = container.querySelector('.focused') as HTMLElement | null;
-  if (!focused?.classList.contains('file-row')) return;
+  if (!focused?.classList.contains('file-row')) {
+    showToast('ℹ️ ↑↓ pour focuser un fichier, puis Espace pour ajouter/retirer.');
+    return;
+  }
 
   const label = focused.querySelector('.file') as HTMLElement | null;
   const filename = label?.textContent || '';
@@ -179,6 +184,8 @@ async function enterPlaylistMode(): Promise<void> {
 
   document.getElementById('main-panels')?.classList.add('hidden');
   document.getElementById('playlist-layout')?.classList.remove('hidden');
+  document.getElementById('page-sync')?.classList.remove('active');
+  document.getElementById('page-playlist')?.classList.add('active');
 
   if (state.playlists.length === 0 && Object.keys(state.pendingPlaylists).length === 0) {
     createNewPlaylist('playlist-1');
@@ -212,6 +219,8 @@ async function exitPlaylistMode(): Promise<void> {
   state.playlistMode = false;
   document.getElementById('playlist-layout')?.classList.add('hidden');
   document.getElementById('main-panels')?.classList.remove('hidden');
+  document.getElementById('page-playlist')?.classList.remove('active');
+  document.getElementById('page-sync')?.classList.add('active');
   const statusText = document.getElementById('status-text');
   if (statusText) statusText.textContent = 'Prêt.';
 }
@@ -254,11 +263,6 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 
   // ── Mode Playlist keyboard handling ────────────────────────────────────
   if (state.playlistMode) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      exitPlaylistMode();
-      return;
-    }
     if (e.key === 'Tab') {
       e.preventDefault();
       togglePlaylistFocus();
@@ -312,6 +316,13 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
       return;
     }
 
+    // N — edit rating on focused file-row in source tree
+    if ((e.key === 'n' || e.key === 'N') && !isInput && state.playlistFocus === 'source') {
+      e.preventDefault();
+      startSourceRatingEdit();
+      return;
+    }
+
     // ↑↓ — navigate in the active playlist panel
     if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !isInput) {
       e.preventDefault();
@@ -331,6 +342,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
         const newIdx = Math.max(0, Math.min(tracks.length - 1, idx + (e.key === 'ArrowDown' ? 1 : -1)));
         tracks[newIdx].classList.add('focused');
         tracks[newIdx].scrollIntoView({ block: 'nearest' });
+        state.playlistTrackFocusIndex = newIdx;
       }
       return;
     }
@@ -349,14 +361,35 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
       return;
     }
 
-    // ←→ — seek audio when playing
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    // ←→ — colonnes quand pas d'audio, sinon seek
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !isInput) {
+      e.preventDefault();
       if (isAudioPlaying()) {
         seekAudio(e.key === 'ArrowRight' ? 1 : -1);
+      } else if (state.playlistFocus === 'source') {
+        const container = document.getElementById('playlist-source-container');
+        if (container) navigateColumn(container, e.key === 'ArrowRight' ? 1 : -1);
       }
-      e.preventDefault();
       return;
     }
+  }
+
+  // ── Ctrl+L — focus le fichier en cours de lecture (hors playlist block) ─
+  if ((e.key === 'l' || e.key === 'L') && e.ctrlKey && !isInput) {
+    e.preventDefault();
+    const playingRow = document.querySelector('.led-playing')?.closest('.file-row') as HTMLElement | null;
+    if (playingRow) {
+      const container = playingRow.closest(
+        '#epars-container, #source-container, #playlist-source-container',
+      ) as HTMLElement | null;
+      if (container) {
+        focusItemByElement(container, playingRow);
+        playingRow.scrollIntoView({ block: 'center' });
+        if (container.id === 'epars-container') setActivePanel('epars');
+        else setActivePanel('source');
+      }
+    }
+    return;
   }
 
   if (e.key === 'F5') {
@@ -382,7 +415,20 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
       stopPlayer();
       return;
     }
+    closeContextMenu();
     return;
+  }
+
+  // ── Alt+←/→ — navigation history (A12) ──────────────────────────────
+  if (e.altKey && !isInput) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); navigateHistory(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); navigateHistory(1); return; }
+  }
+
+  // ── Alt+←/→ — navigation history (A12) ──────────────────────────────
+  if (e.altKey && !isInput) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); navigateHistory(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); navigateHistory(1); return; }
   }
 
   if (isInput) return;
@@ -401,12 +447,38 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     }
   }
 
-  // ←→ — seek audio when playing (même comportement qu'en mode Playlist)
+    // ←→ — seek audio when playing (même comportement qu'en mode Playlist)
   // Passe en navigation de colonne uniquement si aucun morceau ne joue.
   if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && isAudioPlaying()) {
     e.preventDefault();
     seekAudio(e.key === 'ArrowRight' ? 1 : -1);
     return;
+  }
+
+  // ── Backspace — focuser le dossier parent (A5) ───────────────────
+  if (e.key === 'Backspace' && !isInput) {
+    const container =
+      state.activePanel === 'source'
+        ? document.getElementById('source-container')
+        : document.getElementById('epars-container');
+    const focused = container?.querySelector('.focused') as HTMLElement | null;
+    if (focused) {
+      const parentChildren = focused.closest('.children') as HTMLElement | null;
+      if (parentChildren) {
+        // Source Data: .children est enfant de .directory → closest()
+        // Éparpillé : .children est sibling de .directory → previousElementSibling
+        let parentDir = parentChildren.closest('.directory') as HTMLElement | null;
+        if (!parentDir) {
+          const sibling = parentChildren.previousElementSibling as HTMLElement | null;
+          if (sibling?.classList.contains('directory')) parentDir = sibling;
+        }
+        if (parentDir) {
+          e.preventDefault();
+          focusItemByElement(container!, parentDir);
+          return;
+        }
+      }
+    }
   }
 
   if (e.key === 'Tab') {
@@ -465,12 +537,11 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   renderPlaylistManager();
   openModal('playlists');
 };
-(document.getElementById('btn-playlist') as HTMLElement | null)!.onclick = async () => {
-  if (state.playlistMode) {
-    exitPlaylistMode();
-  } else {
-    await enterPlaylistMode();
-  }
+(document.getElementById('page-sync') as HTMLElement | null)!.onclick = async () => {
+  if (state.playlistMode) await exitPlaylistMode();
+};
+(document.getElementById('page-playlist') as HTMLElement | null)!.onclick = async () => {
+  if (!state.playlistMode) await enterPlaylistMode();
 };
 
 // ── Panel click ───────────────────────────────────────────────────────────
@@ -490,7 +561,33 @@ initFilterPalette(() => {
   revalidateFocus();
 });
 
+// ── Server health indicator ────────────────────────────────────────────────
+function updateServerIndicator(): void {
+  const dot = document.getElementById('server-indicator');
+  if (!dot) return;
+  fetch('/ping')
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        dot.classList.add('online');
+        dot.textContent = '🟢 Online';
+        dot.title = 'Serveur connecté';
+      } else {
+        dot.classList.remove('online');
+        dot.textContent = '🔴 Offline';
+        dot.title = 'Serveur hors ligne';
+      }
+    })
+    .catch(() => {
+      dot.classList.remove('online');
+      dot.textContent = '🔴 Offline';
+      dot.title = 'Serveur injoignable';
+    });
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
+updateServerIndicator();
+setInterval(updateServerIndicator, 10000);
 initAudioUI();
 initConfigUI();
 initApp();
