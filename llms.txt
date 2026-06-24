@@ -29,3 +29,7 @@ docs/superpowers/specs/2026-06-23-ux-stabilization-audit.md
 docs/superpowers/specs/2026-06-23-ratings-design.md
 docs/superpowers/specs/2026-06-23-playlist-creation-design.md
 docs/superpowers/specs/2026-06-23-toolbar-pages-design.md
+
+# Plan de refactoring architectural (5 phases, à lire avant toute modif structurelle)
+docs/superpowers/specs/2026-06-24-architecture-refactoring.md
+docs/superpowers/plans/2026-06-24-architecture-refactoring.md
