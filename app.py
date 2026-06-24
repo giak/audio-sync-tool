@@ -140,7 +140,15 @@ def config():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Cache-buster: use dist script.js mtime so browser always gets fresh JS/CSS
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'dist', 'script.js')
+    cache_buster = str(int(os.path.getmtime(script_path))) if os.path.exists(script_path) else '1'
+    return render_template('index.html', cache_buster=cache_buster)
+
+
+@app.route('/ping')
+def ping():
+    return jsonify({'ok': True, 'timestamp': datetime.now().isoformat()})
 
 
 def index_files(directory, phase_label='source'):
