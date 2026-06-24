@@ -4,18 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Audio Sync Tool</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v={{ cache_buster }}">
 </head>
 <body>
 <div id="app">
   <header>
     <h1>Audio Sync Tool</h1>
+    <div id="page-nav">
+      <button id="page-sync" class="page-btn active">📦 Sync</button>
+      <button id="page-playlist" class="page-btn">🎵 Playlist</button>
+    </div>
     <div id="toolbar">
+      <span id="server-indicator" class="server-badge" title="Serveur hors ligne">🔴 Offline</span>
       <button id="btn-config">⚙️ Config</button>
       <button id="btn-scan">🔄 Scan</button>
       <button id="btn-journal">📋 Journal</button>
       <button id="btn-legend">❓ Raccourcis</button>
-      <button id="btn-playlist">🎵 Playlist</button>
     </div>
   </header>
 
@@ -133,6 +137,11 @@
     </div>
     <div id="legend-grid">
       <div class="legend-section">
+        <h4>Navigation pages</h4>
+        <div class="legend-row">📦 <kbd>Sync</kbd> Copie éparpillé → Source Data</div>
+        <div class="legend-row">🎵 <kbd>Playlist</kbd> Playlists + notation</div>
+      </div>
+      <div class="legend-section">
         <h4>Statuts</h4>
         <div class="legend-row"><span class="led-demo led-demo-nouveau"></span> Nouveau — pas dans la source</div>
         <div class="legend-row"><span class="led-demo led-demo-doublon"></span> Doublon — déjà présent</div>
@@ -140,17 +149,31 @@
         <div class="legend-row"><span class="led-demo led-demo-playing"></span> En lecture</div>
       </div>
       <div class="legend-section">
-        <h4>Raccourcis</h4>
-        <div class="legend-row"><kbd>↑↓</kbd> Naviguer</div>
-        <div class="legend-row"><kbd>←→</kbd> Navigation colonnes (Source)</div>
-        <div class="legend-row"><kbd>Shift←→</kbd> Seek audio ±20s</div>
+        <h4>Raccourcis (Sync)</h4>
+        <div class="legend-row"><kbd>↑↓</kbd> Naviguer fichiers/dossiers</div>
+        <div class="legend-row"><kbd>←→</kbd> Navigation colonnes (Source Data)</div>
+        <div class="legend-row"><kbd>Shift + ←→</kbd> Seek audio ±20s</div>
         <div class="legend-row"><kbd>Tab</kbd> Basculer panneau</div>
         <div class="legend-row"><kbd>Entrée</kbd> Jouer / Déplier dossier</div>
         <div class="legend-row"><kbd>Espace</kbd> Sélectionner fichier</div>
         <div class="legend-row"><kbd>F5</kbd> Copier → dossier</div>
-        <div class="legend-row"><kbd>F7</kbd> Filtrer dossiers</div>
-        <div class="legend-row"><kbd>/</kbd> Filtrer dossiers</div>
-        <div class="legend-row"><kbd>Échap</kbd> Fermer / Annuler</div>
+        <div class="legend-row"><kbd>F7</kbd> / <kbd>/</kbd> Filtrer dossiers</div>
+        <div class="legend-row"><kbd>N</kbd> Noter le fichier (0-100)</div>
+        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / Annuler filtre / Stopper audio</div>
+      </div>
+      <div class="legend-section">
+        <h4>Raccourcis (Playlist)</h4>
+        <div class="legend-row"><kbd>↑↓</kbd> Naviguer source / pistes</div>
+        <div class="legend-row"><kbd>Tab</kbd> Basculer source ↔ sidebar</div>
+        <div class="legend-row"><kbd>Entrée</kbd> Jouer le fichier</div>
+        <div class="legend-row"><kbd>Espace</kbd> Ajouter/retirer morceau</div>
+        <div class="legend-row"><kbd>N</kbd> Noter le morceau (0-100)</div>
+        <div class="legend-row"><kbd>Suppr</kbd> / <kbd>←</kbd> Retirer du sidebar</div>
+        <div class="legend-row"><kbd>Ctrl + S</kbd> Sauvegarder la playlist</div>
+        <div class="legend-row"><kbd>Ctrl + E</kbd> Exporter la playlist</div>
+        <div class="legend-row"><kbd>Ctrl + ↑↓</kbd> Réorganiser les pistes</div>
+        <div class="legend-row"><kbd>F7</kbd> / <kbd>/</kbd> Filtrer dossiers</div>
+        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / Annuler filtre / Stopper audio</div>
       </div>
     </div>
   </div>
@@ -194,6 +217,6 @@
   </div>
 </div>
 
-<script type="module" src="/static/dist/script.js"></script>
+<script type="module" src="/static/dist/script.js?v={{ cache_buster }}"></script>
 </body>
 </html>

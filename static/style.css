@@ -60,6 +60,30 @@ input, button, select, textarea { font-family: inherit; }
   #player-progress-fill { transition: none; }
 }
 
+/* ===== Page Navigation =============================================== */
+#page-nav {
+  display: flex;
+  gap: 4px;
+}
+.page-btn {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-panel);
+  padding: 5px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 3px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.page-btn.active {
+  background: var(--bg-focus);
+  border-color: var(--border-active);
+  color: var(--accent);
+}
+.page-btn:hover {
+  background: var(--bg-focus);
+}
+
 /* ===== Header & Toolbar ============================================== */
 header {
   background: var(--bg-surface);
@@ -73,7 +97,7 @@ header h1 {
   color: var(--accent);
   letter-spacing: 0.5px;
 }
-#toolbar { display: flex; gap: 6px; }
+#toolbar { display: flex; gap: 6px; margin-left: auto; }
 #toolbar button {
   background: var(--bg-hover); color: var(--text-secondary);
   border: 1px solid var(--border-panel);
@@ -119,6 +143,7 @@ header h1 {
 }
 .directory.focused { background: var(--bg-focus); outline: 1px solid var(--border-focus); }
 .directory:hover    { background: var(--bg-hover); }
+.directory:active   { background: var(--bg-focus); opacity: 0.8; }
 .directory::before  { content: '📁  '; }
 #source-container .directory.expanded::before { content: '📂  '; }
 .children { padding-left: 12px; }
@@ -133,6 +158,7 @@ header h1 {
   gap: 4px; padding: 2px 0;
 }
 .file-row.focused { background: var(--bg-focus); outline: 1px solid var(--border-focus); }
+.file-row:active   { background: var(--bg-focus); opacity: 0.8; }
 
 /* Play button */
 .play-btn {
@@ -177,6 +203,26 @@ header h1 {
 .year     { margin-left: auto; font-size: 13px; color: var(--text-muted); }
 .codec    { font-size: 12px; color: var(--text-dim); }
 .duration { font-size: 12px; color: var(--text-secondary); text-align: right; min-width: 40px; }
+
+/* ===== File-level rating display (Source Data tree) ================== */
+.file-rating {
+  font-size: 12px;
+  color: var(--text-dim);
+  min-width: 24px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.file-rating:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.file-row:hover .file-rating {
+  color: var(--text-secondary);
+}
 
 /* ===== Éparpillé Status Line ========================================= */
 #epars-status-line {
@@ -297,6 +343,23 @@ header h1 {
   padding: 7px 18px; font-size: 13px;
   border-top: 1px solid var(--border-panel);
   color: var(--text-secondary); flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+}
+.server-badge {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-panel);
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.3s, border-color 0.3s, color 0.3s;
+  background: rgba(255,68,102,0.15);
+  color: var(--led-red);
+}
+.server-badge.online {
+  background: rgba(0,255,136,0.12);
+  color: var(--led-green);
+  border-color: rgba(0,255,136,0.3);
 }
 
 /* ===== Filter Palette (floating) ===================================== */
@@ -492,6 +555,7 @@ header h1 {
 }
 .pl-track:hover { background: var(--bg-hover); }
 .pl-track.focused { background: var(--bg-focus); outline: 1px solid var(--border-focus); }
+.pl-track:active   { background: var(--bg-focus); opacity: 0.8; }
 .pl-track.dragging { opacity: 0.4; }
 .pl-track.drag-over { border-top: 2px solid var(--accent); }
 
@@ -566,6 +630,38 @@ header h1 {
   border: 1px solid var(--border-panel); border-radius: 2px;
 }
 .pl-mgr-actions button:hover { background: var(--bg-focus); color: var(--text-primary); }
+
+/* ===== Context Menu (A7) =========================================== */
+.context-menu {
+  position: fixed;
+  z-index: 200;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-active);
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 200px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+}
+.ctx-item {
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.ctx-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.ctx-item.ctx-danger { color: var(--led-red); }
+.ctx-item.ctx-danger:hover { background: rgba(255,68,102,0.12); }
+
+/* ===== Drag & Drop States (A9) ====================================== */
+.file-row.dragging-source { opacity: 0.4; }
+.directory.drag-over {
+  background: rgba(0, 212, 255, 0.12);
+  border: 1px dashed var(--accent);
+}
 
 /* ===== Scrollbar ===================================================== */
 ::-webkit-scrollbar             { width: 6px; }
