@@ -262,7 +262,7 @@ export function makeFileEl(
 }
 ```
 
-- [ ] **Step 3: Extraire `sourceTree.ts`** ⚠️ NON FAIT — renderSource() encore dans render.ts
+- [x] **Step 3: Extraire `sourceTree.ts`** — renderSource, toggleSourceDir, renderDirTree, buildSourceChildren, showDirContextMenu ✅ (95985da)
 
 Fonctions à déplacer :
 - `renderSource()`
@@ -277,7 +277,7 @@ Fonctions à déplacer :
 Ces fonctions importent `makeFileEl` depuis `./fileRow.js` et passent les callbacks
 appropriés selon le conteneur (source-container vs playlist-source-container).
 
-- [ ] **Step 4: Extraire `eparsUI.ts`, `playlistUI.ts`, `journalUI.ts`** ⚠️ NON FAIT
+- [x] **Step 4: Extraire `eparsUI.ts`, `playlistUI.ts`, `journalUI.ts`** ✅ (95985da)
 
 Chaque module suit le même pattern : importer `makeFileEl` depuis `./fileRow.js`,
 passer les callbacks spécifiques au contexte.
@@ -285,7 +285,7 @@ passer les callbacks spécifiques au contexte.
 ⚠️ `eparsUI.ts` doit exposer `selectEparsFile()` qui gère la sélection simple/multiple
 (Ctrl+clic, Shift+clic). Cette fonction utilise `focusItemByElement` → callback.
 
-- [ ] **Step 5: Extraire `ratingEdit.ts`** ⚠️ NON FAIT — `_startInlineRatingEdit()` encore dans render.ts
+- [x] **Step 5: Extraire `ratingEdit.ts`** — _startInlineRatingEdit, startRatingEdit, startSourceRatingEdit, _ratingClickHandler ✅ (95985da)
 
 Fonctions à déplacer :
 - `_startInlineRatingEdit()` (la fonction partagée)
@@ -294,7 +294,7 @@ Fonctions à déplacer :
 - `_ratingClickHandler()`
 - `_ratingEditActive` (module-level)
 
-- [x] **Step 6: Extraire `contextMenu.ts`, `dragDrop.ts`, `batchCopy.ts`** — batchCopy.ts ✅ extrait, contextMenu.ts et dragDrop.ts ⚠️ NON FAIT
+- [x] **Step 6: Extraire `contextMenu.ts`, `dragDrop.ts`, `batchCopy.ts`** — batchCopy.ts ✅ existant, dragDrop.ts ✅ créé (95985da), showDirContextMenu inlined dans sourceTree.ts (évite circular dep)
 
 - `contextMenu.ts` : `showDirContextMenu`, `batchCopyToDir`
 - `dragDrop.ts` : `doDragCopy`
@@ -327,7 +327,7 @@ export { getBatchCopy } from './batchCopy.js';
 export { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from '../domPatches.js'; // Phase 5
 ```
 
-- [ ] **Step 8: Supprimer `render.ts`, mettre à jour tous les imports** ⚠️ NON FAIT — render.ts conservé
+- [x] **Step 8: Simplifier `render.ts`** — passé de 1217 à 185 lignes (thin shell), ré-exporte depuis sous-modules. Non supprimé car contient encore patchEparsFileAfterCopy + patchSourceFileAfterCopy + renderAll
 
 ```bash
 rm static/src/render.ts
@@ -742,9 +742,9 @@ git commit -m "refactor(phase4): focus stabilized — focusPath conserved, focus
 | Déplacement fonctions playlist → playlist.ts | Task 1 | Step 5 |
 | script.ts réduit à ~60 lignes | Task 1 | Step 6 |
 | Tests registry (bind, dispatch, modal isolation, filter, ordre) | Task 1 | Step 3 |
-| Component Factories (9 modules sous render/) | Task 2 | Steps 2-9 |
-| makeFileEl avec callbacks (pas d'import de focus.ts/audio.ts) | Task 2 | Step 2 |
-| render/index.ts assembleur + ré-exports backward compat | Task 2 | Step 7 |
+| Component Factories (10 modules sous render/) | Task 2 | Steps 2-9 ✅ |
+| makeFileEl avec callbacks (pas d'import de focus.ts/audio.ts) | Task 2 | Step 2 ✅ |
+| render/index.ts assembleur + ré-exports backward compat | Task 2 | Step 7 ✅ |
 | Tests fileRow, sourceTree, eparsUI | Task 2 | Step 9 |
 | domPatches.ts extrait de render.ts | Task 3 | Step 1 |
 | actions.ts découplé du rendu (mutations state pures) | Task 3 | Step 3 |
