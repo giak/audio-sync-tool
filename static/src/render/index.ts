@@ -2,7 +2,6 @@
 // Phase 2: Component Factories. All modules now under render/.
 
 export {
-  renderAll,
   renderEpars,
   renderSource,
   renderJournal,

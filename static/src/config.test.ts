@@ -19,7 +19,6 @@ vi.hoisted(() => {
 vi.mock('./api.js', () => ({ api: vi.fn() }));
 vi.mock('./ui.js', () => ({ openModal: vi.fn(), closeAllModals: vi.fn() }));
 vi.mock('./render.js', () => ({
-  renderAll: vi.fn(),
   renderJournal: vi.fn(),
   renderSource: vi.fn(),
   patchEparsFileAfterCopy: vi.fn(),

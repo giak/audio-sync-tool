@@ -14,7 +14,6 @@ vi.mock('./ui.js', () => ({
 }));
 
 vi.mock('./render.js', () => ({
-  renderAll: vi.fn(),
   renderJournal: vi.fn(),
   renderSource: vi.fn(),
   patchEparsFileAfterCopy: vi.fn(),
@@ -29,7 +28,7 @@ vi.mock('./focus.js', () => ({
 
 import { configData, executeCopy, initApp, runScan } from './actions.js';
 import { api } from './api.js';
-import { getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderAll, renderSource } from './render.js';
+import { getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderSource } from './render.js';
 import { closeAllModals, openModal, showError } from './ui.js';
 
 function setupCopyDOM(
@@ -196,7 +195,7 @@ describe('executeCopy', () => {
 });
 
 describe('runScan', () => {
-  it('updates state and calls renderAll after scan', async () => {
+  it('updates state after scan', async () => {
     vi.mocked(api).mockResolvedValueOnce({
       source: { '/src': { 'a.mp3': { path: 'a.mp3' } } },
       epars: { '/ep': { 'b.mp3': { path: 'b.mp3' } } },
@@ -207,7 +206,8 @@ describe('runScan', () => {
 
     expect(state.sourceFiles['/src']).toBeDefined();
     expect(state.eparsFiles['/ep']).toBeDefined();
-    expect(renderAll).toHaveBeenCalled();
+    expect(state.eparsFiles['/ep']['b.mp3']).toBeDefined();
+    expect(state.journal).toEqual([]);
     expect(document.getElementById('status-text')!.textContent).toContain('Scan terminé');
   });
 });
@@ -225,7 +225,7 @@ describe('initApp', () => {
 
     expect(configData.configs).toHaveLength(1);
     expect(state.sourceFiles['/src']).toBeDefined();
-    expect(renderAll).toHaveBeenCalled();
+    expect(state.sourceFiles['/src']['a.mp3']).toBeDefined();
   });
 
   it('handles empty cache gracefully', async () => {

@@ -1,4 +1,4 @@
-// ─── Render assembler: imports from sub-modules, re-exports + renderAll ───
+// ─── Render assembler: imports from sub-modules, re-exports ─────────────
 // Phase 2: Component Factories. render.ts is now a thin shell.
 // All exports use local bindings (import + export) to avoid pass-through conflicts.
 
@@ -200,17 +200,6 @@ export function patchSourceFileAfterCopy(
   }
 
   return true;
-}
-
-// ── Render all ────────────────────────────────────────────────────────────
-
-export function renderAll(): void {
-  renderEpars();
-  renderSource();
-  // Double rAF : le premier flush le DOM (innerHTML), le second
-  // garantit que le layout est calculé avant revalidateFocus().
-  // Conservé car éprouvé — ne pas remplacer par un seul rAF.
-  requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
 }
 
 // ── Event subscriptions (Phase 3: auto-render on state change) ───────────
