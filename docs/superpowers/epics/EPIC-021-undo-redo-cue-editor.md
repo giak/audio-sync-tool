@@ -82,7 +82,7 @@ restaurées ni re-pousser.
 
 | Commit | Message |
 |---|---|
-| `…` | `feat(ui): EPIC-021 — undo/redo dans le cue editor (poses/suppressions de cues et loops)` |
+| `f978798` | `feat(ui): EPIC-021 — undo/redo dans le cue editor (poses/suppressions de cues et loops)` |
 
 ## Décisions (KISS)
 
