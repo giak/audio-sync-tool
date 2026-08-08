@@ -33,11 +33,11 @@
 | [EPIC-011](EPIC-011-ecriture-grille-nml.md) | Beatgrid P4 : écrire TEMPO+TYPE=4 dans le NML (le graal) | 🟢 Livré | Moyenne | plan beatgrid §P4 |
 | [EPIC-012](EPIC-012-bande-basse-barres.md) | Beatgrid P5 : bande d'énergie basse + numéros de barre | 🟢 Livré | Basse | plan beatgrid §P5 |
 | [EPIC-013](EPIC-013-robustesse-backend.md) | Robustesse backend : JSON atomique, verrou scan, cache parse, debug off | 🟢 Livré | Moyenne | rapport audit §6/B11/B12 |
-| [EPIC-014](EPIC-014-ux-generale.md) | UX générale : focus trap, aria, police locale, prompt→modales, responsive | ⚪ Backlog | Moyenne | rapport audit §4 |
+| [EPIC-014](EPIC-014-ux-generale.md) | UX générale : focus trap, aria, police locale, prompt→modales, responsive | 🟢 Livré | Moyenne | rapport audit §4 |
 
 ## État actuel du projet (2026-08-08)
 
-- Tests : **658 vitest** / **168 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
+- Tests : **672 vitest** / **168 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
 - EPIC-009 livrée (phase manuelle + cache beatgrid) : nudge ←/→ 1/4, « ◎ Beat 1 », cascade
   NML → cache (`data/beatgrids.json`) → détection, invalidation par FILESIZE.
 - EPIC-010 livrée (analyse serveur kick/phase) : pipeline DSP maison pur Python (`analysis.py`,
@@ -56,6 +56,10 @@
   défaut (+ journal error, sans récursion), verrou `/scan` (409, relâché en finally), journal borné
   500 + bouton « 🗑 Vider » (DELETE /journal), `app.run(debug)` via `--debug` uniquement, cache parse
   NML par (mtime+taille) — le graal EPIC-008→011 ne re-parse plus ~0,5 s à chaque GET.
+- EPIC-014 livrée (UX générale) : police sans CDN (fallback mono système), focus trap + aria sur les
+  modales, `prompt()`/`confirm()` → `confirmDialog`/`promptDialog` custom, canal toast séparé de la
+  barre d'état, états vides (`.panel-empty`), responsive minimal < 1024 px, validation rating 0-100
+  à la frappe. Cache-buster CSS déjà en place (vérifié).
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
 - EPIC-002 → EPIC-009 livrées et **commitées** (`a21f1ae` → `3f3b669`), EPIC-001 à ses commits
   historiques, ce registre inclus dans `7bb1735`.

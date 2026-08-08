@@ -93,11 +93,12 @@ vi.hoisted(() => {
   <div id="scan-progress" class="hidden"><div id="scan-progress-bar"><div id="scan-progress-fill"></div></div><span id="scan-progress-text"></span></div>
   <div id="status-bar"><span id="status-text">Prêt.</span></div>
 </div>
+<div id="toast-container"></div>
 <div id="modal-config" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>⚙️ Config</h3><button class="modal-close" data-modal="config">✕</button></div><div id="config-selector"><label>Profil : <select id="cfg-select"></select></label><button id="btn-add-config">+</button><button id="btn-del-config">−</button></div><div id="config-fields"><label>Nom : <input type="text" id="cfg-name"></label><label>Source : <input type="text" id="cfg-source"></label><label>Dossiers : <textarea id="cfg-epars" rows="4"></textarea></label></div><button id="btn-save-config">Sauvegarder</button><p id="config-status"></p></div></div>
 <div id="modal-legend" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>❓ Raccourcis</h3><button class="modal-close" data-modal="legend">✕</button></div><div id="legend-grid"></div></div></div>
 <div id="modal-journal" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>📋 Journal</h3><button class="modal-close" data-modal="journal">✕</button></div><div id="journal-content"></div></div></div>
 <div id="modal-playlists" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>🎵 Playlists</h3><button class="modal-close">✕</button></div><div id="pl-manager-content"></div></div></div>
-<div id="modal-dialog" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content modal-sm"><p id="dialog-msg"></p><div class="dialog-buttons"><button id="dialog-confirm">Copier</button><button id="dialog-cancel">Annuler</button></div></div></div>`;
+<div id="modal-dialog" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content modal-sm"><p id="dialog-msg"></p><input id="dialog-input" class="dialog-input hidden" type="text"><div class="dialog-buttons"><button id="dialog-confirm">Copier</button><button id="dialog-cancel">Annuler</button></div></div></div>`;
 });
 
 // ── Import SCRIPT.TS (executes on the real DOM set up above) ────────────────
@@ -912,7 +913,7 @@ describe('Playlist mode', () => {
     expect(tracks.length).toBe(1);
     expect(tracks[0].querySelector('.pl-track-name')!.textContent).toBe(label.textContent);
 
-    expect(document.getElementById('status-text')!.textContent).toContain('ajouté');
+    expect(document.getElementById('toast-container')!.textContent).toContain('ajouté');
   });
 
   it('Space on an already-added track removes it from playlist', async () => {
@@ -932,7 +933,7 @@ describe('Playlist mode', () => {
 
     expect(label.classList.contains('in-playlist')).toBe(false);
     expect(document.querySelectorAll('#playlist-tracks .pl-track').length).toBe(0);
-    expect(document.getElementById('status-text')!.textContent).toContain('retiré');
+    expect(document.getElementById('toast-container')!.textContent).toContain('retiré');
   });
 
   it('Tab switches focus between source panel and sidebar', async () => {
@@ -1043,7 +1044,7 @@ describe('Playlist mode', () => {
       }),
     );
 
-    expect(document.getElementById('status-text')!.textContent).toContain('sauvegardée');
+    expect(document.getElementById('toast-container')!.textContent).toContain('sauvegardée');
   });
 
   it('Ctrl+S shows warning when playlist is empty', async () => {
@@ -1052,7 +1053,7 @@ describe('Playlist mode', () => {
     dispatchKey('s', { ctrlKey: true });
     await flush();
 
-    expect(document.getElementById('status-text')!.textContent).toContain('vide');
+    expect(document.getElementById('toast-container')!.textContent).toContain('vide');
   });
 
   it('Ctrl+E opens export confirmation dialog', async () => {
@@ -1088,7 +1089,7 @@ describe('Playlist mode', () => {
     await flush();
 
     expect(api).toHaveBeenCalledWith('/playlists', expect.objectContaining({ method: 'POST' }));
-    expect(document.getElementById('status-text')!.textContent).toContain('sauvegardée');
+    expect(document.getElementById('toast-container')!.textContent).toContain('sauvegardée');
   });
 
   it("bouton 📦 Exporter ouvre la confirmation d'export", async () => {
@@ -1428,22 +1429,23 @@ describe('Playlist mode', () => {
     confirmSpy.mockRestore();
   });
 
-  it('clicking + button creates a new playlist tab', async () => {
+  it('clicking + button creates a new playlist tab (dialog custom)', async () => {
     await enterPlaylist();
 
     expect(document.querySelectorAll('#playlist-tabs .pl-tab').length).toBe(1);
 
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('ma-playlist');
-
     const addBtn = document.querySelector('#playlist-tabs .pl-tab-add') as HTMLElement;
     addBtn.click();
+    await flush();
+    // Dialog custom (EPIC-014) : remplir le champ puis confirmer.
+    expect(state.activeModal).toBe('dialog');
+    (document.getElementById('dialog-input') as HTMLInputElement).value = 'ma-playlist';
+    (document.getElementById('dialog-confirm') as HTMLButtonElement).click();
     await flush();
 
     const tabs = document.querySelectorAll('#playlist-tabs .pl-tab');
     expect(tabs.length).toBe(2);
     expect(tabs[1].textContent).toContain('ma-playlist');
-
-    promptSpy.mockRestore();
   });
 
   it('renderPlaylistManager shows empty message when no playlists exist', async () => {
@@ -1540,16 +1542,19 @@ describe('Playlist mode', () => {
     renderPlaylistManager();
     await flush();
 
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('metal');
     vi.mocked(api).mockResolvedValueOnce({ ok: true });
     vi.mocked(api).mockResolvedValueOnce([{ name: 'metal', tracks: [] }] as any);
 
     const renameBtn = document.querySelector('#pl-manager-content .pl-mgr-rename') as HTMLElement;
     renameBtn.click();
     await flush();
+    // Dialog custom (EPIC-014) : pré-rempli avec l'ancien nom → nouveau nom + confirmer.
+    expect(state.activeModal).toBe('dialog');
+    (document.getElementById('dialog-input') as HTMLInputElement).value = 'metal';
+    (document.getElementById('dialog-confirm') as HTMLButtonElement).click();
+    await flush();
     await flush();
 
-    expect(promptSpy).toHaveBeenCalled();
     expect(api).toHaveBeenCalledWith(
       '/playlists/rock',
       expect.objectContaining({
@@ -1559,8 +1564,6 @@ describe('Playlist mode', () => {
     );
     expect(document.getElementById('pl-manager-content')!.textContent).toContain('metal');
     expect(document.getElementById('pl-manager-content')!.textContent).not.toContain('rock');
-
-    promptSpy.mockRestore();
   });
 
   it('Supprimer button deletes playlist after confirmation', async () => {
@@ -1569,16 +1572,18 @@ describe('Playlist mode', () => {
     renderPlaylistManager();
     await flush();
 
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.mocked(api).mockResolvedValueOnce({ ok: true });
     vi.mocked(api).mockResolvedValueOnce([]);
 
     const deleteBtn = document.querySelector('#pl-manager-content .pl-mgr-delete') as HTMLElement;
     deleteBtn.click();
     await flush();
+    // Dialog custom (EPIC-014) : confirmer explicitement.
+    expect(state.activeModal).toBe('dialog');
+    (document.getElementById('dialog-confirm') as HTMLButtonElement).click();
+    await flush();
     await flush();
 
-    expect(confirmSpy).toHaveBeenCalled();
     expect(api).toHaveBeenCalledWith(
       '/playlists/rock',
       expect.objectContaining({
@@ -1586,8 +1591,6 @@ describe('Playlist mode', () => {
       }),
     );
     expect(document.getElementById('pl-manager-content')!.textContent).not.toContain('rock');
-
-    confirmSpy.mockRestore();
   });
 });
 

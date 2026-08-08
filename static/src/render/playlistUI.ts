@@ -15,7 +15,7 @@ import {
 } from '../playlist.js';
 import { getRating } from '../ratings.js';
 import { state } from '../state.js';
-import { closeAllModals, showContextMenu } from '../ui.js';
+import { closeAllModals, confirmDialog, promptDialog, showContextMenu } from '../ui.js';
 import { openCueEditor } from './cueEditor.js';
 import { _ratingClickHandler } from './ratingEdit.js';
 import { renderDirTree, togglePlaylistSourceDir } from './sourceTree.js';
@@ -89,15 +89,20 @@ function renderPlaylistTabs(): void {
   addBtn.textContent = '+';
   addBtn.title = 'Nouvelle playlist';
   addBtn.onclick = () => {
-    const name = prompt('Nom de la nouvelle playlist :', `playlist-${Date.now()}`);
-    if (name?.trim()) {
-      createNewPlaylist(name.trim());
-      const newKeys = Array.from(
-        new Set([...state.playlists.map(p => p.name), ...Object.keys(state.pendingPlaylists)]),
-      );
-      state.activePlaylistIndex = newKeys.indexOf(name.trim());
-      renderPlaylistPanel();
-    }
+    // Modale custom (EPIC-014) : plus de prompt() natif (non stylisable/testable).
+    promptDialog(
+      'Nom de la nouvelle playlist :',
+      `playlist-${Date.now()}`,
+      name => {
+        createNewPlaylist(name);
+        const newKeys = Array.from(
+          new Set([...state.playlists.map(p => p.name), ...Object.keys(state.pendingPlaylists)]),
+        );
+        state.activePlaylistIndex = newKeys.indexOf(name);
+        renderPlaylistPanel();
+      },
+      'Créer',
+    );
   };
   container.appendChild(addBtn);
 }
@@ -282,7 +287,17 @@ function closePlaylistTab(name: string): void {
     const msg = savedPl?.exported
       ? `Fermer la playlist "${name}" ? ${tracks.length} morceau(x) (non sauvegardé depuis l'export).`
       : `Fermer la playlist "${name}" ? ${tracks.length} morceau(x) non exporté(s).`;
-    if (!confirm(msg)) return;
+    confirmDialog(
+      msg,
+      () => {
+        removePendingPlaylist(name);
+        const keys = Object.keys(state.pendingPlaylists);
+        state.activePlaylistIndex = Math.min(state.activePlaylistIndex || 0, Math.max(0, keys.length - 1));
+        renderPlaylistPanel();
+      },
+      'Fermer',
+    );
+    return;
   }
   removePendingPlaylist(name);
   const keys = Object.keys(state.pendingPlaylists);
@@ -416,31 +431,41 @@ export function renderPlaylistManager(): void {
   container.querySelectorAll('.pl-mgr-rename').forEach(btn => {
     (btn as HTMLElement).onclick = async () => {
       const oldName = (btn as HTMLElement).dataset.name || '';
-      const newName = prompt('Nouveau nom :', oldName);
-      if (newName?.trim() && newName.trim() !== oldName) {
-        const saved = state.playlists.find(p => p.name === oldName);
-        const pending = getPendingTracks(oldName);
-        if (saved) await renamePlaylist(oldName, newName.trim());
-        if (pending.length > 0) {
-          setPendingTracks(newName.trim(), pending);
-          removePendingPlaylist(oldName);
-        }
-        renderPlaylistManager();
-        renderPlaylistPanel();
-      }
+      promptDialog(
+        'Nouveau nom :',
+        oldName,
+        async newName => {
+          if (newName === oldName) return;
+          const saved = state.playlists.find(p => p.name === oldName);
+          const pending = getPendingTracks(oldName);
+          if (saved) await renamePlaylist(oldName, newName);
+          if (pending.length > 0) {
+            setPendingTracks(newName, pending);
+            removePendingPlaylist(oldName);
+          }
+          renderPlaylistManager();
+          renderPlaylistPanel();
+        },
+        'Renommer',
+      );
     };
   });
 
   container.querySelectorAll('.pl-mgr-delete').forEach(btn => {
     (btn as HTMLElement).onclick = async () => {
       const name = (btn as HTMLElement).dataset.name || '';
-      if (!confirm(`Supprimer la playlist "${name}" ? (Les fichiers exportés ne sont pas affectés.)`)) return;
-      await deletePlaylist(name);
-      removePendingPlaylist(name);
-      const activeName = getActivePlaylistName();
-      if (activeName === name) state.activePlaylistIndex = 0;
-      renderPlaylistManager();
-      renderPlaylistPanel();
+      confirmDialog(
+        `Supprimer la playlist "${name}" ? (Les fichiers exportés ne sont pas affectés.)`,
+        async () => {
+          await deletePlaylist(name);
+          removePendingPlaylist(name);
+          const activeName = getActivePlaylistName();
+          if (activeName === name) state.activePlaylistIndex = 0;
+          renderPlaylistManager();
+          renderPlaylistPanel();
+        },
+        'Supprimer',
+      );
     };
   });
 }

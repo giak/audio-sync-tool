@@ -410,6 +410,17 @@ export function renderSource(): void {
     allTrees.push({ tree, dirPath });
   }
 
+  // État vide (EPIC-014) : rien à afficher → guidance visuelle au lieu d'un panneau muet.
+  if (allTrees.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'panel-empty';
+    empty.textContent =
+      Object.keys(state.sourceFiles).length === 0
+        ? 'Aucun dossier configuré — ouvre ⚙️ Config, renseigne le dossier Source puis 🔄 Scan.'
+        : 'Aucun fichier scanné — lance 🔄 Scan.';
+    container.appendChild(empty);
+  }
+
   const headerCount = document.getElementById('source-header-count');
   if (state.filterActive && state.sourceFilter) {
     const filteredCount = renderFilteredSource(container, allTrees);

@@ -1229,9 +1229,11 @@ describe('renderEpars', () => {
     vi.mocked(countAllEparsFiles).mockReturnValue(0);
   });
 
-  it('renders empty container when no epars files', () => {
+  it("affiche le bandeau d'état vide quand aucun dossier épars (EPIC-014)", () => {
     renderEpars();
-    expect(document.getElementById('epars-container')!.children.length).toBe(0);
+    const empty = document.getElementById('epars-container')!.querySelector('.panel-empty');
+    expect(empty).not.toBeNull();
+    expect(empty!.textContent).toContain('Aucun dossier épars');
     expect(document.getElementById('epars-header-count')!.textContent).toBe('');
   });
 
@@ -1301,9 +1303,11 @@ describe('renderSource', () => {
     vi.mocked(dirHasMatchingDescendant).mockReturnValue(false);
   });
 
-  it('renders empty container when no source files', () => {
+  it("affiche le bandeau d'état vide quand aucun dossier source (EPIC-014)", () => {
     renderSource();
-    expect(document.getElementById('source-container')!.children.length).toBe(0);
+    const empty = document.getElementById('source-container')!.querySelector('.panel-empty');
+    expect(empty).not.toBeNull();
+    expect(empty!.textContent).toContain('Aucun dossier');
   });
 
   it('renders directories for source data tree', () => {

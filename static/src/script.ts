@@ -23,7 +23,7 @@ import {
   setupRenderSubscriptions,
 } from './render.js';
 import { state } from './state.js';
-import { closeAllModals, initFilterPalette, openModal } from './ui.js';
+import { closeAllModals, confirmDialog, initFilterPalette, openModal } from './ui.js';
 
 // ── Playlist mode helpers ─────────────────────────────────────────────────
 
@@ -90,7 +90,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   openModal('journal');
 };
 (document.getElementById('journal-clear') as HTMLElement | null)?.addEventListener('click', () => {
-  if (confirm('Vider tout le journal ?')) void clearJournal();
+  confirmDialog('Vider tout le journal ?', () => void clearJournal(), 'Vider');
 });
 (document.getElementById('btn-scan') as HTMLElement | null)!.onclick = runScan;
 (document.getElementById('pl-manage') as HTMLElement | null)!.onclick = () => {

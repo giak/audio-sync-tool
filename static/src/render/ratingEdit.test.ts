@@ -448,3 +448,35 @@ describe('startSourceRatingEdit (source tree)', () => {
     expect(row.classList.contains('focused')).toBe(true);
   });
 });
+
+describe('validation visuelle 0-100 (EPIC-014)', () => {
+  beforeEach(() => {
+    setupPlaylistDOM();
+    document.querySelector('.pl-track')!.classList.add('focused');
+  });
+
+  it("marque .invalid dès qu'une valeur hors plage est tapée", () => {
+    startRatingEdit();
+    const input = document.querySelector('.pl-rating-input') as HTMLInputElement;
+    input.value = '150';
+    input.dispatchEvent(new Event('input'));
+    expect(input.classList.contains('invalid')).toBe(true);
+    expect(input.title).toContain('0-100');
+  });
+
+  it('valeur dans la plage → pas de .invalid', () => {
+    startRatingEdit();
+    const input = document.querySelector('.pl-rating-input') as HTMLInputElement;
+    input.value = '42';
+    input.dispatchEvent(new Event('input'));
+    expect(input.classList.contains('invalid')).toBe(false);
+  });
+
+  it('champ vide → pas de .invalid (suppression autorisée)', () => {
+    startRatingEdit();
+    const input = document.querySelector('.pl-rating-input') as HTMLInputElement;
+    input.value = '';
+    input.dispatchEvent(new Event('input'));
+    expect(input.classList.contains('invalid')).toBe(false);
+  });
+});

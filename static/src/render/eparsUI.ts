@@ -95,6 +95,14 @@ export function renderEpars(): void {
     countDoublon = 0,
     countTraite = 0;
 
+  // État vide (EPIC-014) : guidance visuelle quand aucun dossier épars n'est configuré.
+  if (Object.keys(state.eparsFiles).length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'panel-empty';
+    empty.textContent = 'Aucun dossier épars configuré — ⚙️ Config → Dossiers puis 🔄 Scan.';
+    container.appendChild(empty);
+  }
+
   for (const [dirPath, files] of Object.entries(state.eparsFiles)) {
     const dirDiv = document.createElement('div');
     dirDiv.className = 'directory';

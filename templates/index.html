@@ -93,6 +93,9 @@
     <span id="status-text">Prêt. Configure les dossiers puis lance Scan.</span>
   </div>
 </div>
+<!-- Toasts (EPIC-014) : canal séparé de la barre d'état — un toast n'écrase
+     plus une erreur persistante et réciproquement. -->
+<div id="toast-container" aria-live="polite"></div>
 
 <!-- === Modals (overlays, outside document flow) === -->
 
@@ -222,6 +225,7 @@
   <div class="modal-backdrop"></div>
   <div class="modal-content modal-sm">
     <p id="dialog-msg"></p>
+    <input id="dialog-input" class="dialog-input hidden" type="text" autocomplete="off">
     <div class="dialog-buttons">
       <button id="dialog-confirm">Copier</button>
       <button id="dialog-cancel">Annuler</button>

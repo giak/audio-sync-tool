@@ -138,6 +138,18 @@ function _startInlineRatingEdit(
     input.replaceWith(span);
   }
 
+  // Validation visuelle à la frappe (EPIC-014) : hors plage 0-100 → bordure
+  // rouge immédiate (au lieu d'un échec silencieux au commit).
+  function updateValidity(): void {
+    const val = input.value.trim();
+    const num = val === '' ? NaN : parseInt(val, 10);
+    const valid = val === '' || (!Number.isNaN(num) && num >= 0 && num <= 100);
+    input.classList.toggle('invalid', !valid);
+    input.title = valid ? '' : 'Note invalide (0-100)';
+  }
+  input.addEventListener('input', updateValidity);
+  updateValidity();
+
   input.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();

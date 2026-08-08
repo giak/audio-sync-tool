@@ -1,5 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;1,400&display=swap');
-
+/* Police : fallback système assumé (EPIC-014). JetBrains Mono si installée en
+   local, sinon stack monospace du système — plus aucun CDN (hors-ligne vrai,
+   zéro fuite de vie privée). */
 :root {
   /* Backgrounds */
   --bg-deep:       #050510;
@@ -37,7 +38,7 @@
 /* ===== Reset & Base ================================================== */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   background: var(--bg-deep);
   color: var(--text-primary);
   height: 100vh;
@@ -347,6 +348,35 @@ header h1 {
   color: var(--text-secondary); flex-shrink: 0;
   display: flex; align-items: center; gap: 8px;
 }
+/* Toasts flottants (EPIC-014) : au-dessus de tout, auto-expirants, ne touchent
+   pas à la barre d'état (canal de messages séparé de l'erreur persistante). */
+#toast-container {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  z-index: 300;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-active);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  animation: toast-in 0.15s ease-out;
+}
+.toast.toast-error { border-color: var(--led-red); color: var(--led-red); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .server-badge {
   font-size: 12px;
   padding: 3px 10px;
@@ -495,6 +525,31 @@ header h1 {
 
 /* ===== Confirm Dialog ================================================ */
 #dialog-msg { margin-bottom: 16px; font-size: 15px; color: var(--text-primary); }
+/* Champ du prompt custom (EPIC-014, remplace prompt()) */
+.dialog-input {
+  width: 100%;
+  margin-top: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.dialog-input:focus { border-color: var(--border-active); outline: none; }
+/* Rating hors plage 0-100 (EPIC-014) : feedback visuel à la frappe */
+.pl-rating-input.invalid { border-color: var(--led-red); box-shadow: 0 0 0 1px var(--led-red); }
+/* État vide des panneaux (EPIC-014) */
+.panel-empty {
+  padding: 16px;
+  color: var(--text-dim);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  margin: 10px;
+  font-size: 13px;
+  text-align: center;
+}
 .dialog-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
 .dialog-buttons button {
   padding: 8px 22px; border: none; cursor: pointer;
@@ -514,6 +569,15 @@ header h1 {
 /* ===== Playlist Mode Layout =========================================== */
 #playlist-layout { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
 #playlist-main { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+/* Responsive minimal (EPIC-014) : fenêtre réduite < 1024 px — on empile,
+   jamais d'interface inutilisable. */
+@media (max-width: 1024px) {
+  #main-panels { flex-direction: column; }
+  #source-container { column-count: 1; }
+  #playlist-main { flex-direction: column; overflow-y: auto; }
+  #playlist-sidebar { min-height: 40vh; }
+}
 #playlist-source { flex: 1; overflow-y: auto; padding: 10px; border-right: 1px solid var(--border-panel); }
 #playlist-source h2 { font-size: 15px; font-weight: 600; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-panel); }
 #playlist-sidebar { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; padding: 10px; border-left: 1px solid var(--border-panel); }

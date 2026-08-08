@@ -20,10 +20,12 @@ vi.hoisted(() => {
       <div class="modal-content">
         <span class="modal-close">✕</span>
         <p id="dialog-msg"></p>
+        <input id="dialog-input" class="dialog-input hidden" type="text">
         <button id="dialog-confirm">OK</button>
         <button id="dialog-cancel">Annuler</button>
       </div>
     </div>
+    <div id="toast-container"></div>
     <div id="modal-playlists" class="modal hidden">
       <div class="modal-content">
         <span class="modal-close">✕</span>
@@ -57,7 +59,16 @@ vi.mock('./state.js', () => ({
 }));
 
 import { revalidateFocus } from './focus.js';
-import { closeAllModals, closeFilterPalette, initFilterPalette, openFilterPalette, openModal } from './ui.js';
+import {
+  closeAllModals,
+  closeFilterPalette,
+  confirmDialog,
+  initFilterPalette,
+  openFilterPalette,
+  openModal,
+  promptDialog,
+  showToast,
+} from './ui.js';
 
 // Mock revalidateFocus
 vi.mock('./focus.js', () => ({
@@ -119,6 +130,117 @@ describe('closeAllModals', () => {
   it('revalidates focus after closing', () => {
     closeAllModals();
     expect(revalidateFocus).toHaveBeenCalled();
+  });
+});
+
+describe('accessibilité (EPIC-014)', () => {
+  it('openModal pose role=dialog + aria-modal + aria-label', () => {
+    openModal('config');
+    const modal = document.getElementById('modal-config')!;
+    expect(modal.getAttribute('role')).toBe('dialog');
+    expect(modal.getAttribute('aria-modal')).toBe('true');
+    expect(modal.getAttribute('aria-label')).toBeTruthy();
+    expect(modal.querySelector('.modal-close')!.getAttribute('aria-label')).toBe('Fermer');
+  });
+
+  it('closeAllModals retire aria-modal', () => {
+    openModal('config');
+    closeAllModals();
+    expect(document.getElementById('modal-config')!.hasAttribute('aria-modal')).toBe(false);
+  });
+
+  it('Tab confiné dans la modale (focus trap) : le dernier focusable boucle', () => {
+    mockState.activeModal = 'config';
+    const modal = document.getElementById('modal-config')!;
+    modal.classList.remove('hidden');
+    const saveBtn = document.getElementById('btn-save-config')!;
+    saveBtn.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    // Unique focusable : Tab depuis lui → boucle sur lui (ne sort jamais).
+    expect(document.activeElement).toBe(saveBtn);
+    mockState.activeModal = null;
+  });
+
+  it('Tab hors modale ne fait rien (aucune modal ouverte)', () => {
+    mockState.activeModal = null;
+    const el = document.createElement('button');
+    el.textContent = 'dehors';
+    document.body.appendChild(el);
+    el.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    // Le trapFocus retourne immédiatement (pas de modal) → pas de preventDefault,
+    // le focus reste sur l'élément (le déplacement Tab natif est hors scope jsdom).
+    expect(document.activeElement).toBe(el);
+    el.remove();
+  });
+});
+
+describe('dialog custom (EPIC-014)', () => {
+  it('confirmDialog : message + onConfirm sur confirm, fermeture sur cancel', () => {
+    const onConfirm = vi.fn();
+    confirmDialog('Supprimer ?', onConfirm, 'Supprimer');
+    expect(mockState.activeModal).toBe('dialog');
+    expect(document.getElementById('dialog-msg')!.textContent).toBe('Supprimer ?');
+    expect(document.getElementById('dialog-confirm')!.textContent).toBe('Supprimer');
+    (document.getElementById('dialog-confirm') as HTMLButtonElement).click();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(mockState.activeModal).toBeNull();
+  });
+
+  it('promptDialog : pré-remplit, Enter valide, value passée à onOk', () => {
+    const onOk = vi.fn();
+    promptDialog('Nom :', 'playlist-1', onOk, 'Créer');
+    const input = document.getElementById('dialog-input') as HTMLInputElement;
+    expect(input.classList.contains('hidden')).toBe(false);
+    expect(input.value).toBe('playlist-1');
+    input.value = 'ma-liste';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(onOk).toHaveBeenCalledWith('ma-liste');
+    expect(mockState.activeModal).toBeNull();
+  });
+
+  it("confirmDialog : le focus va sur le bouton visible (pas l'input caché)", () => {
+    vi.useFakeTimers();
+    confirmDialog('Confirmer ?', vi.fn());
+    vi.advanceTimersByTime(60);
+    expect(document.activeElement).toBe(document.getElementById('dialog-confirm'));
+    vi.useRealTimers();
+  });
+
+  it("promptDialog : le focus va sur l'input visible", () => {
+    vi.useFakeTimers();
+    promptDialog('Nom :', 'x', vi.fn());
+    vi.advanceTimersByTime(60);
+    expect(document.activeElement).toBe(document.getElementById('dialog-input'));
+    vi.useRealTimers();
+  });
+
+  it('promptDialog : valeur vide → onOk non appelé', () => {
+    const onOk = vi.fn();
+    promptDialog('Nom :', '', onOk);
+    const input = document.getElementById('dialog-input') as HTMLInputElement;
+    input.value = '   ';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(onOk).not.toHaveBeenCalled();
+  });
+});
+
+describe('toast (EPIC-014)', () => {
+  it('showToast crée un toast dans #toast-container et le retire après 3 s', () => {
+    vi.useFakeTimers();
+    showToast('hello');
+    const container = document.getElementById('toast-container')!;
+    expect(container.textContent).toContain('hello');
+    vi.advanceTimersByTime(3001);
+    expect(container.textContent).toBe('');
+    vi.useRealTimers();
+  });
+
+  it("showToast n'écrase pas la barre d'état", () => {
+    const status = document.getElementById('status-text')!;
+    status.textContent = 'Prêt.';
+    showToast('copié');
+    expect(status.textContent).toBe('Prêt.');
   });
 });
 

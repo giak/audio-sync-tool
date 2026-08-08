@@ -189,7 +189,7 @@ npm run format             # Formatage Biome
 #### Frontend (vitest)
 
 ```bash
-npm test                   # 658 tests, 28 fichiers
+npm test                   # 672 tests, 28 fichiers
 npm run coverage           # Clean → test → rapport (~89% lignes)
 ```
 
