@@ -25,5 +25,8 @@
     "jsdom": "^28.1.0",
     "typescript": "^6.0.3",
     "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "wavesurfer.js": "7.12.11"
   }
 }
