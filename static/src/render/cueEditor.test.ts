@@ -35,9 +35,11 @@ vi.mock('wavesurfer.js/dist/plugins/minimap.js', () => ({ default: { create: moc
 import { showToast } from '../ui.js';
 import {
   analyzeOnServer,
+  applyCueMeta,
   deleteRegionAtCursor,
   onSaveClicked,
   openCueEditor,
+  openCueMetaEditor,
   setCueAtPlayhead,
   toggleFullscreen,
   writeGridToCollection,
@@ -158,6 +160,13 @@ const MODAL_HTML = `
         <button id="cue-btn-writegrid">💾 Grille</button>
         <button id="cue-btn-snap">🧲 Snap</button>
         <span id="cue-editor-time">0:00 / 0:00</span>
+      </div>
+      <div id="cue-editor-metaeditor" class="hidden">
+        <div class="cue-meta-title">Cue <b id="cue-meta-slot">A</b></div>
+        <input id="cue-meta-name" type="text" placeholder="n.n.">
+        <div id="cue-meta-colors"></div>
+        <button id="cue-meta-ok">OK</button>
+        <button id="cue-meta-cancel">Annuler</button>
       </div>
     </div>
   </div>
@@ -2095,5 +2104,146 @@ describe('render/cueEditor minimap + bande basse colorée (EPIC-018)', () => {
     expect(wave.classList.contains('zoomed')).toBe(true);
     zoomToFit();
     expect(wave.classList.contains('zoomed')).toBe(false);
+  });
+});
+
+describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () => {
+  function openWithCues(cues: unknown[]): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    // addRegion doit renvoyer une région : le code appelle setContent/setOptions
+    // sur le retour (nom affiché, EPIC-019).
+    ws.regions.addRegion = vi.fn(() => ({ setContent: vi.fn(), setOptions: vi.fn() }));
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues }],
+    });
+    return ws;
+  }
+
+  it('le double-clic sur un slot ouvre l\'éditeur nom/couleur pré-rempli', async () => {
+    const ws = openWithCues([
+      { type: '0', start: 5, len: 0, hotcue: 0, name: 'Intro', displ_order: '0' },
+    ]);
+    ws.regions.getRegions = vi.fn(() => [{ id: 0, start: 5, end: 5.08, color: '#55aaff' }]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const slot = document.querySelector<HTMLElement>('.cue-slot[data-slot="0"]')!;
+    slot.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    const editor = document.getElementById('cue-editor-metaeditor')!;
+    expect(editor.classList.contains('hidden')).toBe(false);
+    expect((document.getElementById('cue-meta-name') as HTMLInputElement).value).toBe('Intro');
+    expect(document.getElementById('cue-meta-slot')!.textContent).toBe('A');
+    expect(document.querySelectorAll('#cue-meta-colors .cue-meta-swatch').length).toBe(8);
+  });
+
+  it('double-clic sur un slot vide pose d\'abord un cue au curseur puis ouvre l\'éditeur', async () => {
+    const ws = openWithCues([]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    expect(ws.regions.addRegion).not.toHaveBeenCalled();
+    const slot = document.querySelector<HTMLElement>('.cue-slot[data-slot="3"]')!;
+    slot.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(ws.regions.addRegion).toHaveBeenCalledWith(expect.objectContaining({ id: 3, start: 25 }));
+    const editor = document.getElementById('cue-editor-metaeditor')!;
+    expect(editor.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('cue-meta-slot')!.textContent).toBe('D');
+  });
+
+  it('le double-clic sur une région ouvre l\'éditeur (region-double-clicked)', async () => {
+    const ws = openWithCues([]);
+    ws.regions.getRegions = vi.fn(() => [{ id: 5, start: 10, end: 10.08, color: '#ff6b6b' }]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    ws.regions.emit('region-double-clicked', { id: 5 });
+    const editor = document.getElementById('cue-editor-metaeditor')!;
+    expect(editor.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('cue-meta-slot')!.textContent).toBe('F');
+  });
+
+  it('appliquer nom + couleur met à jour la région et le badge (tooltip)', async () => {
+    const ws = openWithCues([]);
+    const region = { id: 1, start: 5, end: 5.08, color: '#55aaff', setOptions: vi.fn(), setContent: vi.fn() };
+    ws.regions.getRegions = vi.fn(() => [region]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    openCueMetaEditor(1);
+    const name = document.getElementById('cue-meta-name') as HTMLInputElement;
+    name.value = 'Drop';
+    (document.querySelector<HTMLElement>('#cue-meta-colors .cue-meta-swatch[data-color="#ff6b6b"]')!).click();
+    applyCueMeta();
+    expect(region.setOptions).toHaveBeenCalledWith({ color: '#ff6b6b' });
+    expect(region.setContent).toHaveBeenCalled();
+    const editor = document.getElementById('cue-editor-metaeditor')!;
+    expect(editor.classList.contains('hidden')).toBe(true);
+    const slot = document.querySelector<HTMLElement>('.cue-slot[data-slot="1"]')!;
+    expect(slot.title).toContain('Drop');
+  });
+
+  it('le save injecte nom/couleur dans le payload (round-trip écriture)', async () => {
+    const ws = openWithCues([
+      { type: '0', start: 5, len: 0, hotcue: 2, name: 'n.n.', displ_order: '7' },
+    ]);
+    const region = { id: 2, start: 5, end: 5.08, color: '#55aaff', setOptions: vi.fn(), setContent: vi.fn() };
+    ws.regions.getRegions = vi.fn(() => [region]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    // Renommer le cue A (hotcue 2 → slot C) : « Drop » + couleur rouge.
+    openCueMetaEditor(2);
+    const name = document.getElementById('cue-meta-name') as HTMLInputElement;
+    name.value = 'Drop';
+    (document.querySelector<HTMLElement>('#cue-meta-colors .cue-meta-swatch[data-color="#ff6b6b"]')!).click();
+    applyCueMeta();
+    mockApi.mockResolvedValueOnce({ ok: true });
+    await onSaveClicked();
+    const call = mockApi.mock.calls.find(([u]: [string]) => u === '/api/track/cues');
+    expect(call).toBeDefined();
+    const body = JSON.parse((call[1] as { body: string }).body);
+    const cue = body.cues.find((c: { hotcue: number }) => c.hotcue === 2);
+    expect(cue.name).toBe('Drop');
+    expect(cue.color).toBe('#ff6b6b');
+    expect(cue.displ_order).toBe('7'); // DISPL_ORDER préservé (B9) malgré le renommage
+  });
+
+  it('supprimer un cue (clic droit) efface aussi son nom/couleur (pas de fantôme)', async () => {
+    const ws = openWithCues([
+      { type: '0', start: 5, len: 0, hotcue: 4, name: 'Drop', color: '#ff6b6b', displ_order: '0' },
+    ]);
+    const region = { id: 4, start: 5, end: 5.08, color: '#ff6b6b', remove: vi.fn(), setOptions: vi.fn(), setContent: vi.fn() };
+    let regions = [region];
+    ws.regions.getRegions = vi.fn(() => regions);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    expect(document.querySelector<HTMLElement>('.cue-slot[data-slot="4"]')!.title).toContain('Drop');
+    // Suppression clic droit (button === 2) : remove + nettoyage _cueMeta.
+    ws.regions.emit('region-clicked', region, { button: 2 } as MouseEvent);
+    expect(region.remove).toHaveBeenCalled();
+    regions = []; // la région est retirée des régions vivantes
+    // Re-poser un cue au même slot : il repart VIERGE (pas de nom fantôme).
+    openCueMetaEditor(4);
+    const name = document.getElementById('cue-meta-name') as HTMLInputElement;
+    expect(name.value).toBe(''); // pas d'héritage du nom supprimé
+  });
+
+  it('le nom du cue est affiché dans la région au chargement (round-trip lecture)', async () => {
+    const ws = openWithCues([
+      { type: '0', start: 5, len: 0, hotcue: 0, name: 'Intro', displ_order: '0' },
+    ]);
+    ws.regions.getRegions = vi.fn(() => [{ id: 0, start: 5, end: 5.08, color: '#55aaff' }]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const call = ws.regions.addRegion.mock.calls[0] as [{ id: number }];
+    expect(call[0].id).toBe(0);
+    // Le nom est poussé via setContent (span) sur la région créée (EPIC-019).
+    const region = ws.regions.addRegion.mock.results[0].value as {
+      setContent: ReturnType<typeof vi.fn>;
+    };
+    const span = region.setContent.mock.calls[0][0] as HTMLElement;
+    expect(span.className).toBe('cue-region-name');
+    expect(span.textContent).toBe('Intro');
+    // Le badge porte le nom en tooltip.
+    const slot = document.querySelector<HTMLElement>('.cue-slot[data-slot="0"]')!;
+    expect(slot.title).toContain('Intro');
   });
 });

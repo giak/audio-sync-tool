@@ -780,7 +780,57 @@ header h1 {
 }
 .cue-slot:hover { border-color: var(--border-active); }
 .cue-slot.live { border-color: var(--accent); color: var(--accent); }
+/* Slot avec un cue (EPIC-019) : bordure et lettre teintées de la couleur du cue. */
+.cue-slot.has-cue {
+  border-color: var(--cue-color, var(--border-panel));
+  color: var(--cue-color, var(--text-primary));
+}
+.cue-slot.has-cue:hover { border-color: var(--cue-color); }
 .cue-slot-sep { display: inline-block; width: 0; }
+
+/* Éditeur nom/couleur d'un cue (double-clic sur slot ou région, EPIC-019). */
+#cue-editor-metaeditor {
+  position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 30;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-active);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  padding: 14px 16px;
+  min-width: 260px;
+  text-align: left;
+}
+.cue-meta-title { font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+.cue-meta-field { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+.cue-meta-field input {
+  width: 100%; box-sizing: border-box; margin-top: 4px;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border-panel); border-radius: 2px;
+  padding: 5px 8px; font-size: 13px;
+}
+.cue-meta-field input:focus { border-color: var(--border-active); outline: none; }
+.cue-meta-colors { display: flex; gap: 6px; margin: 10px 0; }
+.cue-meta-swatch {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer; padding: 0;
+}
+.cue-meta-swatch.selected { border-color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.cue-meta-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.cue-meta-actions button {
+  background: var(--bg-hover); color: var(--text-primary);
+  border: 1px solid var(--border-panel); border-radius: 3px;
+  padding: 4px 12px; cursor: pointer; font-size: 12px;
+}
+.cue-meta-actions #cue-meta-ok { background: var(--accent); color: #000; border-color: transparent; font-weight: 600; }
+.cue-meta-actions button:hover { filter: brightness(1.15); }
+/* Nom affiché dans la région (contenu HTML). */
+.cue-region-name {
+  position: absolute; top: 2px; left: 4px;
+  font-size: 10px; line-height: 1.2;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
 
 /* Cue editor transport (play/pause + temps) */
 #cue-editor-waveform { height: 200px; position: relative; }

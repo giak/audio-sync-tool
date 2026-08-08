@@ -34,6 +34,14 @@ let _trackLite: PlaylistTrackLite | null = null;
 /** hotcue → DISPL_ORDER d'origine (round-trip). wavesurfer perd les metadata custom
  *  des régions, donc on garde un Map séparé peuplé au chargement des cues. */
 let _displOrders = new Map<number, string>();
+/** Métadonnées name/color par slot hotcue (EPIC-019) — source de vérité pour le
+ *  round-trip des noms/couleurs (les régions wavesurfer perdent les metadata). */
+let _cueMeta = new Map<number, { name?: string; color?: string }>();
+/** Slot en cours d'édition dans l'éditeur nom/couleur (EPIC-019), sinon null. */
+let _metaEditingSlot: number | null = null;
+
+/** Palette de couleurs de cue (standard DJ) — swatches de l'éditeur de métadonnées. */
+const CUE_COLORS = ['#55aaff', '#ff6b6b', '#4cd964', '#ffaa00', '#ff6bdc', '#7aa8ff', '#ffd166', '#5cd6c6'];
 /** Mode dessin de loop (bouton ⟳ Loop) : activé → drag sur la waveform crée une région. */
 let _loopMode = false;
 let _dragCleanup: (() => void) | null = null;
@@ -700,6 +708,30 @@ export function wireControls(root: HTMLElement = document.body): void {
     _wired.add(el);
     const slot = Number.parseInt(el.getAttribute('data-slot') || '', 10);
     el.addEventListener('click', () => onSlotClicked(slot));
+    el.addEventListener('dblclick', () => openCueMetaEditor(slot));
+  }
+  const metaOk = root.querySelector<HTMLButtonElement>('#cue-meta-ok');
+  if (metaOk && !_wired.has(metaOk)) {
+    _wired.add(metaOk);
+    metaOk.addEventListener('click', applyCueMeta);
+  }
+  const metaCancel = root.querySelector<HTMLButtonElement>('#cue-meta-cancel');
+  if (metaCancel && !_wired.has(metaCancel)) {
+    _wired.add(metaCancel);
+    metaCancel.addEventListener('click', closeCueMetaEditor);
+  }
+  const metaName = metaNameInput();
+  if (metaName && !_wired.has(metaName)) {
+    _wired.add(metaName);
+    metaName.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyCueMeta();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeCueMetaEditor();
+      }
+    });
   }
   const btn = root.querySelector<HTMLButtonElement>('#cue-btn-save');
   if (btn && !_wired.has(btn)) {
@@ -846,6 +878,18 @@ function onModalKeydown(e: KeyboardEvent): void {
   // BUTTON exclu : Espace sur un bouton focusé déclenche déjà son click natif (double toggle sinon).
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.tagName === 'BUTTON'))
     return;
+  // Éditeur nom/couleur ouvert (EPIC-019) : Entrée = appliquer, Échap = fermer
+  // (le champ INPUT a son propre handler pour Entrée/Échap quand il est focusé).
+  if (_metaEditingSlot !== null) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeCueMetaEditor();
+    } else if (e.key === 'Enter' && !(t && t.tagName === 'INPUT')) {
+      e.preventDefault();
+      applyCueMeta();
+    }
+    return;
+  }
   if (e.key === ' ') {
     e.preventDefault();
     ws?.playPause();
@@ -1077,8 +1121,17 @@ export async function renderWaveform(
   _zoomPx = 0;
   waveformEl()?.classList.remove('zoomed');
   updateZoomButtons();
+  _cueMeta = new Map();
+  closeCueMetaEditor();
   // DISPL_ORDER d'origine : {hotcue → displ_order} — jamais reconstruit depuis le slot (B9).
   _displOrders = new Map(cues.filter(c => c.hotcue >= 0 && c.hotcue <= 7).map(c => [c.hotcue, c.displ_order]));
+  // Métadonnées nom/couleur par slot (EPIC-019) : le nom 'n.n.' (Traktor) = pas de nom.
+  _cueMeta = new Map(
+    cues
+      .filter(c => c.hotcue >= 0 && c.hotcue <= 7)
+      .map(c => [c.hotcue, { name: c.name && c.name !== 'n.n.' ? c.name : undefined, color: c.color }]),
+  );
+  closeCueMetaEditor();
   setPlayingUI(false);
   const time = timeEl();
   if (time) time.textContent = '0:00 / 0:00';
@@ -1102,10 +1155,24 @@ export async function renderWaveform(
   }
   ws.on('ready', () => {
     _regions = ws!.registerPlugin(Regions.create());
-    for (const r of cuesToRegions(cues)) _regions.addRegion(r);
+    for (const r of cuesToRegions(cues)) {
+      const reg = _regions.addRegion(r);
+      // Nom affiché dans la région (contenu HTML, EPIC-019).
+      const meta = _cueMeta.get(r.id);
+      if (meta?.name) {
+        const span = document.createElement('span');
+        span.className = 'cue-region-name';
+        span.textContent = meta.name;
+        reg.setContent(span);
+      }
+    }
+    refreshSlotBadges();
     // Clic-droit sur une région = suppression (audit UX).
     _regions.on('region-clicked', (region: any, ev: MouseEvent) => {
       if (ev.button === 2) {
+        // EPIC-019 : la suppression efface aussi nom/couleur — un cue re-posé au
+        // même slot repart vierge (sémantique Traktor), pas de nom fantôme.
+        if (typeof region.id === 'number') _cueMeta.delete(region.id);
         region.remove();
         // La boucle supprimée était en cours de lecture → couper l'audio.
         if (_loopPlay) {
@@ -1113,7 +1180,12 @@ export async function renderWaveform(
           ws?.pause();
         }
         refreshLiveSlot();
+        refreshSlotBadges();
       }
+    });
+    // Double-clic sur une région = éditer nom/couleur du cue (EPIC-019).
+    _regions.on('region-double-clicked', (region: any) => {
+      if (typeof region.id === 'number' && region.id >= 0 && region.id <= 7) openCueMetaEditor(region.id);
     });
     // Loop dessiné (id string, créé par le drag) → slot A–H libre ; sinon la
     // sauvegarde écrirait HOTCUE invalide (400 backend). Snap sur la grille si active.
@@ -1135,6 +1207,7 @@ export async function renderWaveform(
         region.setOptions({ start, end });
       }
       refreshLiveSlot();
+      refreshSlotBadges();
     });
     updateTimeUI();
     // Clic (mode « poser le beat 1 ») : wavesurfer émet (relativeX, relativeY) 0..1.
@@ -1200,6 +1273,8 @@ export function destroyCueEditor(): void {
   _entryRef = null;
   _trackLite = null;
   _displOrders = new Map();
+  _cueMeta = new Map();
+  closeCueMetaEditor();
   stopLoopPlay();
   hideAddRow();
   _grid = [];
@@ -1247,6 +1322,109 @@ export function onSlotClicked(slot: number): void {
   }
   _regions.addRegion({ start: time, end: time + 0.08, id: slot, label: hotToLabel(slot), color: '#55aaff' });
   refreshLiveSlot();
+  refreshSlotBadges();
+}
+
+/** Synchronise l'apparence des slots A–H avec les régions (EPIC-019) : bordure
+ *  teintée de la couleur du cue + infobulle avec le nom. */
+function refreshSlotBadges(): void {
+  const regions = _regions?.getRegions() ?? [];
+  for (const el of document.querySelectorAll<HTMLElement>('.cue-slot')) {
+    const slot = Number.parseInt(el.getAttribute('data-slot') || '', 10);
+    const reg = regions.find((r: any) => r.id === slot);
+    el.classList.toggle('has-cue', Boolean(reg));
+    if (reg) {
+      el.style.setProperty('--cue-color', reg.color || '#55aaff');
+      const meta = _cueMeta.get(slot);
+      el.title = meta?.name ? `${hotToLabel(slot)} — ${meta.name}` : hotToLabel(slot);
+    } else {
+      el.style.removeProperty('--cue-color');
+      el.title = hotToLabel(slot);
+    }
+  }
+}
+
+function metaEditorEl(): HTMLElement | null {
+  return document.getElementById('cue-editor-metaeditor');
+}
+
+function metaNameInput(): HTMLInputElement | null {
+  return document.getElementById('cue-meta-name') as HTMLInputElement | null;
+}
+
+/** Ouvre l'éditeur nom/couleur d'un slot (double-clic slot ou région, EPIC-019).
+ *  Slot vide → pose d'abord un cue au curseur, puis édition immédiate. */
+export function openCueMetaEditor(slot: number): void {
+  if (slot < 0 || slot > 7 || !ws || !_regions) return;
+  if (!_regions.getRegions().some((r: any) => r.id === slot)) {
+    onSlotClicked(slot);
+  }
+  _metaEditingSlot = slot;
+  const editor = metaEditorEl();
+  if (!editor) return;
+  const region = _regions.getRegions().find((r: any) => r.id === slot);
+  const meta = _cueMeta.get(slot);
+  const name = metaNameInput();
+  if (name) name.value = meta?.name ?? '';
+  const title = document.getElementById('cue-meta-slot');
+  if (title) title.textContent = hotToLabel(slot);
+  // Swatches régénérées à chaque ouverture (état sélectionné = couleur courante).
+  const colorsEl = document.getElementById('cue-meta-colors');
+  if (colorsEl) {
+    colorsEl.innerHTML = '';
+    const current = meta?.color ?? region?.color ?? '#55aaff';
+    for (const c of CUE_COLORS) {
+      const sw = document.createElement('button');
+      sw.type = 'button';
+      sw.className = 'cue-meta-swatch';
+      sw.dataset.color = c;
+      sw.style.background = c;
+      sw.title = c;
+      if (c === current) sw.classList.add('selected');
+      sw.addEventListener('click', () => {
+        colorsEl.querySelectorAll('.cue-meta-swatch').forEach(s => s.classList.remove('selected'));
+        sw.classList.add('selected');
+      });
+      colorsEl.appendChild(sw);
+    }
+  }
+  editor.classList.remove('hidden');
+  setTimeout(() => name?.focus(), 0);
+}
+
+function selectedMetaColor(): string {
+  const sel = document.querySelector('#cue-meta-colors .cue-meta-swatch.selected');
+  return (sel as HTMLElement | null)?.dataset.color || '#55aaff';
+}
+
+/** Applique nom/couleur au slot édité (meta + région + badge slot + sauvegarde). */
+export function applyCueMeta(): void {
+  if (_metaEditingSlot === null) return;
+  const slot = _metaEditingSlot;
+  const name = (metaNameInput()?.value ?? '').trim();
+  const color = selectedMetaColor();
+  _cueMeta.set(slot, { name: name || undefined, color });
+  const region = _regions?.getRegions().find((r: any) => r.id === slot);
+  if (region) {
+    region.setOptions({ color });
+    if (name) {
+      const span = document.createElement('span');
+      span.className = 'cue-region-name';
+      span.textContent = name;
+      region.setContent(span);
+    } else {
+      region.setContent('');
+    }
+  }
+  closeCueMetaEditor();
+  refreshSlotBadges();
+  setStatus(`🏷 Cue ${hotToLabel(slot)} ${name ? `« ${name} »` : ''} — couleur appliquée.`);
+}
+
+export function closeCueMetaEditor(): void {
+  _metaEditingSlot = null;
+  const editor = metaEditorEl();
+  if (editor) editor.classList.add('hidden');
 }
 
 /** Raccourci C : déplace le cue sous le curseur, sinon pose un cue au premier slot libre. */
@@ -1286,6 +1464,8 @@ export function deleteRegionAtCursor(): boolean {
     }
   }
   if (!target) return false;
+  // EPIC-019 : efface aussi nom/couleur (pas de nom fantôme sur re-pose).
+  if (typeof target.id === 'number') _cueMeta.delete(target.id);
   target.remove();
   // Si c'était la boucle en cours de lecture, on coupe le son immédiatement
   // (stopLoopPlay seul laisserait l'audio jouer la fin de la boucle supprimée).
@@ -1294,6 +1474,7 @@ export function deleteRegionAtCursor(): boolean {
     ws.pause();
   }
   refreshLiveSlot();
+  refreshSlotBadges();
   return true;
 }
 
@@ -1330,7 +1511,16 @@ export function onSaveClicked(): Promise<void> | void {
     }, -1) + 1;
   const cues = [...regions]
     .sort((a, b) => a.r.start - b.r.start)
-    .map(({ r, known }) => regionToCue(r, known ?? String(next++)));
+    .map(({ r, known }) => {
+      const cue = regionToCue(r, known ?? String(next++));
+      // Métadonnées nom/couleur (EPIC-019) : les régions wavesurfer ne portent
+      // pas le nom — on restitue la source de vérité _cueMeta (nouveaux cues :
+      // nom par défaut 'n.n.', couleur par défaut de la région).
+      const meta = _cueMeta.get(r.id);
+      if (meta?.name) cue.name = meta.name;
+      if (meta?.color) cue.color = meta.color;
+      return cue;
+    });
   return saveCues(cues)
     .then(() => showToast('✅ sauvegardé'))
     .catch((err: unknown) => showToast(`❌ ${err instanceof Error ? err.message : String(err)}`))
