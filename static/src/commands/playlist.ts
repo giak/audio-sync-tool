@@ -64,7 +64,7 @@ function toggleTrackInPlaylist(): void {
   // renderPlaylistPanel auto-déclenché par eparsPlaylist:changed
 }
 
-async function saveCurrentPlaylist(): Promise<void> {
+export async function saveCurrentPlaylist(): Promise<void> {
   const name = getActivePlaylistName();
   const tracks = getPendingTracks(name);
   if (tracks.length === 0) {
@@ -79,7 +79,7 @@ async function saveCurrentPlaylist(): Promise<void> {
   }
 }
 
-async function showExportModal(): Promise<void> {
+export async function showExportModal(): Promise<void> {
   const name = getActivePlaylistName();
   const tracks = getPendingTracks(name);
   if (tracks.length === 0) {

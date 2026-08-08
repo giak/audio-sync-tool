@@ -1072,6 +1072,41 @@ describe('Playlist mode', () => {
     expect(document.getElementById('dialog-confirm')!.textContent).toBe('📦 Exporter');
   });
 
+  it('bouton 💾 Sauvegarder sauvegarde la playlist courante', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    focusFirstPlaylistFile();
+    dispatchKey(' ');
+    await flush();
+
+    vi.mocked(api).mockResolvedValueOnce({ ok: true, playlist: { name: 'playlist-1' } });
+    vi.mocked(api).mockResolvedValueOnce([]);
+
+    (document.getElementById('pl-save') as HTMLButtonElement).click();
+    await flush();
+    await flush();
+
+    expect(api).toHaveBeenCalledWith('/playlists', expect.objectContaining({ method: 'POST' }));
+    expect(document.getElementById('status-text')!.textContent).toContain('sauvegardée');
+  });
+
+  it("bouton 📦 Exporter ouvre la confirmation d'export", async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    focusFirstPlaylistFile();
+    dispatchKey(' ');
+    await flush();
+
+    (document.getElementById('pl-export') as HTMLButtonElement).click();
+    await flush();
+
+    expect(state.activeModal).toBe('dialog');
+    expect(document.getElementById('dialog-msg')!.textContent).toContain('Exporter');
+    expect(document.getElementById('dialog-confirm')!.textContent).toBe('📦 Exporter');
+  });
+
   it('Delete removes focused track from playlist sidebar', async () => {
     await enterPlaylist();
     state.playlistFocus = 'source';

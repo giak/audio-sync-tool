@@ -12,6 +12,7 @@ import { initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
 import { setActivePanel } from './focus.js';
 import { createNewPlaylist, loadPlaylists, savePlaylist, setPendingTracks } from './playlist.js';
+import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
 import {
   renderJournal,
   renderPlaylistManager,
@@ -92,6 +93,8 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   renderPlaylistManager();
   openModal('playlists');
 };
+(document.getElementById('pl-save') as HTMLElement | null)!.onclick = () => void saveCurrentPlaylist();
+(document.getElementById('pl-export') as HTMLElement | null)!.onclick = () => void showExportModal();
 (document.getElementById('page-sync') as HTMLElement | null)!.onclick = async () => {
   if (state.playlistMode) await exitPlaylistMode();
 };
