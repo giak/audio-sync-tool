@@ -876,6 +876,9 @@ header h1 {
   font-size: 13px; line-height: 1;
 }
 .cue-play:hover { border-color: var(--border-active); color: var(--accent); }
+/* Undo/redo (EPIC-021) : désactivés quand la pile correspondante est vide. */
+.cue-play:disabled { opacity: 0.35; cursor: default; }
+.cue-play:disabled:hover { border-color: var(--border-panel); color: var(--text-primary); }
 .cue-play.playing { color: var(--accent-green); border-color: var(--accent-green); }
 .cue-play.looping {
   color: var(--led-amber); border-color: var(--led-amber);

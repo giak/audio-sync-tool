@@ -40,6 +40,7 @@
 | [EPIC-018](EPIC-018-minimap-bande-basse-coloree.md) | Minimap/overview synchronisée au zoom + bande basse colorée (RGB DJ, étape 1) | 🟢 Livré | Moyenne | rapport benchmark §P1 |
 | [EPIC-019](EPIC-019-renommage-couleur-cues.md) | Renommage + recolorisation des cues (double-clic slot/région, round-trip NML) | 🟢 Livré | Moyenne | rapport benchmark §P1 |
 | [EPIC-020](EPIC-020-waveform-3-bandes-rgb.md) | Waveform 3-bandes RGB complète (low/mid/high — FFT fenêtrée, standard DJ) | 🟢 Livré | Moyenne | rapport benchmark §P1-4 |
+| [EPIC-021](EPIC-021-undo-redo-cue-editor.md) | Undo/redo dans le cue editor (poses/suppressions/déplacements de cues et loops) | 🟢 Livré | Moyenne | rapport benchmark §P2 |
 
 ## État actuel du projet (2026-08-08)
 
@@ -98,6 +99,11 @@
   découverte forensique : le biquad RBJ à Q faible fuit 20-35 % du hors-bande, cascade ordre 8
   nécessaire → FFT) ; rendu 3 couches superposées (rouge basse / vert médium / bleu aigu) en
   `mix-blend-mode: screen` (mélange additif), masquée en zoom. 10 tests, 723 vitest shuffle.
+- EPIC-021 livrée (P2 du benchmark) : **undo/redo dans le cue editor** — piles de snapshots
+  de l'état des régions (structure + `_cueMeta` + `_displOrders`), push AVANT chaque mutation
+  (pose clic/1-8/C, suppression Suppr/clic droit, loop dessiné via `region-initialized` id
+  string, renommage/couleur), restauration atomique (remove+re-addRegion, garde `_restoring`
+  contre la ré-entrance plugin). Boutons ↺/↻ + Ctrl+Z / Ctrl+Shift+Z. 7 tests, 730 vitest.
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
 - EPIC-002 → EPIC-009 livrées et **commitées** (`a21f1ae` → `3f3b669`), EPIC-001 à ses commits
   historiques, ce registre inclus dans `7bb1735`.

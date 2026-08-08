@@ -38,10 +38,13 @@ import {
   applyCueMeta,
   deleteRegionAtCursor,
   onSaveClicked,
+  onSlotClicked,
   openCueEditor,
   openCueMetaEditor,
+  redoCues,
   setCueAtPlayhead,
   toggleFullscreen,
+  undoCues,
   writeGridToCollection,
   zoomBy,
   zoomToFit,
@@ -145,6 +148,8 @@ const MODAL_HTML = `
       </div>
       <div id="cue-editor-transport">
         <button id="cue-btn-play">▶</button>
+        <button id="cue-btn-undo">↺</button>
+        <button id="cue-btn-redo">↻</button>
         <button id="cue-btn-zoomout">−</button>
         <button id="cue-btn-zoomin">+</button>
         <button id="cue-btn-zoomfit">Fit</button>
@@ -2335,5 +2340,171 @@ describe('render/cueEditor waveform 3-bandes RGB (EPIC-020)', () => {
     expect(band!.querySelectorAll('.rgb-bar').length).toBe(160 * 3);
     mockState.setModal(null); // fermeture → destroyCueEditor
     expect(band!.querySelectorAll('.rgb-bar').length).toBe(0);
+  });
+});
+
+describe('render/cueEditor undo/redo (EPIC-021)', () => {
+  beforeEach(resetMocks);
+
+  /** Remplace addRegion/getRegions par un store mutable fidèle au plugin :
+   *  addRegion → pousse + retourne la région, remove → la retire du store. */
+  function makeRegionStore(ws: MockWS): Array<Record<string, unknown>> {
+    const store: Array<Record<string, unknown>> = [];
+    (ws.regions.addRegion as ReturnType<typeof vi.fn>).mockImplementation((opts: any) => {
+      const reg = {
+        ...opts,
+        setContent: vi.fn(),
+        // Fidèle au plugin : setOptions mute start/end (les mutations passent par là).
+        setOptions: vi.fn((o: any) => Object.assign(reg, o)),
+        remove: vi.fn(() => {
+          const i = store.indexOf(reg);
+          if (i >= 0) store.splice(i, 1);
+        }),
+      };
+      store.push(reg);
+      return reg;
+    });
+    (ws.regions.getRegions as ReturnType<typeof vi.fn>).mockImplementation(() => store);
+    return store;
+  }
+
+  function openSingle(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  it('une pose puis undo retire le cue, redo le restaure', async () => {
+    const ws = openSingle();
+    const store = makeRegionStore(ws);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const undoBtn = document.getElementById('cue-btn-undo') as HTMLButtonElement;
+    const redoBtn = document.getElementById('cue-btn-redo') as HTMLButtonElement;
+    expect(undoBtn.disabled).toBe(true); // historique vide au départ
+    onSlotClicked(2);
+    expect(store.length).toBe(1);
+    expect(undoBtn.disabled).toBe(false);
+    expect(undoCues()).toBe(true);
+    expect(store.length).toBe(0); // cue annulé
+    expect(undoBtn.disabled).toBe(true);
+    expect(redoBtn.disabled).toBe(false);
+    expect(redoCues()).toBe(true);
+    expect(store.length).toBe(1); // cue rétabli (même slot)
+    expect(store[0].id).toBe(2);
+  });
+
+  it('undo/redo vides → false, sans erreur', async () => {
+    const ws = openSingle();
+    makeRegionStore(ws);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    expect(undoCues()).toBe(false);
+    expect(redoCues()).toBe(false);
+  });
+
+  it('une suppression puis undo restaure le cue', async () => {
+    const ws = openSingle();
+    const store = makeRegionStore(ws);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    onSlotClicked(0); // pose slot 0, couleur par défaut #55aaff
+    expect((store[0].color as string).length).toBeGreaterThan(0);
+    // Positionne la lecture sur le cue puis suppression (touche Suppr).
+    (ws.getCurrentTime as ReturnType<typeof vi.fn>).mockReturnValue((store[0].start as number) + 0.01);
+    expect(deleteRegionAtCursor()).toBe(true);
+    expect(store.length).toBe(0);
+    expect(undoCues()).toBe(true);
+    expect(store.length).toBe(1); // cue restauré
+    expect(store[0].id).toBe(0);
+    expect(store[0].color).toBe('#55aaff'); // couleur d'origine de la pose
+  });
+
+  it('un loop dessiné (region-initialized id string) puis undo le retire', async () => {
+    const ws = openSingle();
+    const store = makeRegionStore(ws);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    // Le vrai plugin émet region-initialized AVANT d'ajouter au store (drag en cours) :
+    // l'état avant (sans le loop) est poussé. Puis saveRegion → ajout + region-created.
+    const inited = (ws.regions.on.mock.calls as Array<[string, (...a: unknown[]) => void]>).find(
+      c => c[0] === 'region-initialized',
+    )!;
+    inited[1]({ id: 'region-abc' }); // push l'état AVANT (store vide)
+    // Le vrai plugin ajoute la région au store (saveRegion) PUIS émet region-created :
+    // on simule la même instance (id string → slot A–H assigné par le handler).
+    const loop: Record<string, unknown> = {
+      id: 'region-abc',
+      start: 10,
+      end: 20,
+      setOptions: vi.fn(),
+      remove: vi.fn(() => {
+        const i = store.indexOf(loop);
+        if (i >= 0) store.splice(i, 1);
+      }),
+    };
+    store.push(loop);
+    const created = (ws.regions.on.mock.calls as Array<[string, (...a: unknown[]) => void]>).find(
+      c => c[0] === 'region-created',
+    )!;
+    created[1](loop);
+    expect(store.length).toBe(1);
+    expect(loop.id).toBe(0); // slot A–H assigné par le handler
+    expect(undoCues()).toBe(true);
+    expect(store.length).toBe(0); // loop annulé
+  });
+
+  it('la pose par la touche C sur un slot libre est annulable', async () => {
+    const ws = openSingle();
+    const store = makeRegionStore(ws);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    (ws.getCurrentTime as ReturnType<typeof vi.fn>).mockReturnValue(30);
+    onSlotClicked(1); // cue posé à t=30
+    const orig = store[0].start as number;
+    (ws.getCurrentTime as ReturnType<typeof vi.fn>).mockReturnValue(45);
+    expect(setCueAtPlayhead()).toBe(true); // 45 hors du cue [30,30.08] → pose sur slot libre
+    expect(store.length).toBe(2);
+    expect(undoCues()).toBe(true);
+    expect(store.length).toBe(1);
+    expect(store[0].start).toBe(orig);
+  });
+
+  it('le déplacement du cue sous le curseur (C) est annulable', async () => {
+    const ws = openSingle();
+    const store = makeRegionStore(ws);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    (ws.getCurrentTime as ReturnType<typeof vi.fn>).mockReturnValue(30);
+    onSlotClicked(1); // cue posé à t=30 → [30, 30.08]
+    const orig = store[0].start as number;
+    // Curseur DANS le cue [30, 30.08] → C déplace le MÊME cue vers t=30.04.
+    (ws.getCurrentTime as ReturnType<typeof vi.fn>).mockReturnValue(30.04);
+    expect(setCueAtPlayhead()).toBe(true);
+    expect(store.length).toBe(1); // déplacé, pas dupliqué
+    expect(store[0].start).toBe(30.04);
+    expect(undoCues()).toBe(true);
+    expect(store.length).toBe(1);
+    expect(store[0].start).toBe(orig); // position d'origine restaurée (30)
+  });
+
+  it('la fermeture de la modal vide les piles (reset lifecycle)', async () => {
+    const ws = openSingle();
+    const store = makeRegionStore(ws);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    onSlotClicked(0);
+    expect(undoCues()).toBe(true); // undo consommé
+    onSlotClicked(1);
+    const undoBtn = document.getElementById('cue-btn-undo') as HTMLButtonElement;
+    expect(undoBtn.disabled).toBe(false);
+    mockState.setModal(null); // fermeture → destroyCueEditor
+    expect(undoBtn.disabled).toBe(true); // pile vidée
+    expect(undoCues()).toBe(false);
   });
 });

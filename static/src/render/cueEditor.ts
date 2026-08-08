@@ -40,6 +40,21 @@ let _cueMeta = new Map<number, { name?: string; color?: string }>();
 /** Slot en cours d'édition dans l'éditeur nom/couleur (EPIC-019), sinon null. */
 let _metaEditingSlot: number | null = null;
 
+// ── Undo/redo (EPIC-021) : piles de snapshots de l'état des régions ─────────
+// 8 slots max → un snapshot (structure + métadonnées + DISPL_ORDER) est minuscule ;
+// la restauration (remove + re-addRegion) est triviale. Pas de command pattern :
+// over-engineering pour un état aussi petit.
+interface CueSnapshot {
+  regions: Array<{ id: number | string; start: number; end: number; color?: string }>;
+  meta: Array<[number, { name?: string; color?: string }]>;
+  displ: Array<[number, string]>;
+}
+let _undoStack: CueSnapshot[] = [];
+let _redoStack: CueSnapshot[] = [];
+/** Garde anti-réentrance : pendant une restauration, les événements plugin
+ *  (region-created…) ne doivent ni re-pusher un snapshot ni re-snapper. */
+let _restoring = false;
+
 /** Palette de couleurs de cue (standard DJ) — swatches de l'éditeur de métadonnées. */
 const CUE_COLORS = ['#55aaff', '#ff6b6b', '#4cd964', '#ffaa00', '#ff6bdc', '#7aa8ff', '#ffd166', '#5cd6c6'];
 /** Mode dessin de loop (bouton ⟳ Loop) : activé → drag sur la waveform crée une région. */
@@ -859,6 +874,17 @@ export function wireControls(root: HTMLElement = document.body): void {
     _wired.add(zoom1);
     zoom1.addEventListener('click', zoomToOneBeat);
   }
+  // Undo/redo (EPIC-021) : boutons ↺/↻ du transport.
+  const undoBtn = root.querySelector<HTMLButtonElement>('#cue-btn-undo');
+  if (undoBtn && !_wired.has(undoBtn)) {
+    _wired.add(undoBtn);
+    undoBtn.addEventListener('click', () => void undoCues());
+  }
+  const redoBtn = root.querySelector<HTMLButtonElement>('#cue-btn-redo');
+  if (redoBtn && !_wired.has(redoBtn)) {
+    _wired.add(redoBtn);
+    redoBtn.addEventListener('click', () => void redoCues());
+  }
 }
 
 /** Bascule le mode dessin de loop : drag sur la waveform → nouvelle région boucle. */
@@ -905,7 +931,17 @@ function onModalKeydown(e: KeyboardEvent): void {
     }
     return;
   }
-  if (e.key === ' ') {
+  // Undo/redo (EPIC-021) : Ctrl+Z (annuler) / Ctrl+Shift+Z ou Ctrl+Y (rétablir).
+  // Les gardes !altKey/!metaKey protègent du navigateur (Ctrl+Z natif reste hors
+  // champ de saisie, où le handler est déjà exclu plus haut).
+  if (e.ctrlKey && !e.altKey && !e.metaKey && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault();
+    if (e.shiftKey) redoCues();
+    else undoCues();
+  } else if (e.ctrlKey && !e.altKey && !e.metaKey && (e.key === 'y' || e.key === 'Y')) {
+    e.preventDefault();
+    redoCues();
+  } else if (e.key === ' ') {
     e.preventDefault();
     ws?.playPause();
   } else if (e.key === 'ArrowLeft' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
@@ -1138,6 +1174,11 @@ export async function renderWaveform(
   updateZoomButtons();
   _cueMeta = new Map();
   closeCueMetaEditor();
+  // Undo/redo (EPIC-021) : chaque ouverture/re-render repart d'un historique vierge.
+  _undoStack = [];
+  _redoStack = [];
+  _restoring = false;
+  updateHistoryButtons();
   // DISPL_ORDER d'origine : {hotcue → displ_order} — jamais reconstruit depuis le slot (B9).
   _displOrders = new Map(cues.filter(c => c.hotcue >= 0 && c.hotcue <= 7).map(c => [c.hotcue, c.displ_order]));
   // Métadonnées nom/couleur par slot (EPIC-019) : le nom 'n.n.' (Traktor) = pas de nom.
@@ -1185,6 +1226,7 @@ export async function renderWaveform(
     // Clic-droit sur une région = suppression (audit UX).
     _regions.on('region-clicked', (region: any, ev: MouseEvent) => {
       if (ev.button === 2) {
+        pushHistory();
         // EPIC-019 : la suppression efface aussi nom/couleur — un cue re-posé au
         // même slot repart vierge (sémantique Traktor), pas de nom fantôme.
         if (typeof region.id === 'number') _cueMeta.delete(region.id);
@@ -1205,6 +1247,9 @@ export async function renderWaveform(
     // Loop dessiné (id string, créé par le drag) → slot A–H libre ; sinon la
     // sauvegarde écrirait HOTCUE invalide (400 backend). Snap sur la grille si active.
     _regions.on('region-created', (region: any) => {
+      // Pendant une restauration (EPIC-021) : addRegion émet region-created — ne
+      // pas re-snapper les positions restaurées ni re-assigner les ids.
+      if (_restoring) return;
       if (typeof region.id !== 'number') {
         const slot = nextFreeSlot();
         if (slot === -1) {
@@ -1220,9 +1265,14 @@ export async function renderWaveform(
         const start = snapToBeat(region.start, _grid);
         const end = Math.max(start + 0.2, snapToBeat(region.end, _grid));
         region.setOptions({ start, end });
-      }
-      refreshLiveSlot();
-      refreshSlotBadges();
+      }    refreshLiveSlot();
+    refreshSlotBadges();
+  });
+    // Undo/redo (EPIC-021) : un loop dessiné (id string généré par le drag) est
+    // créé APRÈS region-initialized → pousser l'état AVANT sa création ici. Les
+    // cues posés (addRegion, id numérique) poussent déjà via onSlotClicked / C.
+    _regions.on('region-initialized', (region: any) => {
+      if (typeof region.id !== 'number') pushHistory();
     });
     updateTimeUI();
     // Clic (mode « poser le beat 1 ») : wavesurfer émet (relativeX, relativeY) 0..1.
@@ -1289,6 +1339,10 @@ export function destroyCueEditor(): void {
   _trackLite = null;
   _displOrders = new Map();
   _cueMeta = new Map();
+  _undoStack = [];
+  _redoStack = [];
+  _restoring = false;
+  updateHistoryButtons();
   closeCueMetaEditor();
   stopLoopPlay();
   hideAddRow();
@@ -1331,6 +1385,7 @@ export function destroyCueEditor(): void {
 
 export function onSlotClicked(slot: number): void {
   if (!ws || !_regions) return;
+  pushHistory();
   const time = ws.getCurrentTime();
   for (const r of _regions.getRegions()) {
     if (r.id === slot) r.remove();
@@ -1415,6 +1470,7 @@ function selectedMetaColor(): string {
 /** Applique nom/couleur au slot édité (meta + région + badge slot + sauvegarde). */
 export function applyCueMeta(): void {
   if (_metaEditingSlot === null) return;
+  pushHistory();
   const slot = _metaEditingSlot;
   const name = (metaNameInput()?.value ?? '').trim();
   const color = selectedMetaColor();
@@ -1451,6 +1507,7 @@ export function setCueAtPlayhead(): boolean {
     if (typeof r.id === 'number' && r.id >= 0 && r.id <= 7) {
       const end = r.end === r.start ? r.start + 0.05 : r.end;
       if (t >= r.start && t <= end) {
+        pushHistory();
         r.setOptions({ start: t, end: t + 0.08 });
         refreshLiveSlot();
         return true;
@@ -1479,6 +1536,7 @@ export function deleteRegionAtCursor(): boolean {
     }
   }
   if (!target) return false;
+  pushHistory();
   // EPIC-019 : efface aussi nom/couleur (pas de nom fantôme sur re-pose).
   if (typeof target.id === 'number') _cueMeta.delete(target.id);
   target.remove();
@@ -1491,6 +1549,100 @@ export function deleteRegionAtCursor(): boolean {
   refreshLiveSlot();
   refreshSlotBadges();
   return true;
+}
+
+/** Capture l'état courant des régions + métadonnées (pour undo/redo, EPIC-021). */
+function snapshotCurrent(): CueSnapshot {
+  const regions = (_regions?.getRegions() ?? []).map((r: any) => ({
+    id: r.id,
+    start: r.start,
+    end: r.end,
+    color: r.color,
+  }));
+  return { regions, meta: [..._cueMeta.entries()], displ: [..._displOrders.entries()] };
+}
+
+/** Pousse l'état AVANT une mutation dans la pile d'undo, vide le redo. */
+function pushHistory(): void {
+  if (_restoring) return;
+  _undoStack.push(snapshotCurrent());
+  _redoStack = [];
+  updateHistoryButtons();
+}
+
+/** Restaure un snapshot : détruit les régions courantes, recrée depuis l'état
+ *  capturé (structure + nom/couleur + DISPL_ORDER). */
+function restoreSnapshot(snap: CueSnapshot): void {
+  if (!_regions) return;
+  _restoring = true;
+  try {
+    // La boucle en lecture a disparu du snapshot (supprimée/annulée) → couper le son.
+    if (_loopPlay) {
+      const stillThere = snap.regions.some(
+        r => Math.abs(r.start - _loopPlay!.start) < 1e-6 && Math.abs(r.end - _loopPlay!.end) < 1e-6,
+      );
+      if (!stillThere) {
+        stopLoopPlay();
+        ws?.pause();
+      }
+    }
+    // Copie d'abord : remove() mute la liste (splice) — itérer dessus sauterait des éléments.
+    for (const r of [..._regions.getRegions()]) r.remove();
+    _cueMeta = new Map(snap.meta);
+    _displOrders = new Map(snap.displ);
+    for (const r of snap.regions) {
+      const reg = _regions.addRegion({
+        id: r.id,
+        start: r.start,
+        end: r.end,
+        color: r.color,
+        label: typeof r.id === 'number' ? hotToLabel(r.id) : undefined,
+      });
+      const meta = typeof r.id === 'number' ? _cueMeta.get(r.id) : undefined;
+      if (meta?.name) {
+        const span = document.createElement('span');
+        span.className = 'cue-region-name';
+        span.textContent = meta.name;
+        reg.setContent(span);
+      }
+    }
+  } finally {
+    _restoring = false;
+  }
+  refreshLiveSlot();
+  refreshSlotBadges();
+}
+
+/** Annule la dernière pose/suppression/déplacement/renommage de cue ou loop. */
+export function undoCues(): boolean {
+  if (_undoStack.length === 0 || !_regions) return false;
+  const current = snapshotCurrent();
+  const prev = _undoStack.pop()!;
+  _redoStack.push(current);
+  restoreSnapshot(prev);
+  updateHistoryButtons();
+  setStatus('↩ Annulé — pose/suppression de cue restaurée.');
+  return true;
+}
+
+/** Rétablit l'action annulée. */
+export function redoCues(): boolean {
+  if (_redoStack.length === 0 || !_regions) return false;
+  const current = snapshotCurrent();
+  const next = _redoStack.pop()!;
+  _undoStack.push(current);
+  restoreSnapshot(next);
+  updateHistoryButtons();
+  setStatus('↪ Rétabli.');
+  return true;
+}
+
+/** Désactive les boutons ↺/↻ quand la pile correspondante est vide. */
+function updateHistoryButtons(): void {
+  const undo = document.getElementById('cue-btn-undo') as HTMLButtonElement | null;
+  if (undo) undo.disabled = _undoStack.length === 0;
+  const redo = document.getElementById('cue-btn-redo') as HTMLButtonElement | null;
+  if (redo) redo.disabled = _redoStack.length === 0;
 }
 
 export async function saveCues(cues: CueDTO[]): Promise<void> {

@@ -256,6 +256,8 @@
     <div id="cue-editor-minimap" title="Vue d'ensemble de la piste — cliquer pour se déplacer (synchronisée au zoom)"></div>
     <div id="cue-editor-transport">
       <button id="cue-btn-play" class="cue-play" title="Lecture / pause (Espace)">▶</button>
+      <button id="cue-btn-undo" class="cue-play" title="Annuler la dernière pose/suppression (Ctrl+Z)">↺</button>
+      <button id="cue-btn-redo" class="cue-play" title="Rétablir (Ctrl+Shift+Z)">↻</button>
       <span id="cue-editor-time">0:00 / 0:00</span>
       <button id="cue-btn-zoomout" class="cue-play" title="Zoom arrière (−)">−</button>
       <button id="cue-btn-zoomin" class="cue-play" title="Zoom avant (+ / molette sur la waveform)">+</button>
@@ -271,7 +273,7 @@
       <button id="cue-btn-analyze" class="cue-play" title="Analyser la basse/le kick côté serveur (BPM + phase) — 60–90 s analysées, résultat mis en cache">🔍 Analyser</button>
       <button id="cue-btn-writegrid" class="cue-play" title="Écrire la grille dans la collection Traktor (TEMPO + TYPE=4/GRID) — Traktor l'affichera">💾 Grille</button>
       <button id="cue-btn-snap" class="cue-play" title="Caler les cues/loops sur la grille de beats">🧲 Snap</button>
-      <span class="cue-hint">←/→ seek ±5s · +/− = zoom (molette aussi) · 1–8 = poser un cue · C = cue au curseur · ←/→ 1/4 = calage grille · ◎ Beat 1 = poser le premier beat · 🔍 Analyser = analyse serveur basse/phase · 💾 Grille = écrire dans la collection · slot A–H = cue · ⟳ Loop = boucle · 🔁 Play = boucle en continu · Suppr = retirer · clic droit = supprimer</span>
+      <span class="cue-hint">←/→ seek ±5s · +/− = zoom (molette aussi) · 1–8 = poser un cue · C = cue au curseur · Ctrl+Z = annuler · Ctrl+Shift+Z = rétablir · ←/→ 1/4 = calage grille · ◎ Beat 1 = poser le premier beat · 🔍 Analyser = analyse serveur basse/phase · 💾 Grille = écrire dans la collection · slot A–H = cue · ⟳ Loop = boucle · 🔁 Play = boucle en continu · Suppr = retirer · clic droit = supprimer</span>
     </div>
     <div id="cue-editor-controls">
       <span class="cue-slot" data-slot="0">A</span>
