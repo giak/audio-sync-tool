@@ -1652,6 +1652,66 @@ def test_cues_write_ok(client, tmp_path, monkeypatch):
     assert (tmp_path / 'c.nml.bak.nml').exists()
 
 
+# ── Écriture de la grille dans le NML (EPIC-011) ──────────────────────────
+
+
+def _load_nml_tree(path):
+    import nml
+    return nml.load_nml(str(path))
+
+
+def test_grid_write_ok_and_readable(client, tmp_path, monkeypatch):
+    """POST /api/track/grid écrit TEMPO + TYPE=4/GRID et le backup .bak est créé."""
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    rv = client.post('/api/track/grid', json={
+        'filename': 'Carbon Decay - In The Warehouse.mp3',
+        'filesize': '5243',
+        'bpm': 126.5, 'phase': 2.25, 'quality': 100,
+    })
+    assert rv.status_code == 200
+    assert rv.get_json()['ok'] is True
+    assert (tmp_path / 'c.nml.bak.nml').exists()
+    # Relu depuis le fichier : grille écrite + lisible.
+    tree = _load_nml_tree(nml_path)
+    entry = tree.getroot().find('.//ENTRY')
+    import nml
+    grid = nml.get_beatgrid(entry)
+    assert grid is not None
+    assert grid['bpm'] == pytest.approx(126.5)
+    assert grid['phase'] == pytest.approx(2.25)
+    tempo = entry.find('TEMPO')
+    assert tempo.get('BPM') == '126.500000'
+    assert tempo.get('BPM_QUALITY') == '100.000000'
+
+
+def test_grid_write_rejects_invalid(client, tmp_path, monkeypatch):
+    """BPM hors bornes / phase négative / payload manquant → 400."""
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    base = {'filename': 'Carbon Decay - In The Warehouse.mp3', 'filesize': '5243'}
+    rv = client.post('/api/track/grid', json={**base, 'bpm': 1.0})       # aberrant
+    assert rv.status_code == 400
+    rv = client.post('/api/track/grid', json={**base, 'bpm': 128, 'phase': -1})
+    assert rv.status_code == 400
+    rv = client.post('/api/track/grid', json={})
+    assert rv.status_code == 400
+    rv = client.post('/api/track/grid', json={**base, 'bpm': 'abc'})
+    assert rv.status_code == 400
+
+
+def test_grid_write_entry_not_found(client, tmp_path, monkeypatch):
+    """Clé (FILE, FILESIZE) inconnue → 404."""
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    rv = client.post('/api/track/grid', json={
+        'filename': 'ghost.mp3', 'filesize': '1', 'bpm': 128, 'phase': 0})
+    assert rv.status_code == 404
+
+
 def test_cues_post_409_multiple(client, tmp_path, monkeypatch):
     nml_path = tmp_path / 'c.nml'
     nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())

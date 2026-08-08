@@ -31,7 +31,14 @@ vi.mock('wavesurfer.js', () => ({ default: { create: mockWSCreate } }));
 vi.mock('wavesurfer.js/dist/plugins/regions.js', () => ({ default: { create: mockRegionsCreate } }));
 
 import { showToast } from '../ui.js';
-import { analyzeOnServer, deleteRegionAtCursor, onSaveClicked, openCueEditor, toggleFullscreen } from './cueEditor.js';
+import {
+  analyzeOnServer,
+  deleteRegionAtCursor,
+  onSaveClicked,
+  openCueEditor,
+  toggleFullscreen,
+  writeGridToCollection,
+} from './cueEditor.js';
 
 interface MockWS {
   on: ReturnType<typeof vi.fn>;
@@ -128,6 +135,7 @@ const MODAL_HTML = `
         <span id="cue-bpm-badge" class="cue-bpm-badge hidden"></span>
         <button id="cue-btn-beat1">◎ Beat 1</button>
         <button id="cue-btn-analyze">🔍 Analyser</button>
+        <button id="cue-btn-writegrid">💾 Grille</button>
         <button id="cue-btn-snap">🧲 Snap</button>
         <span id="cue-editor-time">0:00 / 0:00</span>
       </div>
@@ -1549,5 +1557,108 @@ describe('render/cueEditor analyse serveur kick/phase (EPIC-010)', () => {
     const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
     expect(bpm.value).toBe('130');
     expect((document.getElementById('cue-bpm-badge') as HTMLElement).textContent).toBe('auto · 60 %');
+  });
+});
+
+describe('render/cueEditor écriture grille NML (EPIC-011)', () => {
+  beforeEach(resetMocks);
+
+  const flush = () => new Promise(r => setTimeout(r, 0));
+
+  function openMatched(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  it('💾 Grille est désactivé sans BPM (et en visualisation seule)', async () => {
+    openMatched();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const btn = document.getElementById('cue-btn-writegrid') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true); // pas de BPM encore
+    // Saisie manuelle du BPM → activé (ENTRY résolu + BPM présent).
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '124';
+    bpm.dispatchEvent(new Event('input'));
+    expect(btn.disabled).toBe(false);
+  });
+
+  it('💾 Grille POST /api/track/grid avec filename/filesize/entry/bpm/phase', async () => {
+    openMatched();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '126.5';
+    bpm.dispatchEvent(new Event('input'));
+    (document.getElementById('cue-btn-nudge-fwd') as HTMLButtonElement).click(); // phase 0.125
+    const btn = document.getElementById('cue-btn-writegrid') as HTMLButtonElement;
+    mockApi.mockResolvedValueOnce({ ok: true });
+    btn.click();
+    expect(btn.disabled).toBe(true); // état ⏳ pendant l'écriture
+    await flush();
+    expect(btn.disabled).toBe(false);
+    const call = mockApi.mock.calls.find(([u]: [string]) => u === '/api/track/grid');
+    expect(call).toBeDefined();
+    const body = JSON.parse((call[1] as { body: string }).body);
+    expect(body.filename).toBe('a.mp3');
+    expect(body.filesize).toBe('1');
+    expect(body.entry).toBe(0);
+    expect(body.bpm).toBe(126.5);
+    expect(body.phase).toBeCloseTo(60 / 126.5 / 4, 5); // 1/4 de beat à 126,5 BPM
+    // Après écriture : la grille devient native → badge NML.
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('NML');
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('Grille écrite');
+  });
+
+  it("💾 Grille désactivé en visualisation seule (pas d'ENTRY)", async () => {
+    mockWSCreate.mockReturnValue(makeWS());
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [], // piste absente de la collection → _entryRef = null
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '124';
+    bpm.dispatchEvent(new Event('input'));
+    const btn = document.getElementById('cue-btn-writegrid') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true); // jamais d'ENTRY à modifier → bouton inactif
+    btn.click(); // un bouton disabled ne déclenche rien (comportement natif)
+    await flush();
+    const calls = mockApi.mock.calls.filter(([u]: [string]) => u === '/api/track/grid');
+    expect(calls.length).toBe(0); // aucun POST possible sans ENTRY
+  });
+
+  it("échec d'écriture → message, bouton ré-armé", async () => {
+    openMatched();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '124';
+    bpm.dispatchEvent(new Event('input'));
+    const btn = document.getElementById('cue-btn-writegrid') as HTMLButtonElement;
+    mockApi.mockRejectedValueOnce(new Error('ENTRY introuvable'));
+    btn.click();
+    await flush();
+    expect(btn.disabled).toBe(false);
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('ENTRY introuvable');
+  });
+
+  it('writeGridToCollection exportée (appel direct) fonctionne sans bouton', async () => {
+    openMatched();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '128';
+    bpm.dispatchEvent(new Event('input'));
+    mockApi.mockResolvedValueOnce({ ok: true });
+    await writeGridToCollection();
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('NML');
   });
 });

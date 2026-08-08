@@ -2,7 +2,7 @@ import os
 import xml.etree.ElementTree as ET
 import pytest
 from nml import (load_nml, build_index, get_cues, get_beatgrid, get_entry_meta, write_cues,
-                 save_nml, build_export_nml, build_entry_element, append_entry)
+                 save_nml, build_export_nml, build_entry_element, append_entry, upsert_beatgrid)
 
 DATA = os.path.join('tests', 'fixtures', 'nml-sample.xml')
 
@@ -201,6 +201,91 @@ def test_build_entry_element_fallback_title_artist():
     assert el.get('TITLE') == 'only-file'
     assert el.get('ARTIST') == ''
     assert el.find('INFO').get('PLAYTIME') is None
+
+
+def test_upsert_beatgrid_creates_tempo_and_grid(tmp_path):
+    """EPIC-011 : upsert sur un ENTRY sans grille → TEMPO (après INFO) + CUE_V2 TYPE=4
+    AutoGrid + GRID enfant créés, au format exact Traktor (6 décimales)."""
+    tree = load_nml(DATA)
+    entry = tree.getroot().find('.//ENTRY')
+    # Retire la grille existante pour simuler une piste non analysée par Traktor.
+    for c in list(entry.findall('CUE_V2')):
+        if c.get('TYPE') == '4':
+            entry.remove(c)
+    for t in list(entry.findall('TEMPO')):
+        entry.remove(t)
+    assert get_beatgrid(entry) is None
+
+    cue4 = upsert_beatgrid(entry, 124.0, 2.25, 100)
+
+    # TEMPO créé APRÈS INFO (ordre réel Traktor) avec BPM_QUALITY.
+    tempo = entry.find('TEMPO')
+    assert tempo is not None
+    assert tempo.get('BPM') == '124.000000'
+    assert tempo.get('BPM_QUALITY') == '100.000000'
+    tags = [c.tag for c in entry]
+    assert tags.index('INFO') < tags.index('TEMPO') < tags.index('CUE_V2')
+    # CUE_V2 TYPE=4 + GRID enfant, exactement un seul.
+    assert cue4.get('TYPE') == '4'
+    assert cue4.get('NAME') == 'AutoGrid'
+    assert cue4.get('START') == '2.250000'
+    assert cue4.get('HOTCUE') == '-1'
+    grid = cue4.find('GRID')
+    assert grid is not None and grid.get('BPM') == '124.000000'
+    assert len([c for c in entry.findall('CUE_V2') if c.get('TYPE') == '4']) == 1
+    # get_beatgrid relit la grille écrite.
+    g = get_beatgrid(entry)
+    assert g['bpm'] == pytest.approx(124.0)
+    assert g['phase'] == pytest.approx(2.25)
+
+
+def test_upsert_beatgrid_updates_existing_without_duplicating():
+    """EPIC-011 : un TYPE=4 existant est mis à jour (START + GRID/BPM), jamais dupliqué."""
+    tree = load_nml(DATA)
+    entry = tree.getroot().find('.//ENTRY')
+    before = [c for c in entry.findall('CUE_V2') if c.get('TYPE') == '4']
+    assert len(before) == 1
+
+    upsert_beatgrid(entry, 130.5, 8.0, 100)
+    upsert_beatgrid(entry, 131.0, 8.5, 100)  # seconde écriture → update, pas ajout
+
+    after = [c for c in entry.findall('CUE_V2') if c.get('TYPE') == '4']
+    assert len(after) == 1
+    assert after[0].get('START') == '8.500000'
+    assert after[0].find('GRID').get('BPM') == '131.000000'
+    assert entry.find('TEMPO').get('BPM') == '131.000000'
+    # Les autres cues (TYPE=0) sont intacts.
+    assert len([c for c in entry.findall('CUE_V2') if c.get('TYPE') == '0']) == 1
+
+
+def test_upsert_beatgrid_preserved_by_write_cues_roundtrip(tmp_path):
+    """EPIC-011 : après upsert, la sauvegarde des CUES (write_cues + save_nml) préserve
+    la grille — round-trip complet : fichier relu → grille toujours là."""
+    path = tmp_path / 'c.nml'
+    path.write_text(open(DATA).read())
+    tree = load_nml(str(path))
+    entry = tree.getroot().find('.//ENTRY')
+    upsert_beatgrid(entry, 124.0, 2.25, 100)
+    # Sauvegarde des cues éditables (l'utilisateur ajoute un cue A).
+    write_cues(entry, [{'type': '0', 'start': '10.0', 'len': '0.0', 'hotcue': 0,
+                        'name': 'n.n.', 'displ_order': '3', 'color': ''}])
+    save_nml(str(path), tree)
+
+    tree2 = load_nml(str(path))
+    entry2 = tree2.getroot().find('.//ENTRY')
+    g = get_beatgrid(entry2)
+    assert g is not None
+    assert g['bpm'] == pytest.approx(124.0)
+    assert g['phase'] == pytest.approx(2.25)
+
+
+def test_upsert_beatgrid_phase_zero_is_written():
+    """EPIC-011 : une phase à 0 (début de fichier) est bien écrite (0.000000)."""
+    tree = load_nml(DATA)
+    entry = tree.getroot().find('.//ENTRY')
+    upsert_beatgrid(entry, 128.0, 0.0, 100)
+    cue4 = next(c for c in entry.findall('CUE_V2') if c.get('TYPE') == '4')
+    assert cue4.get('START') == '0.000000'
 
 
 def test_append_entry_updates_count_and_index(tmp_path):

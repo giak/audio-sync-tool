@@ -842,6 +842,65 @@ def track_cues():
     return jsonify({'ok': True})
 
 
+@app.route('/api/track/grid', methods=['POST'])
+def track_grid():
+    """Écrit la grille calculée (TEMPO + CUE_V2 TYPE=4 + GRID) dans le NML (EPIC-011).
+
+    C'est le « graal » : Traktor lui-même affichera la grille au prochain scan, et
+    l'app n'analyse plus jamais la piste. La phase vient de l'analyse serveur
+    (EPIC-010) ou de la correction manuelle (EPIC-009) ; BPM_QUALITY=100 par défaut.
+    Backup .bak.nml automatique (save_nml) + validation des bornes 20–400 (EPIC-008).
+    """
+    data = request.json
+    if not data or 'filename' not in data or 'bpm' not in data:
+        return jsonify({'ok': False, 'error': 'filename/bpm manquants'}), 400
+    filename = data.get('filename', '')
+    filesize = data.get('filesize', '')
+    if not filename:
+        return jsonify({'ok': False, 'error': 'filename manquant'}), 400
+    try:
+        bpm = float(data.get('bpm'))
+        phase = float(data.get('phase', 0))
+        quality = float(data.get('quality', 100))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'bpm/phase/quality non numériques'}), 400
+    # Mêmes bornes que le frontend/le cache (garde 20–400) : on n'écrit jamais un BPM aberrant.
+    if not math.isfinite(bpm) or bpm <= 20 or bpm >= 400:
+        return jsonify({'ok': False, 'error': 'bpm invalide'}), 400
+    if not math.isfinite(phase) or phase < 0:
+        return jsonify({'ok': False, 'error': 'phase invalide'}), 400
+    if not math.isfinite(quality) or quality < 0 or quality > 100:
+        return jsonify({'ok': False, 'error': 'quality invalide'}), 400
+    tree, idx, path = get_nml_index()
+    if not tree:
+        return jsonify({'ok': False, 'error': 'NML non configuré'}), 400
+    hits = idx.get((filename, filesize))
+    if not hits:
+        return jsonify({'ok': False, 'error': 'ENTRY introuvable'}), 404
+    sel = data.get('entry')
+    if sel is None:
+        if len(hits) > 1:
+            infos = [nml_module.get_entry_meta(e) for e in hits]
+            return jsonify({'ok': False, 'error': 'multiple', 'entries': infos}), 409
+        entry = hits[0]
+    else:
+        try:
+            entry = hits[int(sel)]
+        except (ValueError, IndexError):
+            return jsonify({'ok': False, 'error': 'entry invalide'}), 400
+    nml_module.upsert_beatgrid(entry, bpm, phase, quality)
+    try:
+        nml_module.save_nml(path, tree)
+    except OSError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    log_journal({'timestamp': datetime.now().isoformat(),
+                 'action': 'Grille écrite dans la collection',
+                 'filename': filename,
+                 'details': f'{bpm} BPM, beat 1 à {phase:.3f}s',
+                 'status': 'collection'})
+    return jsonify({'ok': True, 'bpm': bpm, 'phase': phase})
+
+
 # ── Beatgrid cache (EPIC-009) ─────────────────────────────────────────────
 
 

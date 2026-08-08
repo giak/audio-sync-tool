@@ -159,6 +159,57 @@ def get_entry_meta(entry):
         meta['playtime'] = info.get('PLAYTIME', '')
     return meta
 
+def upsert_beatgrid(entry, bpm, phase, quality=100.0):
+    """Écrit (crée ou met à jour) la grille de beats de l'ENTRY dans le NML.
+
+    Format mesuré sur la collection réelle (EPIC-008/011) :
+      <TEMPO BPM="133.000000" BPM_QUALITY="100.000000"></TEMPO>
+      <CUE_V2 NAME="AutoGrid" DISPL_ORDER="0" TYPE="4" START="55.387418"
+              LEN="0.000000" REPEATS="-1" HOTCUE="-1"><GRID BPM="133.000000"></GRID></CUE_V2>
+
+    - TEMPO : mis à jour s'il existe, sinon créé APRÈS INFO (ordre réel Traktor).
+    - CUE_V2 TYPE=4 : mis à jour (START + GRID/BPM) s'il existe, sinon créé en
+      tête des CUE_V2 — jamais de doublon de grille.
+    - Renvoie la CUE_V2 TYPE=4 (pratique pour les tests).
+    """
+    bpm_s = f'{bpm:.6f}'
+    phase_s = f'{phase:.6f}'
+    quality_s = f'{quality:.6f}'
+    # TEMPO : upsert, positionné après INFO (ordre réel).
+    tempo = entry.find('TEMPO')
+    if tempo is None:
+        tempo = ET.Element('TEMPO')
+        info = entry.find('INFO')
+        if info is not None:
+            entry.insert(list(entry).index(info) + 1, tempo)
+        else:
+            entry.insert(0, tempo)
+    tempo.set('BPM', bpm_s)
+    tempo.set('BPM_QUALITY', quality_s)
+    # CUE_V2 TYPE=4 : upsert (jamais deux grilles).
+    grid_cue = None
+    for c in entry.findall('CUE_V2'):
+        if c.get('TYPE') == '4':
+            grid_cue = c
+            break
+    if grid_cue is None:
+        grid_cue = ET.Element('CUE_V2', attrib={
+            'NAME': 'AutoGrid', 'DISPL_ORDER': '0', 'TYPE': '4',
+            'START': phase_s, 'LEN': '0.000000', 'REPEATS': '-1', 'HOTCUE': '-1'})
+        # En tête des CUE_V2 existants (l'ordre réel place la grille avant les cues).
+        first_cue = entry.find('CUE_V2')
+        if first_cue is not None:
+            entry.insert(list(entry).index(first_cue), grid_cue)
+        else:
+            entry.append(grid_cue)
+    else:
+        grid_cue.set('START', phase_s)
+        for g in grid_cue.findall('GRID'):
+            grid_cue.remove(g)
+    ET.SubElement(grid_cue, 'GRID', attrib={'BPM': bpm_s})
+    return grid_cue
+
+
 def _cue_to_element(cue: dict, tag: str = 'CUE_V2') -> ET.Element:
     out = {}
     if 'start' in cue and cue['start']:

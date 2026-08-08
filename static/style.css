@@ -762,6 +762,17 @@ header h1 {
   cursor: wait;
   min-width: 96px;
 }
+/* Écriture de la grille dans la collection (EPIC-011) : indisponible sans
+   BPM calé ou en mode visualisation seule (pas d'ENTRY à modifier). */
+#cue-btn-writegrid:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--text-dim);
+}
+#cue-btn-writegrid.writing {
+  opacity: 0.6;
+  cursor: wait;
+}
 .cue-play.loop-playing {
   color: var(--led-amber); border-color: var(--led-amber);
   box-shadow: 0 0 8px rgba(255, 204, 0, 0.35);

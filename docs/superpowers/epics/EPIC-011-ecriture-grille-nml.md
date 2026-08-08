@@ -1,6 +1,6 @@
 # EPIC-011 — Beatgrid P4 : écrire la grille calculée dans le NML (le graal)
 
-> **Statut** : ⚪ Backlog
+> **Statut** : 🟢 Livré
 > **Créée** : 2026-08-08 · **Dernière mise à jour** : 2026-08-08
 > **Priorité** : Moyenne
 > **Docs liées** : [plan beatgrid](plans/2026-08-08-beatgrid-calage-bpm-basse.md) §P4, §6b
@@ -22,19 +22,31 @@ jamais ces pistes.
   ```
 - `write_cues()` préserve déjà les TYPE∉{0,5} (dont TYPE=4) — mais il n'y a pas d'écriture/upsert de grille.
 
-## Tâches (proposées)
+## Tâches
 
-- [ ] `nml.py` : `upsert_beatgrid(entry, bpm, phase, quality)` — crée ou met à jour TEMPO + CUE_V2 TYPE=4
-      (+ GRID enfant), en préservant un TYPE=4 existant.
-- [ ] Route : réutiliser un POST (soit `/api/track/cues`, soit une nouvelle `/api/track/grid`) avec
-      backup `.bak` + écriture atomique (pattern existant).
-- [ ] **Validation sur copie** : tester sur une copie de la collection réelle avant tout usage réel
-      (règle data-safety du projet) ; vérifier que Traktor accepte la grille (scan test).
-- [ ] `BPM_QUALITY` cohérent (ex. 100 si analyse réussie) ; borne 20–400 (cf. EPIC-008).
-- [ ] UI : option « Enregistrer la grille dans la collection » (badge `NML` après écriture) ou
-      automatique à la sauvegarde des cues.
-- [ ] Tests : upsert crée/met à jour sans dupliquer ; backup créé ; round-trip ; grille préservée par
-      `write_cues` après upsert.
+- [x] `nml.py` : `upsert_beatgrid(entry, bpm, phase, quality)` — crée ou met à jour TEMPO + CUE_V2 TYPE=4
+      (+ GRID enfant), en préservant un TYPE=4 existant (upsert idempotent, jamais de doublon).
+- [x] Route `POST /api/track/grid` : résolution d'ENTRY (pattern `track_cues`, 404/409/400),
+      backup `.bak` + écriture atomique (pattern existant), journal.
+- [x] **Validation sur copie** : upsert + re-parse XML + relecture sur une copie de la collection réelle
+      (56 645 ENTRY, +3 grilles exactement, round-trip sans perte, XML valide) — jamais sur l'original.
+- [x] `BPM_QUALITY=100` par défaut ; borne 20–400 (cf. EPIC-008) + phase ≥ 0 + quality 0–100 validées.
+- [x] UI : bouton « 💾 Grille » dans le transport (disabled sans BPM ou sans ENTRY, état ⏳ pendant
+      l'écriture, ré-armé en finally) ; badge `NML` après écriture (source centralisée `updateBpmBadge`).
+- [x] Tests : upsert crée/met à jour sans dupliquer ; round-trip `write_cues` ; POST écrit+relu,
+      400/404/409, backup ; vitest (disabled, POST, badge NML, erreur).
+
+## Validation
+
+- **640 vitest** (shuffle) / **160 pytest** — typecheck 0 · lint 0 · build OK.
+- Validation forensique sur copie de la collection réelle : format exact (TEMPO après INFO,
+  6 décimales, `CUE_V2 TYPE=4 NAME=AutoGrid` + enfant `GRID BPM`) confirmé sur 12 323 grilles natives.
+- Le TEMPO existant est mis à jour (pas dupliqué) ; un TYPE=4 existant est mis à jour (START + GRID),
+  jamais doublé ; les autres CUE_V2 sont intacts.
+
+## Livraison
+
+- Commit : à référencer après `git commit` (état actuel non commité).
 
 ## Fichiers impactés (prévision)
 
@@ -49,3 +61,5 @@ jamais ces pistes.
 - ⚠️ Traktor peut **régénérer/écraser** son analyse au prochain scan complet — à valider sur copie.
 - Ne jamais écrire dans le NML pendant que Traktor tourne (règle EPIC-001).
 - Le gain est réel même si partiel : les pistes analysées une fois sont calées pour toujours.
+- Après écriture, la cascade NML → cache donne la priorité à la grille native à la réouverture :
+  l'analyse/correction manuelle qui l'a produite ne s'applique plus qu'en secours.

@@ -141,6 +141,7 @@ function updateBpmBadge(): void {
   el.classList.toggle('src-nml', src === 'nml');
   el.classList.toggle('src-detected', src === 'detected');
   el.classList.toggle('src-manual', src === 'manual');
+  updateWriteGridBtn();
 }
 
 /** Applique une grille native NML (TEMPO + TYPE=4/GRID) : BPM + phase réels.
@@ -171,6 +172,19 @@ function beat1BtnEl(): HTMLButtonElement | null {
 
 function analyzeBtnEl(): HTMLButtonElement | null {
   return document.getElementById('cue-btn-analyze') as HTMLButtonElement | null;
+}
+
+function writeGridBtnEl(): HTMLButtonElement | null {
+  return document.getElementById('cue-btn-writegrid') as HTMLButtonElement | null;
+}
+
+/** Bouton 💾 Grille (EPIC-011) : actif seulement en mode édition (ENTRY résolu,
+ *  pas en visualisation seule) AVEC un BPM calé. Centralisé dans updateBpmBadge
+ *  (appelé à chaque changement de grille/source) — un seul point de vérité. */
+function updateWriteGridBtn(): void {
+  const btn = writeGridBtnEl();
+  if (!btn) return;
+  btn.disabled = !(_entryRef && _bpm !== null);
 }
 
 function updateBeat1Btn(): void {
@@ -297,6 +311,49 @@ export function toggleBeat1Mode(): void {
   _beat1Mode = !_beat1Mode;
   updateBeat1Btn();
   setStatus(_beat1Mode ? '◎ Clique sur la waveform pour poser le beat 1 ici.' : '');
+}
+
+/** Écriture de la grille dans la collection (EPIC-011) : POST /api/track/grid.
+ *  Disponible uniquement en mode édition (ENTRY résolu) AVEC un BPM calé.
+ *  Après écriture, la grille est native NML (badge NML) et Traktor l'affichera. */
+export async function writeGridToCollection(): Promise<void> {
+  if (!_entryRef || _bpm === null) {
+    setStatus("⚠️ Calcule ou saisis un BPM d'abord pour écrire la grille.");
+    return;
+  }
+  const btn = writeGridBtnEl();
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('writing');
+  }
+  setStatus('⏳ Écriture de la grille dans la collection…');
+  try {
+    const res = await api<{ ok: boolean; error?: string }>('/api/track/grid', {
+      method: 'POST',
+      body: JSON.stringify({
+        filename: _entryRef.filename,
+        filesize: _entryRef.filesize,
+        entry: _entryRef.entry,
+        bpm: _bpm,
+        phase: _phase,
+        quality: 100,
+      }),
+    });
+    if (!res.ok) throw new Error(res.error || 'écriture refusée');
+    // La grille est désormais NATIVE dans le NML : le badge bascule sur NML.
+    _gridSource = 'nml';
+    updateBpmBadge();
+    setStatus(
+      `✅ Grille écrite dans la collection — ${_bpm} BPM, beat 1 à ${_phase.toFixed(2)} s. Traktor l'affichera au prochain scan.`,
+    );
+  } catch (err) {
+    setStatus(`❌ Écriture impossible : ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('writing');
+    }
+  }
 }
 
 /** Analyse serveur basse/kick (EPIC-010) : POST /api/track/analyze → {bpm, phase,
@@ -558,6 +615,11 @@ export function wireControls(root: HTMLElement = document.body): void {
   if (analyze && !_wired.has(analyze)) {
     _wired.add(analyze);
     analyze.addEventListener('click', () => void analyzeOnServer());
+  }
+  const writeGrid = root.querySelector<HTMLButtonElement>('#cue-btn-writegrid');
+  if (writeGrid && !_wired.has(writeGrid)) {
+    _wired.add(writeGrid);
+    writeGrid.addEventListener('click', () => void writeGridToCollection());
   }
   const fs = root.querySelector<HTMLButtonElement>('#cue-btn-fullscreen');
   if (fs && !_wired.has(fs)) {
