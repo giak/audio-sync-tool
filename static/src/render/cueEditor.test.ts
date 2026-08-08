@@ -23,12 +23,14 @@ const mockState = vi.hoisted(() => {
 });
 const mockWSCreate = vi.hoisted(() => vi.fn());
 const mockRegionsCreate = vi.hoisted(() => vi.fn());
+const mockMinimapCreate = vi.hoisted(() => vi.fn());
 
 vi.mock('../api.js', () => ({ api: mockApi }));
 vi.mock('../state.js', () => ({ state: mockState, on: mockState.on.bind(mockState), emit: vi.fn() }));
 vi.mock('../ui.js', () => ({ showToast: vi.fn() }));
 vi.mock('wavesurfer.js', () => ({ default: { create: mockWSCreate } }));
 vi.mock('wavesurfer.js/dist/plugins/regions.js', () => ({ default: { create: mockRegionsCreate } }));
+vi.mock('wavesurfer.js/dist/plugins/minimap.js', () => ({ default: { create: mockMinimapCreate } }));
 
 import { showToast } from '../ui.js';
 import {
@@ -127,6 +129,7 @@ const MODAL_HTML = `
         <button id="cue-btn-add">➕ Ajouter à la collection</button>
       </div>
       <div id="cue-editor-waveform"></div>
+      <div id="cue-editor-minimap"></div>
       <div id="cue-editor-controls">
         <span class="cue-slot" data-slot="0">A</span>
         <span class="cue-slot" data-slot="1">B</span>
@@ -165,6 +168,7 @@ function resetMocks(): void {
   mockApi.mockReset();
   mockWSCreate.mockReset();
   mockRegionsCreate.mockReset();
+  mockMinimapCreate.mockReset();
   mockState.activeModal = null;
 }
 
@@ -1989,5 +1993,107 @@ describe('render/cueEditor raccourcis clavier cue/zoom (EPIC-017)', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
     expect(ws.regions.addRegion).not.toHaveBeenCalled();
     expect(ws.zoom).not.toHaveBeenCalled();
+  });
+});
+
+describe('render/cueEditor minimap + bande basse colorée (EPIC-018)', () => {
+  beforeEach(resetMocks);
+
+  // Buffer factice (kicks 60 Hz) — local à ce describe (fakeBuffer d'EPIC-012 est scoped).
+  function fakeBuffer(seconds = 8, sr = 44100): { sampleRate: number; getChannelData: () => Float32Array } {
+    const n = seconds * sr;
+    const data = new Float32Array(n);
+    for (let t = 0; t < seconds; t += 0.5) {
+      const start = Math.round(t * sr);
+      for (let i = 0; i < sr * 0.05; i++) {
+        data[start + i] = 0.8 * Math.sin((2 * Math.PI * 60 * i) / sr);
+      }
+    }
+    return { sampleRate: sr, getChannelData: () => data };
+  }
+
+  function openSingle(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  it("crée un minimap dans son conteneur dédié (overview)", async () => {
+    const ws = openSingle();
+    const minimapInst = { plugin: 'minimap' };
+    mockMinimapCreate.mockReturnValue(minimapInst);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const mini = document.getElementById('cue-editor-minimap');
+    expect(mockMinimapCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ height: 56, container: mini, overlayColor: expect.any(String) }),
+    );
+    // L'instance créée est bien celle enregistrée (assertion non triviale).
+    expect(ws.registerPlugin).toHaveBeenCalledWith(minimapInst);
+  });
+
+  it("sans conteneur minimap → aucun plugin (dégradation silencieuse)", async () => {
+    document.getElementById('cue-editor-minimap')!.remove();
+    openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    expect(mockMinimapCreate).not.toHaveBeenCalled();
+  });
+
+  it("changer d'entrée homonyme → un minimap par rendu (destruction propre)", async () => {
+    mockWSCreate.mockReturnValue(makeWS());
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: true,
+      entries: [
+        { filename: 't.mp3', filesize: '1', artist: 'A1', title: 'T1', cues: [] },
+        { filename: 't.mp3', filesize: '1', artist: 'A2', title: 'T2', cues: [] },
+      ],
+    });
+    await openCueEditor({ filename: 't.mp3', fullPath: '/x/t.mp3' });
+    const mini = document.getElementById('cue-editor-minimap');
+    expect(mockMinimapCreate).toHaveBeenCalledTimes(1);
+    expect(mockMinimapCreate.mock.calls[0][0].container).toBe(mini);
+    // Re-render (changement d'entrée) : ws.destroy() nettoie le minimap, un seul
+    // nouveau plugin est créé dans le MÊME conteneur (pas de double wrapper).
+    const select = document.getElementById('cue-editor-select') as HTMLSelectElement;
+    select.value = '1';
+    select.dispatchEvent(new Event('change'));
+    expect(mockMinimapCreate).toHaveBeenCalledTimes(2);
+    expect(mockMinimapCreate.mock.calls[1][0].container).toBe(mini);
+  });
+
+  it("le zoom fonctionne toujours avec le minimap (aucune interférence)", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    zoomBy(1.5);
+    expect(ws.zoom).toHaveBeenCalledWith(12); // fitPx 800/100 × 1,5
+  });
+
+  it("la bande basse est titrée « basse » (standard RGB : rouge = basse)", async () => {
+    const ws = openSingle();
+    (ws.getDecodedData as ReturnType<typeof vi.fn>).mockReturnValue(fakeBuffer());
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0)); // bande calculée en setTimeout(0)
+    const band = document.getElementById('cue-editor-bassband');
+    expect(band).not.toBeNull();
+    expect(band!.title).toContain('basse');
+    expect(band!.querySelectorAll('.bass-bar').length).toBe(160);
+  });
+
+  it("la bande basse est masquée quand on zoome (elle couvre toute la piste)", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const wave = document.getElementById('cue-editor-waveform') as HTMLElement;
+    zoomBy(1.5);
+    expect(wave.classList.contains('zoomed')).toBe(true);
+    zoomToFit();
+    expect(wave.classList.contains('zoomed')).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 // ─── Cue editor modal — wavesurfer + régions (Task 7) ─────────────────────
 import WaveSurfer from 'wavesurfer.js';
+import Minimap from 'wavesurfer.js/dist/plugins/minimap.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
 import { api } from '../api.js';
 import { computeBassBand } from '../bassband.js';
@@ -330,6 +331,10 @@ function waveformEl(): HTMLElement | null {
   return document.getElementById('cue-editor-waveform') as HTMLElement | null;
 }
 
+function minimapEl(): HTMLElement | null {
+  return document.getElementById('cue-editor-minimap') as HTMLElement | null;
+}
+
 /** Pixels par seconde au niveau « fit » (toute la piste visible) — base des paliers. */
 function fitPx(): number {
   if (!ws) return 0;
@@ -409,6 +414,7 @@ function renderBassBand(): void {
   if (!bandEl) {
     bandEl = document.createElement('div');
     bandEl.id = 'cue-editor-bassband';
+    bandEl.title = "Bande d'énergie basse 40–150 Hz (kick) — rouge = basse (standard RGB DJ)";
     wave.appendChild(bandEl);
   }
   bandEl.innerHTML = '';
@@ -1085,6 +1091,15 @@ export async function renderWaveform(
     if (_zoomPx <= 0) return;
     renderGrid();
   });
+  // Minimap / overview (EPIC-018) : vue d'ensemble de la piste, synchronisée au
+  // zoom/scroll de la waveform principale (viewport overlay), clic = seek.
+  // Conteneur dédié (sous la waveform) pour ne pas chevaucher la grille/bande.
+  const mini = minimapEl();
+  if (mini) {
+    ws.registerPlugin(
+      Minimap.create({ container: mini, height: 56, overlayColor: 'rgba(0, 212, 255, 0.18)' }),
+    );
+  }
   ws.on('ready', () => {
     _regions = ws!.registerPlugin(Regions.create());
     for (const r of cuesToRegions(cues)) _regions.addRegion(r);

@@ -803,6 +803,17 @@ header h1 {
 .cue-fullscreen #cue-editor-waveform {
   flex: 1; min-height: 0; height: auto;
 }
+/* Minimap / overview (EPIC-018) : vue d'ensemble de la piste sous la waveform,
+   synchronisée au zoom/scroll (viewport overlay) — clic = seek. */
+#cue-editor-minimap {
+  height: 56px;
+  margin-top: 4px;
+  border: 1px solid var(--border-panel);
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--bg-input);
+}
+#cue-editor-minimap wavesurfer { background: transparent; }
 #cue-editor-transport {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 0 4px;
@@ -970,7 +981,8 @@ header h1 {
 }
 #cue-editor-bassband .bass-bar {
   flex: 1 1 0;
-  background: rgba(0, 212, 255, 0.18);
+  /* EPIC-018 : rouge = basse (standard RGB DJ : red = low, green = mid, blue = high). */
+  background: linear-gradient(180deg, rgba(255, 90, 70, 0.9), rgba(200, 40, 30, 0.55));
   min-height: 1px;
   border-radius: 1px;
 }

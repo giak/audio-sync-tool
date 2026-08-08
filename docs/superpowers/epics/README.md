@@ -37,6 +37,7 @@
 | [EPIC-015](EPIC-015-filesize-ko-octets.md) | FILESIZE en Ko (convention Traktor) : match/add/export réparés sur la collection réelle | 🟢 Livré | Haute | rapport `2026-08-08-smoke-test-navigateur.md` |
 | [EPIC-016](EPIC-016-badge-match-nml-playlist.md) | Badge « matché NML » / « homonymes » / « non importé » dans la playlist | 🟢 Livré | Moyenne | EPIC-015 (contexte match) |
 | [EPIC-017](EPIC-017-zoom-raccourcis-downbeat.md) | Zoom waveform (paliers, molette, 1 beat) + raccourcis cue 1-8/C + downbeat différencié | 🟢 Livré | Haute | rapport `2026-08-08-waveform-cue-beatgrid-benchmark.md` §P0 |
+| [EPIC-018](EPIC-018-minimap-bande-basse-coloree.md) | Minimap/overview synchronisée au zoom + bande basse colorée (RGB DJ, étape 1) | 🟢 Livré | Moyenne | rapport benchmark §P1 |
 
 ## État actuel du projet (2026-08-08)
 
@@ -81,6 +82,10 @@
   (scrollLeft ÷ px/s) pour rester alignée à tout zoom ; downbeat différencié (classe `beat1`,
   trait ambre) ; raccourcis cue `1–8` (slots A–H) et `C` (pose au curseur / déplace l'existant,
   toast si 8 pleins) ; bande basse masquée en zoom. 14 tests, 97 tests cueEditor.
+- EPIC-018 livrée (P1 du benchmark) : **minimap/overview** — plugin Minimap de wavesurfer dans
+  un conteneur dédié sous la waveform, viewport synchronisé au zoom/scroll (EPIC-017), clic =
+  seek, dégradation silencieuse sans conteneur ; **bande basse colorée en rouge** (standard RGB
+  DJ : red = low) + title explicite. 5 tests, 103 tests cueEditor.
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
 - EPIC-002 → EPIC-009 livrées et **commitées** (`a21f1ae` → `3f3b669`), EPIC-001 à ses commits
   historiques, ce registre inclus dans `7bb1735`.
