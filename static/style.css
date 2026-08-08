@@ -670,3 +670,22 @@ header h1 {
 ::-webkit-scrollbar-track       { background: var(--bg-deep); }
 ::-webkit-scrollbar-thumb       { background: var(--bg-hover); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--bg-focus); }
+
+/* ===== Cue editor modal ============================================ */
+.modal-content.modal-lg {
+  min-width: 720px; max-width: 960px;
+}
+.cue-slot {
+  display: inline-block;
+  min-width: 34px; height: 34px; line-height: 32px;
+  text-align: center; vertical-align: middle;
+  margin: 2px;
+  border: 1px solid var(--border-panel);
+  border-radius: 4px;
+  cursor: pointer;
+  background: var(--bg-elevated, #1e2430);
+  user-select: none;
+}
+.cue-slot:hover { border-color: var(--border-active); }
+.cue-slot.live { border-color: var(--accent); color: var(--accent); }
+.cue-slot-sep { display: inline-block; width: 0; }

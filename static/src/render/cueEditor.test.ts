@@ -7,9 +7,14 @@ const mockState = vi.hoisted(() => {
   return {
     activeModal: null as string | null,
     listeners,
+    on(event: string, fn: () => void) {
+      if (!listeners[event]) listeners[event] = [];
+      listeners[event].push(fn);
+      return () => {};
+    },
     setModal(v: string | null) {
       this.activeModal = v;
-      for (const fn of listeners.activeModal ?? []) fn();
+      for (const fn of listeners['activeModal:changed'] ?? []) fn();
     },
   };
 });
@@ -17,12 +22,12 @@ const mockWSCreate = vi.hoisted(() => vi.fn());
 const mockRegionsCreate = vi.hoisted(() => vi.fn());
 
 vi.mock('../api.js', () => ({ api: mockApi }));
-vi.mock('../state.js', () => ({ state: mockState }));
+vi.mock('../state.js', () => ({ state: mockState, on: mockState.on.bind(mockState) }));
 vi.mock('../ui.js', () => ({ showToast: vi.fn() }));
 vi.mock('wavesurfer.js', () => ({ default: { create: mockWSCreate } }));
 vi.mock('wavesurfer.js/dist/plugins/regions.js', () => ({ default: { create: mockRegionsCreate } }));
 
-import { openCueEditor } from './cueEditor.js';
+import { onSaveClicked, openCueEditor } from './cueEditor.js';
 
 function makeWS(overrides: Record<string, unknown> = {}) {
   const regions = { addRegion: vi.fn(), getRegions: vi.fn(() => []) };
@@ -62,12 +67,12 @@ describe('render/cueEditor scaffold', () => {
     expect(modal!.classList.contains('hidden')).toBe(true);
   });
 
-  it("ouvre la modal quand configuré", async () => {
-    mockApi
-      .mockResolvedValueOnce({ configured: true })
-      .mockResolvedValueOnce({ ok: true, multiple: false, entries: [
-        { filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] },
-      ] });
+  it('ouvre la modal quand configuré', async () => {
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     expect(mockState.activeModal).toBe('cueEditor');
     expect(mockApi).toHaveBeenCalledWith('/api/nml/status');
@@ -96,10 +101,15 @@ describe('render/cueEditor wavesurfer', () => {
     mockApi.mockResolvedValueOnce({
       ok: true,
       multiple: false,
-      entries: [{
-        filename: 'a.mp3', filesize: '5243', artist: 'X', title: 'Y',
-        cues: [{ type: '0', start: 5, len: 0, hotcue: 2, name: 'n.n.', displ_order: '0' }],
-      }],
+      entries: [
+        {
+          filename: 'a.mp3',
+          filesize: '5243',
+          artist: 'X',
+          title: 'Y',
+          cues: [{ type: '0', start: 5, len: 0, hotcue: 2, name: 'n.n.', displ_order: '0' }],
+        },
+      ],
     });
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
 
@@ -120,6 +130,7 @@ describe('render/cueEditor sélecteur homonymes', () => {
         <div id="cue-editor-status"></div>
         <div id="cue-editor-waveform"></div>
         <div id="cue-editor-controls"></div>
+        <button id="cue-btn-save">💾</button>
       </div>
     `;
     mockApi.mockReset();
@@ -127,20 +138,70 @@ describe('render/cueEditor sélecteur homonymes', () => {
     mockWSCreate.mockReturnValue(makeWS());
   });
 
-  it("affiche un sélecteur quand multiple matchs", async () => {
-    mockApi
-      .mockResolvedValueOnce({ configured: true })
-      .mockResolvedValueOnce({
-        ok: true, multiple: true,
-        entries: [
-          { filename: 'track.mp3', filesize: '1', artist: 'Native Instruments', title: 'Native', cues: [] },
-          { filename: 'track.mp3', filesize: '2', artist: 'Autre', title: 'Autre', cues: [] },
-        ],
-      });
+  it('affiche un sélecteur quand multiple matchs', async () => {
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: true,
+      entries: [
+        { filename: 'track.mp3', filesize: '1', artist: 'Native Instruments', title: 'Native', cues: [] },
+        { filename: 'track.mp3', filesize: '2', artist: 'Autre', title: 'Autre', cues: [] },
+      ],
+    });
     await openCueEditor({ filename: 'track.mp3', fullPath: '/x/track.mp3' });
     const select = document.getElementById('cue-editor-select') as HTMLSelectElement | null;
     expect(select).not.toBeNull();
     expect(select!.options.length).toBe(2);
     expect(select!.options[0].textContent).toContain('Native');
+  });
+
+  it('désactive le bouton save pendant le POST', async () => {
+    let release: (v: unknown) => void = () => {};
+    const gate = new Promise(r => {
+      release = r;
+    });
+    mockWSCreate.mockReturnValue(makeWS());
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    mockApi.mockImplementationOnce(() => gate as Promise<unknown>);
+    const btn = document.getElementById('cue-btn-save') as HTMLButtonElement;
+    const p = onSaveClicked();
+    expect(btn.disabled).toBe(true);
+    release({ ok: true });
+    await p;
+    expect(btn.disabled).toBe(false);
+    expect(mockApi).toHaveBeenCalledWith('/api/track/cues', expect.objectContaining({ method: 'POST' }));
+  });
+});
+
+describe('render/cueEditor lifecycle', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div id="modal-cue-editor" class="modal hidden">
+        <div id="cue-editor-title"></div>
+        <div id="cue-editor-status"></div>
+        <div id="cue-editor-waveform"></div>
+        <button id="cue-btn-save">💾</button>
+      </div>
+    `;
+    mockApi.mockReset();
+    mockWSCreate.mockReset();
+    mockWSCreate.mockReturnValue(makeWS());
+  });
+
+  it('détruit wavesurfer quand activeModal quitte cueEditor', async () => {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    mockState.setModal(null);
+    expect(ws.destroy).toHaveBeenCalled();
   });
 });

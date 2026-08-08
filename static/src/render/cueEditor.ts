@@ -2,7 +2,7 @@
 import WaveSurfer from 'wavesurfer.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
 import { api } from '../api.js';
-import { state } from '../state.js';
+import { state, on } from '../state.js';
 import { showToast } from '../ui.js';
 import { cuesToRegions, regionToCue, hotToLabel } from '../cueModel.js';
 import type { CueDTO } from '../cueModel.js';
@@ -22,6 +22,26 @@ let ws: WaveSurfer | null = null;
 let _regions: any = null;
 let _entryRef: CueEntryRef | null = null;
 let _trackPath = '';
+
+const _wired = new WeakSet<Element>();
+
+export function wireControls(root: HTMLElement = document.body): void {
+  for (const el of root.querySelectorAll<HTMLElement>('.cue-slot')) {
+    if (_wired.has(el)) continue;
+    _wired.add(el);
+    const slot = Number.parseInt(el.getAttribute('data-slot') || '', 10);
+    el.addEventListener('click', () => onSlotClicked(slot));
+  }
+  const btn = root.querySelector<HTMLButtonElement>('#cue-btn-save');
+  if (btn && !_wired.has(btn)) {
+    _wired.add(btn);
+    btn.addEventListener('click', () => void onSaveClicked());
+  }
+}
+
+on('activeModal:changed', () => {
+  if (state.activeModal !== 'cueEditor') destroyCueEditor();
+});
 
 function storedIndex(filename: string): number {
   const raw = localStorage.getItem(`cue/sel:${filename}`);
@@ -71,6 +91,7 @@ export async function openCueEditor(track: PlaylistTrackLite): Promise<void> {
   state.activeModal = 'cueEditor';
   const modal = document.getElementById('modal-cue-editor');
   if (modal) modal.classList.remove('hidden');
+  wireControls(document.body);
   await renderWaveform(track.fullPath, entry.cues || []);
 }
 
