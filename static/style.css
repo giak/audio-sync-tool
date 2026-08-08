@@ -756,6 +756,12 @@ header h1 {
   border-color: var(--accent-green);
   box-shadow: 0 0 8px rgba(0, 255, 136, 0.35);
 }
+/* Analyse serveur (EPIC-010) : état ⏳ pendant le calcul (basse/phase) */
+#cue-btn-analyze:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  min-width: 96px;
+}
 .cue-play.loop-playing {
   color: var(--led-amber); border-color: var(--led-amber);
   box-shadow: 0 0 8px rgba(255, 204, 0, 0.35);

@@ -12,6 +12,10 @@ python3 -m venv venv
 ./venv/bin/pip install pytest          # pour les tests backend
 ```
 
+> **Analyse serveur (bouton 🔍 Analyser)** : utilise `ffmpeg` (binaire système) pour décoder
+> les mp3/flac/ogg. Les `.wav` fonctionnent sans (repli stdlib). Si ffmpeg est absent, seul le
+> décodage WAV + la détection client restent disponibles.
+
 ```bash
 npm install                            # pour le frontend (vitest, biome, esbuild)
 ```
@@ -132,7 +136,8 @@ avec deux points d'entrée `startRatingEdit()` (sidebar tracks) et
 
 ```
 audio-sync-tool/
-├── app.py                 # Serveur Flask (port 8765, 17 routes)
+├── app.py                 # Serveur Flask (port 8765, routes REST)
+├── analysis.py            # Analyse serveur kick/phase (DSP pur Python, EPIC-010)
 ├── templates/index.html   # Interface utilisateur
 ├── static/
 │   ├── style.css          # Thème SCADA (JetBrains Mono, LED glow)
@@ -151,7 +156,8 @@ audio-sync-tool/
 ├── vitest.config.js       # Tests frontend + coverage
 ├── tsconfig.json          # TypeScript config
 ├── package.json           # Dépendances JS
-├── test_app.py            # Tests backend (pytest)
+├── test_app.py            # Tests backend API (pytest)
+├── test_analysis.py       # Tests DSP analyse kick/phase (pytest)
 └── README.md
 ```
 
@@ -183,7 +189,7 @@ npm run format             # Formatage Biome
 #### Frontend (vitest)
 
 ```bash
-npm test                   # 627 tests, 26 fichiers
+npm test                   # 635 tests, 26 fichiers
 npm run coverage           # Clean → test → rapport (~89% lignes)
 ```
 
@@ -191,8 +197,8 @@ npm run coverage           # Clean → test → rapport (~89% lignes)
 
 | Suite | Tests | Couverture |
 |-------|-------|------------|
-| Pytest | 127 | — |
-| Vitest | 627 | 88.8% lignes, 82.6% branches |
+| Pytest | 153 | — |
+| Vitest | 635 | 88.8% lignes, 82.6% branches |
 
 ### Évolutions & traçabilité
 

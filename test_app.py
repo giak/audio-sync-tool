@@ -1531,6 +1531,106 @@ def test_beatgrid_missing_file(client, tmp_path):
     assert rv.status_code == 404
 
 
+# ── Analyse serveur kick/phase (EPIC-010) ─────────────────────────────────
+
+
+def _kick_wav(path, bpm=128.0, phase=0.25, seconds=6.0, rate=44100):
+    """WAV PCM 16-bit : kick 55 Hz amorti chaque beat (4/4), phase décalée.
+    Le signal COMPLET est écrit (silences inclus) — un WAV tronqué aux seuls
+    kicks produirait un « tempo » faux à la lecture."""
+    import array
+    import math
+    import wave
+
+    n = int(seconds * rate)
+    sig = [0.0] * n
+    interval = 60.0 / bpm
+    t = phase
+    while t < seconds - 0.01:
+        i0 = int(t * rate)
+        for j in range(min(int(0.03 * rate), n - i0)):
+            tt = j / rate
+            sig[i0 + j] = math.sin(2 * math.pi * 55 * tt) * math.exp(-tt / 0.008)
+        t += interval
+    pcm = array.array('h', (int(max(-1.0, min(1.0, v)) * 32767) for v in sig))
+    with wave.open(str(path), 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm.tobytes())
+
+
+def test_analyze_endpoint_kick(client, tmp_path):
+    """POST /api/track/analyze sur un kick 4/4 → BPM + phase + confidence,
+    et le résultat est persisté dans le cache beatgrid (source detected)."""
+    wav = tmp_path / 'kick.wav'
+    _kick_wav(wav, bpm=128.0, phase=0.25)
+    client.post('/config', json=make_cfg(source_data=str(tmp_path)))
+    rv = client.post('/api/track/analyze', json={'path': str(wav)})
+    assert rv.status_code == 200
+    data = rv.get_json()
+    assert data['ok'] is True
+    assert data['bpm'] == pytest.approx(128.0, abs=2.0)
+    assert data['phase'] == pytest.approx(0.25, abs=0.05)
+    assert data['confidence'] > 0.3
+    # Persisté dans le cache beatgrid (EPIC-009) — réutilisé à la prochaine ouverture.
+    rv2 = client.get('/api/beatgrid', query_string={'path': str(wav)})
+    cached = rv2.get_json()
+    assert cached['bpm'] == pytest.approx(128.0, abs=2.0)
+    assert cached['source'] == 'detected'
+    assert cached['confidence'] > 0.3
+
+
+def test_analyze_endpoint_no_beat_returns_null(client, tmp_path):
+    """Piste sans kick exploitable (silence) → bpm None + notice, pas d'erreur."""
+    import wave
+
+    wav = tmp_path / 'silence.wav'
+    with wave.open(str(wav), 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(44100)
+        w.writeframes(b'\x00' * (44100 * 3 * 2))  # 3 s de silence 16-bit
+    client.post('/config', json=make_cfg(source_data=str(tmp_path)))
+    rv = client.post('/api/track/analyze', json={'path': str(wav)})
+    assert rv.status_code == 200
+    data = rv.get_json()
+    assert data['ok'] is True
+    assert data['bpm'] is None
+    assert data['confidence'] == 0.0
+    assert 'notice' in data
+
+
+def test_analyze_endpoint_corrupt_file_422(client, tmp_path):
+    """Fichier corrompu/illisible → 422 (AnalysisError), pas de cache écrit."""
+    wav = tmp_path / 'corrupt.wav'
+    wav.write_bytes(b'RIFF\x00\x00\x00\x00WAVE')  # en-tête tronqué
+    client.post('/config', json=make_cfg(source_data=str(tmp_path)))
+    rv = client.post('/api/track/analyze', json={'path': str(wav)})
+    assert rv.status_code == 422
+    data = rv.get_json()
+    assert data['ok'] is False
+    # Aucun cache écrit pour un fichier corrompu.
+    rv2 = client.get('/api/beatgrid', query_string={'path': str(wav)})
+    assert rv2.get_json() == {}
+
+
+def test_analyze_endpoint_errors(client, tmp_path):
+    """path manquant → 400 ; fichier inexistant → 404 ; hors dossiers → 403."""
+    client.post('/config', json=make_cfg(source_data=str(tmp_path)))
+    rv = client.post('/api/track/analyze', json={})
+    assert rv.status_code == 400
+    rv = client.post('/api/track/analyze', json={'path': str(tmp_path / 'ghost.mp3')})
+    assert rv.status_code == 404
+    allowed = tmp_path / 'allowed'
+    allowed.mkdir()
+    client.post('/config', json=make_cfg(source_data=str(allowed)))
+    outside = tmp_path / 'kick.wav'
+    _kick_wav(outside)
+    rv = client.post('/api/track/analyze', json={'path': str(outside)})
+    assert rv.status_code == 403
+
+
 def test_cues_write_ok(client, tmp_path, monkeypatch):
     nml_path = tmp_path / 'c.nml'
     nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())

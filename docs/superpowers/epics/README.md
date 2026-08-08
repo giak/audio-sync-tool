@@ -29,7 +29,7 @@
 | [EPIC-007](EPIC-007-ajout-piste-collection.md) | Ajouter une piste absente au collection.nml (POST /api/track/add) | 🟢 Livré | — | plan beatgrid |
 | [EPIC-008](EPIC-008-grille-native-nml.md) | Grille native Traktor (TEMPO + TYPE=4/GRID) exposée et appliquée (P1) | 🟢 Livré | — | plan beatgrid §P1 |
 | [EPIC-009](EPIC-009-phase-manuelle-cache.md) | Beatgrid P2 : contrôle de phase manuel + cache par piste | 🟢 Livré | Haute | plan beatgrid §P2 |
-| [EPIC-010](EPIC-010-analyse-serveur-kick.md) | Beatgrid P3 : analyse serveur kick/phase (librosa) + bouton Analyser | ⚪ Backlog | Haute | plan beatgrid §P3 |
+| [EPIC-010](EPIC-010-analyse-serveur-kick.md) | Beatgrid P3 : analyse serveur kick/phase (DSP maison) + bouton Analyser | 🟢 Livré | Haute | plan beatgrid §P3 |
 | [EPIC-011](EPIC-011-ecriture-grille-nml.md) | Beatgrid P4 : écrire TEMPO+TYPE=4 dans le NML (le graal) | ⚪ Backlog | Moyenne | plan beatgrid §P4 |
 | [EPIC-012](EPIC-012-bande-basse-barres.md) | Beatgrid P5 : bande d'énergie basse + numéros de barre | ⚪ Backlog | Basse | plan beatgrid §P5 |
 | [EPIC-013](EPIC-013-robustesse-backend.md) | Robustesse backend : JSON atomique, verrou scan, cache parse, debug off | ⚪ Backlog | Moyenne | rapport audit §6/B11/B12 |
@@ -37,11 +37,16 @@
 
 ## État actuel du projet (2026-08-08)
 
-- Tests : **627 vitest** / **134 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
+- Tests : **635 vitest** / **153 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
 - EPIC-009 livrée (phase manuelle + cache beatgrid) : nudge ←/→ 1/4, « ◎ Beat 1 », cascade
   NML → cache (`data/beatgrids.json`) → détection, invalidation par FILESIZE.
+- EPIC-010 livrée (analyse serveur kick/phase) : pipeline DSP maison pur Python (`analysis.py`,
+  zéro dépendance lourde — décision review KISS), `POST /api/track/analyze` → {bpm, phase,
+  confidence} persisté en cache (source detected), bouton « 🔍 Analyser » (état ⏳), badge
+  « auto · % ». Filtre 40–150 Hz + ODF + autocorrélation (comb 4 harmoniques, interpolation
+  parabolique du lag) + scan de phase 5 ms ; repli large bande si pas de kick 4/4.
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
-- EPIC-002 → EPIC-008 livrées et **commitées** (`a21f1ae` → `24d67de`), EPIC-001 à ses commits
+- EPIC-002 → EPIC-009 livrées et **commitées** (`a21f1ae` → `3f3b669`), EPIC-001 à ses commits
   historiques, ce registre inclus dans `7bb1735`.
 - Review critique des EPICs : `reports/2026-08-08-audit-epics-review.md` (corrections chiffres,
   stabilisation shuffle, sécurité `/api/track/match`).

@@ -49,6 +49,10 @@ let _snapOn = true;
 let _loopPlay: { start: number; end: number } | null = null;
 /** Mode « poser le beat 1 » (EPIC-009) : le prochain clic sur la waveform fixe la phase. */
 let _beat1Mode = false;
+/** Confiance de l'analyse serveur (EPIC-010, 0..1) — affichée dans le badge « auto · % ». */
+let _confidence: number | null = null;
+/** Analyse serveur en cours (bouton 🔍 Analyser) — évite le double clic. */
+let _analyzing = false;
 
 const _wired = new WeakSet<Element>();
 
@@ -121,13 +125,18 @@ function bpmBadgeEl(): HTMLElement | null {
   return document.getElementById('cue-bpm-badge');
 }
 
-/** Badge de source de la grille : NML (native) / auto (détecté) / manuel. */
+/** Badge de source de la grille : NML (native) / auto (détecté) / manuel.
+ *  EPIC-010 : la confiance de l'analyse serveur (0..1) est ajoutée au badge « auto ». */
 function updateBpmBadge(): void {
   const el = bpmBadgeEl();
   if (!el) return;
   const labels: Record<string, string> = { nml: 'NML', detected: 'auto', manual: 'manuel' };
   const src = _gridSource && _bpm !== null ? _gridSource : null;
-  el.textContent = src ? labels[src] : '';
+  let txt = src ? labels[src] : '';
+  if (src === 'detected' && _confidence !== null && _confidence > 0) {
+    txt += ` · ${Math.round(_confidence * 100)} %`;
+  }
+  el.textContent = txt;
   el.classList.toggle('hidden', !src);
   el.classList.toggle('src-nml', src === 'nml');
   el.classList.toggle('src-detected', src === 'detected');
@@ -158,6 +167,10 @@ function snapBtnEl(): HTMLButtonElement | null {
 
 function beat1BtnEl(): HTMLButtonElement | null {
   return document.getElementById('cue-btn-beat1') as HTMLButtonElement | null;
+}
+
+function analyzeBtnEl(): HTMLButtonElement | null {
+  return document.getElementById('cue-btn-analyze') as HTMLButtonElement | null;
 }
 
 function updateBeat1Btn(): void {
@@ -286,6 +299,65 @@ export function toggleBeat1Mode(): void {
   setStatus(_beat1Mode ? '◎ Clique sur la waveform pour poser le beat 1 ici.' : '');
 }
 
+/** Analyse serveur basse/kick (EPIC-010) : POST /api/track/analyze → {bpm, phase,
+ *  confidence}. Le serveur PERSISTE le résultat dans le cache beatgrid (source
+ *  'detected') — pas de PUT local (le PUT n'enverrait pas la confidence).
+ *  Une grille native NML ou une correction MANUELLE active ne sont jamais
+ *  remplacées (cascade EPIC-009 : native > manuel > analyse > détection client). */
+export async function analyzeOnServer(): Promise<void> {
+  if (_analyzing || !_trackPath || !ws) return;
+  if (_gridSource === 'nml' || _gridSource === 'manual') {
+    setStatus(
+      _gridSource === 'nml'
+        ? "🎛 Grille native Traktor déjà active — l'analyse n'est pas nécessaire."
+        : "🎛 Grille manuelle active — efface le BPM saisi pour relancer l'analyse serveur.",
+    );
+    return;
+  }
+  _analyzing = true;
+  const btn = analyzeBtnEl();
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳';
+  }
+  setStatus('⏳ Analyse basse/phase sur le serveur…');
+  try {
+    const res = await api<{
+      ok: boolean;
+      bpm?: number | null;
+      phase?: number | null;
+      confidence?: number | null;
+      notice?: string;
+      error?: string;
+    }>('/api/track/analyze', {
+      method: 'POST',
+      body: JSON.stringify({ path: _trackPath }),
+    });
+    if (!res.ok || typeof res.bpm !== 'number' || !Number.isFinite(res.bpm)) {
+      setStatus(res.notice || res.error || '⚠️ Analyse impossible — saisis le BPM manuellement.');
+      return;
+    }
+    _bpm = res.bpm;
+    _phase = typeof res.phase === 'number' && Number.isFinite(res.phase) ? res.phase : 0;
+    _confidence = typeof res.confidence === 'number' && Number.isFinite(res.confidence) ? res.confidence : null;
+    _gridSource = 'detected';
+    const input = bpmInputEl();
+    if (input) input.value = String(res.bpm);
+    rebuildGrid();
+    updateBpmBadge();
+    const pct = _confidence !== null ? ` — confiance ${Math.round(_confidence * 100)} %` : '';
+    setStatus(`🎛 Analyse serveur : ${res.bpm} BPM, beat 1 à ${_phase.toFixed(2)} s${pct}. Snap calé sur la basse.`);
+  } catch (err) {
+    setStatus(`❌ Analyse impossible : ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    _analyzing = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🔍 Analyser';
+    }
+  }
+}
+
 /** Cascade grille : NML (native, appliquée au ready) → cache serveur → détection client.
  *  Règles :
  *  - Le cache « manual » (correction explicite de l'utilisateur) PRIME sur la grille native.
@@ -293,9 +365,9 @@ export function toggleBeat1Mode(): void {
  *  - Grille native aberrante (garde 20–400 rejetée au ready) → le cache s'applique quand même. */
 async function loadCachedGrid(): Promise<void> {
   if (!_trackPath || !ws) return;
-  let data: { bpm?: number; phase?: number; source?: string } | undefined;
+  let data: { bpm?: number; phase?: number; source?: string; confidence?: number } | undefined;
   try {
-    data = await api<{ bpm?: number; phase?: number; source?: string }>(
+    data = await api<{ bpm?: number; phase?: number; source?: string; confidence?: number }>(
       `/api/beatgrid?path=${encodeURIComponent(_trackPath)}`,
     );
   } catch {
@@ -318,12 +390,15 @@ async function loadCachedGrid(): Promise<void> {
   _phase = typeof data.phase === 'number' && Number.isFinite(data.phase) && data.phase >= 0 ? data.phase : 0;
   _gridSource =
     data.source === 'nml' || data.source === 'detected' || data.source === 'manual' ? data.source : 'detected';
+  _confidence = typeof data.confidence === 'number' && Number.isFinite(data.confidence) ? data.confidence : null;
   const input = bpmInputEl();
   if (input) input.value = String(data.bpm);
   rebuildGrid();
   updateBpmBadge();
+  const pct =
+    _gridSource === 'detected' && _confidence !== null ? ` (confiance ${Math.round(_confidence * 100)} %)` : '';
   setStatus(
-    `🎛 Grille chargée du cache (${_gridSource === 'manual' ? 'manuel' : _gridSource === 'nml' ? 'NML' : 'détectée'}) — ${_bpm} BPM.`,
+    `🎛 Grille chargée du cache (${_gridSource === 'manual' ? 'manuel' : _gridSource === 'nml' ? 'NML' : 'détectée'})${pct} — ${_bpm} BPM.`,
   );
 }
 
@@ -478,6 +553,11 @@ export function wireControls(root: HTMLElement = document.body): void {
   if (beat1 && !_wired.has(beat1)) {
     _wired.add(beat1);
     beat1.addEventListener('click', () => toggleBeat1Mode());
+  }
+  const analyze = root.querySelector<HTMLButtonElement>('#cue-btn-analyze');
+  if (analyze && !_wired.has(analyze)) {
+    _wired.add(analyze);
+    analyze.addEventListener('click', () => void analyzeOnServer());
   }
   const fs = root.querySelector<HTMLButtonElement>('#cue-btn-fullscreen');
   if (fs && !_wired.has(fs)) {
@@ -711,10 +791,17 @@ export async function renderWaveform(
   _bpm = null;
   _phase = 0;
   _gridSource = null;
+  _confidence = null;
+  _analyzing = false;
   _beat1Mode = false;
   updateBeat1Btn();
   updateSnapBtn();
   updateBpmBadge();
+  const analyzeBtn = analyzeBtnEl();
+  if (analyzeBtn) {
+    analyzeBtn.disabled = false;
+    analyzeBtn.textContent = '🔍 Analyser';
+  }
   const bpmInput = bpmInputEl();
   if (bpmInput) bpmInput.value = '';
   // DISPL_ORDER d'origine : {hotcue → displ_order} — jamais reconstruit depuis le slot (B9).
@@ -828,10 +915,17 @@ export function destroyCueEditor(): void {
   _bpm = null;
   _phase = 0;
   _gridSource = null;
+  _confidence = null;
+  _analyzing = false;
   _beat1Mode = false;
   updateBeat1Btn();
   updateSnapBtn();
   updateBpmBadge();
+  const analyzeBtn = analyzeBtnEl();
+  if (analyzeBtn) {
+    analyzeBtn.disabled = false;
+    analyzeBtn.textContent = '🔍 Analyser';
+  }
   const bpmInput = bpmInputEl();
   if (bpmInput) bpmInput.value = '';
   // Sort du plein écran si la modal se ferme dans cet état.

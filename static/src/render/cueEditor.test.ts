@@ -31,7 +31,7 @@ vi.mock('wavesurfer.js', () => ({ default: { create: mockWSCreate } }));
 vi.mock('wavesurfer.js/dist/plugins/regions.js', () => ({ default: { create: mockRegionsCreate } }));
 
 import { showToast } from '../ui.js';
-import { deleteRegionAtCursor, onSaveClicked, openCueEditor, toggleFullscreen } from './cueEditor.js';
+import { analyzeOnServer, deleteRegionAtCursor, onSaveClicked, openCueEditor, toggleFullscreen } from './cueEditor.js';
 
 interface MockWS {
   on: ReturnType<typeof vi.fn>;
@@ -127,6 +127,7 @@ const MODAL_HTML = `
         <button id="cue-btn-nudge-fwd">→ 1/4</button>
         <span id="cue-bpm-badge" class="cue-bpm-badge hidden"></span>
         <button id="cue-btn-beat1">◎ Beat 1</button>
+        <button id="cue-btn-analyze">🔍 Analyser</button>
         <button id="cue-btn-snap">🧲 Snap</button>
         <span id="cue-editor-time">0:00 / 0:00</span>
       </div>
@@ -1379,5 +1380,174 @@ describe('render/cueEditor phase manuelle + cache (EPIC-009)', () => {
     expect(bpm.value).toBe('133'); // la native reste prioritaire
     const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
     expect(badge.textContent).toBe('NML');
+  });
+});
+
+describe('render/cueEditor analyse serveur kick/phase (EPIC-010)', () => {
+  beforeEach(resetMocks);
+
+  function openNoGrid(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  const flush = () => new Promise(r => setTimeout(r, 0));
+
+  it('le bouton 🔍 Analyser POST /api/track/analyze et applique BPM + phase + confiance', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await flush(); // cache miss ({} par défaut) → détection échoue silencieusement
+    const btn = document.getElementById('cue-btn-analyze') as HTMLButtonElement;
+    mockApi.mockResolvedValueOnce({ ok: true, bpm: 126, phase: 2.25, confidence: 0.87 });
+    btn.click();
+    expect(btn.disabled).toBe(true); // état ⏳ pendant le calcul
+    expect(btn.textContent).toBe('⏳');
+    await flush();
+    const call = mockApi.mock.calls.find(([u]: [string]) => u === '/api/track/analyze');
+    expect(call).toBeDefined();
+    const body = JSON.parse((call[1] as { body: string }).body);
+    expect(body.path).toBe('/x/a.mp3');
+    expect(btn.disabled).toBe(false);
+    expect(btn.textContent).toBe('🔍 Analyser');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    expect(bpm.value).toBe('126');
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('auto · 87 %'); // badge + confiance (EPIC-010)
+    expect(badge.classList.contains('src-detected')).toBe(true);
+    const lines = Array.from(document.querySelectorAll('.cue-grid-line')) as HTMLElement[];
+    expect(lines[0].style.left).toBe('2.25%'); // phase 2.25 s / 100 s
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('126 BPM');
+  });
+
+  it("n'écrase pas une grille native NML active (cascade native > analyse)", async () => {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [
+        {
+          filename: 'a.mp3',
+          filesize: '1',
+          artist: 'X',
+          title: 'Y',
+          cues: [],
+          grid: { bpm: 133, phase: 55, quality: 100 }, // native correcte
+        },
+      ],
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await flush();
+    const btn = document.getElementById('cue-btn-analyze') as HTMLButtonElement;
+    mockApi.mockResolvedValueOnce({ ok: true, bpm: 128, phase: 0, confidence: 0.9 });
+    btn.click();
+    await flush();
+    const analyzeCall = mockApi.mock.calls.filter(([u]: [string]) => u === '/api/track/analyze');
+    expect(analyzeCall.length).toBe(0); // pas de requête : la native prime
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    expect(bpm.value).toBe('133');
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('NML');
+  });
+
+  it("n'écrase pas une grille manuelle active (cascade manual > analyse)", async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await flush();
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '127'; // saisie manuelle → grille « manuel »
+    bpm.dispatchEvent(new Event('input'));
+    const btn = document.getElementById('cue-btn-analyze') as HTMLButtonElement;
+    mockApi.mockResolvedValueOnce({ ok: true, bpm: 128, phase: 0, confidence: 0.9 });
+    btn.click();
+    await flush();
+    const analyzeCall = mockApi.mock.calls.filter(([u]: [string]) => u === '/api/track/analyze');
+    expect(analyzeCall.length).toBe(0); // la correction manuelle prime
+    expect(bpm.value).toBe('127'); // inchangé
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('Grille manuelle active');
+  });
+
+  it('échec analyse (bpm null) → message notice, aucune grille appliquée', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await flush();
+    mockApi.mockResolvedValueOnce({
+      ok: true,
+      bpm: null,
+      phase: null,
+      confidence: 0,
+      notice: 'Aucun tempo fiable détecté — saisis le BPM manuellement.',
+    });
+    (document.getElementById('cue-btn-analyze') as HTMLButtonElement).click();
+    await flush();
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('Aucun tempo fiable');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    expect(bpm.value).toBe('');
+  });
+
+  it('erreur API (403/404) → message, bouton ré-activé', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await flush();
+    const btn = document.getElementById('cue-btn-analyze') as HTMLButtonElement;
+    mockApi.mockRejectedValueOnce(new Error('chemin hors des dossiers autorisés'));
+    btn.click();
+    await flush();
+    expect(btn.disabled).toBe(false);
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('chemin hors des dossiers autorisés');
+  });
+
+  it('double clic → une seule requête /api/track/analyze', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await flush();
+    const btn = document.getElementById('cue-btn-analyze') as HTMLButtonElement;
+    mockApi.mockResolvedValueOnce({ ok: true, bpm: 126, phase: 0, confidence: 0.8 });
+    btn.click();
+    btn.click(); // pendant que _analyzing est vrai / bouton disabled
+    await flush();
+    const calls = mockApi.mock.calls.filter(([u]: [string]) => u === '/api/track/analyze');
+    expect(calls.length).toBe(1);
+  });
+
+  it("fermer la modal réinitialise l'état d'analyse (bouton ré-armé)", async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const btn = document.getElementById('cue-btn-analyze') as HTMLButtonElement;
+    mockApi.mockResolvedValueOnce({ ok: true, bpm: 126, phase: 0, confidence: 0.8 });
+    btn.click();
+    await flush();
+    mockState.setModal(null); // fermeture → destroyCueEditor
+    expect(btn.disabled).toBe(false);
+    expect(btn.textContent).toBe('🔍 Analyser');
+  });
+
+  it('analyseOnServer exportée fonctionne directement (bouton absent)', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await flush();
+    mockApi.mockResolvedValueOnce({ ok: true, bpm: 130, phase: 0.5, confidence: 0.6 });
+    await analyzeOnServer();
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    expect(bpm.value).toBe('130');
+    expect((document.getElementById('cue-bpm-badge') as HTMLElement).textContent).toBe('auto · 60 %');
   });
 });

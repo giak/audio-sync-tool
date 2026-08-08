@@ -6,6 +6,7 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, send_file, abort
+import analysis as analysis_module
 import nml as nml_module
 from xml.etree import ElementTree as ET
 
@@ -906,8 +907,54 @@ def beatgrid_cache():
         return jsonify({})
     if entry.get('filesize') != os.path.getsize(local):
         return jsonify({})  # fichier remplacé → cache périmé
-    return jsonify({'bpm': entry['bpm'], 'phase': entry.get('phase', 0),
-                    'source': entry.get('source', '')})
+    resp = {'bpm': entry['bpm'], 'phase': entry.get('phase', 0),
+            'source': entry.get('source', '')}
+    # EPIC-010 : l'analyse serveur stocke une confiance (0..1) — le PUT manuel non.
+    if entry.get('confidence') is not None:
+        resp['confidence'] = entry['confidence']
+    return jsonify(resp)
+
+
+# ── Analyse serveur kick/phase (EPIC-010) ────────────────────────────────
+
+
+@app.route('/api/track/analyze', methods=['POST'])
+def track_analyze():
+    """Analyse la basse/le kick côté serveur → {bpm, phase, confidence}.
+
+    Pipeline DSP maison (analysis.py — KISS, pas de librosa/madmom) : décodage
+    (wave stdlib / ffmpeg) → filtre 40–150 Hz → ODF → autocorrélation → BPM,
+    puis scan de phase (position du premier beat). Résultat persisté dans le
+    cache beatgrid (EPIC-009) avec source 'detected' — survit à la fermeture.
+    Échec de décodage → 422 (fichier corrompu/format illisible).
+    """
+    data = request.json
+    if not data or 'path' not in data:
+        return jsonify({'ok': False, 'error': 'path manquant'}), 400
+    local = data.get('path', '')
+    real, err = _beatgrid_path_or_error(local)
+    if err:
+        return err
+    try:
+        result = analysis_module.analyze_path(local)
+    except analysis_module.AnalysisError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 422
+    if not result or result.get('bpm') is None:
+        # Pas de tempo fiable (pas de kick 4/4, silence…) → repli BPM manuel UI.
+        return jsonify({'ok': True, 'bpm': None, 'phase': None, 'confidence': 0.0,
+                        'notice': 'Aucun tempo fiable détecté (pas de kick 4/4 ?) — saisis le BPM manuellement.'})
+    cache = load_json(BEATGRID_PATH, {})
+    cache[real] = {
+        'bpm': result['bpm'],
+        'phase': result['phase'],
+        'source': 'detected',
+        'confidence': result['confidence'],
+        # Invalidation : le fichier audio a changé (FILESIZE suffit en pratique).
+        'filesize': os.path.getsize(local),
+        'updated': datetime.now().isoformat(),
+    }
+    save_json(BEATGRID_PATH, cache)
+    return jsonify({'ok': True, **result})
 
 
 if __name__ == '__main__':
