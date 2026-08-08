@@ -1726,10 +1726,10 @@ describe('render/cueEditor bande basse + numéros de barre (EPIC-012)', () => {
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
     await new Promise(r => setTimeout(r, 0)); // bande calculée en setTimeout(0)
-    const band = document.getElementById('cue-editor-bassband');
+    const band = document.getElementById('cue-editor-rgbband');
     expect(band).not.toBeNull();
-    const bars = band!.querySelectorAll('.bass-bar');
-    expect(bars.length).toBe(160); // barCount par défaut
+    const bars = band!.querySelectorAll('.rgb-bar');
+    expect(bars.length).toBe(160 * 3); // 3 couches × barCount par défaut
     const heights = Array.from(bars).map(b => (b as HTMLElement).style.height);
     expect(heights.some(h => h !== '2%')).toBe(true); // au moins une barre énergétique
   });
@@ -1738,7 +1738,7 @@ describe('render/cueEditor bande basse + numéros de barre (EPIC-012)', () => {
     const ws = openSingle(); // getDecodedData → null par défaut
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
-    const band = document.getElementById('cue-editor-bassband');
+    const band = document.getElementById('cue-editor-rgbband');
     expect(band).toBeNull(); // jamais créé : best-effort silencieux
   });
 
@@ -1750,7 +1750,7 @@ describe('render/cueEditor bande basse + numéros de barre (EPIC-012)', () => {
     });
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
-    expect(document.getElementById('cue-editor-bassband')).toBeNull();
+    expect(document.getElementById('cue-editor-rgbband')).toBeNull();
   });
 
   it('numéros de barre sur les lignes fortes (tous les 4 beats)', async () => {
@@ -1794,10 +1794,10 @@ describe('render/cueEditor bande basse + numéros de barre (EPIC-012)', () => {
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
     await new Promise(r => setTimeout(r, 0)); // bande calculée en setTimeout(0)
-    const band = document.getElementById('cue-editor-bassband');
-    expect(band!.querySelectorAll('.bass-bar').length).toBe(160);
+    const band = document.getElementById('cue-editor-rgbband');
+    expect(band!.querySelectorAll('.rgb-bar').length).toBe(160 * 3);
     mockState.setModal(null); // fermeture → destroyCueEditor
-    expect(band!.querySelectorAll('.bass-bar').length).toBe(0);
+    expect(band!.querySelectorAll('.rgb-bar').length).toBe(0);
   });
 });
 
@@ -2083,19 +2083,19 @@ describe('render/cueEditor minimap + bande basse colorée (EPIC-018)', () => {
     expect(ws.zoom).toHaveBeenCalledWith(12); // fitPx 800/100 × 1,5
   });
 
-  it("la bande basse est titrée « basse » (standard RGB : rouge = basse)", async () => {
+  it('la bande RGB est titrée (3-bandes, standard RGB DJ)', async () => {
     const ws = openSingle();
     (ws.getDecodedData as ReturnType<typeof vi.fn>).mockReturnValue(fakeBuffer());
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
     await new Promise(r => setTimeout(r, 0)); // bande calculée en setTimeout(0)
-    const band = document.getElementById('cue-editor-bassband');
+    const band = document.getElementById('cue-editor-rgbband');
     expect(band).not.toBeNull();
-    expect(band!.title).toContain('basse');
-    expect(band!.querySelectorAll('.bass-bar').length).toBe(160);
+    expect(band!.title).toContain('3-bandes');
+    expect(band!.querySelectorAll('.rgb-bar').length).toBe(160 * 3);
   });
 
-  it("la bande basse est masquée quand on zoome (elle couvre toute la piste)", async () => {
+  it('la bande RGB est masquée quand on zoome (elle couvre toute la piste)', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -2245,5 +2245,95 @@ describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () =
     // Le badge porte le nom en tooltip.
     const slot = document.querySelector<HTMLElement>('.cue-slot[data-slot="0"]')!;
     expect(slot.title).toContain('Intro');
+  });
+});
+
+describe('render/cueEditor waveform 3-bandes RGB (EPIC-020)', () => {
+  beforeEach(resetMocks);
+
+  function openSingle(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  /** 12 s : kick 60 Hz (0-4 s), voix 500 Hz (4-8 s), hats 8 kHz (8-12 s). */
+  function spectrumBuffer(): { sampleRate: number; getChannelData: () => Float32Array } {
+    const sr = 44100;
+    const data = new Float32Array(12 * sr);
+    const add = (from: number, to: number, freq: number) => {
+      for (let t = from; t < to; t += 1 / 50) {
+        const start = Math.round(t * sr);
+        const dur = Math.round(sr / 50);
+        for (let i = 0; i < dur && start + i < 12 * sr; i++) {
+          data[start + i] += 0.5 * Math.sin((2 * Math.PI * freq * i) / sr);
+        }
+      }
+    };
+    add(0, 4, 60);
+    add(4, 8, 500);
+    add(8, 12, 8000);
+    return { sampleRate: sr, getChannelData: () => data };
+  }
+
+  it('rend 3 couches distinctes (rgb-low/mid/high) au ready', async () => {
+    const ws = openSingle();
+    (ws.getDecodedData as ReturnType<typeof vi.fn>).mockReturnValue(spectrumBuffer());
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0)); // bande calculée en setTimeout(0)
+    const band = document.getElementById('cue-editor-rgbband');
+    expect(band).not.toBeNull();
+    const layers = band!.querySelectorAll('.rgb-layer');
+    expect(layers.length).toBe(3);
+    expect(layers[0].classList.contains('rgb-low')).toBe(true);
+    expect(layers[1].classList.contains('rgb-mid')).toBe(true);
+    expect(layers[2].classList.contains('rgb-high')).toBe(true);
+    // Chaque couche porte 160 barres ; la couche low (kicks) a des barres énergétiques.
+    expect(layers[0].querySelectorAll('.rgb-bar').length).toBe(160);
+    const lowHeights = Array.from(layers[0].querySelectorAll('.rgb-bar')).map(
+      b => (b as HTMLElement).style.height,
+    );
+    expect(lowHeights.some(h => h !== '2%')).toBe(true);
+  });
+
+  it('la couche low domine pendant les kicks (0-4 s), pas pendant les hats (8-12 s)', async () => {
+    const ws = openSingle();
+    (ws.getDecodedData as ReturnType<typeof vi.fn>).mockReturnValue(spectrumBuffer());
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0));
+    const band = document.getElementById('cue-editor-rgbband');
+    const low = Array.from(band!.querySelectorAll('.rgb-low .rgb-bar')).map(b =>
+      parseInt((b as HTMLElement).style.height, 10),
+    );
+    const high = Array.from(band!.querySelectorAll('.rgb-high .rgb-bar')).map(b =>
+      parseInt((b as HTMLElement).style.height, 10),
+    );
+    // 12 s / 160 barres = 0.075 s/barre → [0-4s]=[0,53], [4-8s]=[53,106], [8-12s]=[106,160].
+    const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+    const lowKicks = mean(low.slice(0, 53));
+    const lowHats = mean(low.slice(106));
+    const highKicks = mean(high.slice(0, 53));
+    const highHats = mean(high.slice(106));
+    expect(lowKicks).toBeGreaterThan(lowHats * 3); // la basse suit le kick, pas les hats
+    expect(highHats).toBeGreaterThan(highKicks * 3); // l'aigu suit les hats, pas le kick
+  });
+
+  it('fermer la modal vide la bande RGB (reset lifecycle)', async () => {
+    const ws = openSingle();
+    (ws.getDecodedData as ReturnType<typeof vi.fn>).mockReturnValue(spectrumBuffer());
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0));
+    const band = document.getElementById('cue-editor-rgbband');
+    expect(band!.querySelectorAll('.rgb-bar').length).toBe(160 * 3);
+    mockState.setModal(null); // fermeture → destroyCueEditor
+    expect(band!.querySelectorAll('.rgb-bar').length).toBe(0);
   });
 });

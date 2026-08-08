@@ -1,6 +1,6 @@
-// ─── Tests: bassband.ts — bande d'énergie basse 40-150 Hz (EPIC-012) ───────
+// ─── Tests: bands.ts — analyse spectrale 3-bandes RGB (EPIC-020) ─────────────
 import { describe, expect, it } from 'vitest';
-import { computeBassBand } from './bassband.js';
+import { computeBassBand, computeRGBBands } from './bands.js';
 
 const SR = 44100;
 
@@ -14,7 +14,7 @@ function synth(seconds: number, freqHz: number | null, amp = 0.8): Float32Array 
   return out;
 }
 
-describe('computeBassBand', () => {
+describe('computeBassBand (EPIC-012, compat)', () => {
   it('retourne [] pour un signal trop court (< 1 s)', () => {
     expect(computeBassBand(new Float32Array(1000), SR)).toEqual([]);
     expect(computeBassBand(new Float32Array(SR - 1), SR)).toEqual([]);
@@ -63,5 +63,54 @@ describe('computeBassBand', () => {
     const pre = band.slice(0, 15).reduce((a, v) => a + v, 0);
     const around = band.slice(18, 28).reduce((a, v) => a + v, 0);
     expect(around).toBeGreaterThan(pre);
+  });
+});
+
+describe('computeRGBBands (EPIC-020)', () => {
+  it('retourne 3 bandes vides pour un signal trop court', () => {
+    expect(computeRGBBands(new Float32Array(1000), SR)).toEqual({ low: [], mid: [], high: [] });
+  });
+
+  it('retourne 3 bandes plates (toutes à 0) pour le silence', () => {
+    const r = computeRGBBands(synth(5, null), SR, 80);
+    expect(r.low).toHaveLength(80);
+    expect(r.low.every(v => v === 0)).toBe(true);
+    expect(r.mid.every(v => v === 0)).toBe(true);
+    expect(r.high.every(v => v === 0)).toBe(true);
+  });
+
+  it('un kick 60 Hz → basse pleine, médium et aigu ~0', () => {
+    const r = computeRGBBands(synth(5, 60), SR, 80);
+    expect(Math.max(...r.low)).toBeCloseTo(1, 5);
+    expect(Math.max(...r.mid)).toBe(0);
+    expect(Math.max(...r.high)).toBe(0);
+  });
+
+  it('une voix 500 Hz → médium pleine, basse et aigu ~0', () => {
+    const r = computeRGBBands(synth(5, 500), SR, 80);
+    expect(Math.max(...r.mid)).toBeCloseTo(1, 5);
+    expect(Math.max(...r.low)).toBe(0);
+    expect(Math.max(...r.high)).toBe(0);
+  });
+
+  it('un hat 8 kHz → aigu pleine, basse et médium ~0', () => {
+    const r = computeRGBBands(synth(5, 8000), SR, 80);
+    expect(Math.max(...r.high)).toBeCloseTo(1, 5);
+    expect(Math.max(...r.low)).toBe(0);
+    expect(Math.max(...r.mid)).toBe(0);
+  });
+
+  it('normalise chaque bande indépendamment (une piste hat-only montre un aigu plein, une basse plate)', () => {
+    const r = computeRGBBands(synth(5, 8000), SR, 80);
+    // high normalisée à 1 malgré une énergie absolue faible vs un kick.
+    expect(Math.max(...r.high)).toBeCloseTo(1, 5);
+    expect(r.low.every(v => v === 0)).toBe(true);
+  });
+
+  it('respecte le barCount sur les 3 bandes (défaut 160)', () => {
+    const r = computeRGBBands(synth(10, 60), SR);
+    expect(r.low).toHaveLength(160);
+    expect(r.mid).toHaveLength(160);
+    expect(r.high).toHaveLength(160);
   });
 });

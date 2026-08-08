@@ -39,6 +39,7 @@
 | [EPIC-017](EPIC-017-zoom-raccourcis-downbeat.md) | Zoom waveform (paliers, molette, 1 beat) + raccourcis cue 1-8/C + downbeat différencié | 🟢 Livré | Haute | rapport `2026-08-08-waveform-cue-beatgrid-benchmark.md` §P0 |
 | [EPIC-018](EPIC-018-minimap-bande-basse-coloree.md) | Minimap/overview synchronisée au zoom + bande basse colorée (RGB DJ, étape 1) | 🟢 Livré | Moyenne | rapport benchmark §P1 |
 | [EPIC-019](EPIC-019-renommage-couleur-cues.md) | Renommage + recolorisation des cues (double-clic slot/région, round-trip NML) | 🟢 Livré | Moyenne | rapport benchmark §P1 |
+| [EPIC-020](EPIC-020-waveform-3-bandes-rgb.md) | Waveform 3-bandes RGB complète (low/mid/high — FFT fenêtrée, standard DJ) | 🟢 Livré | Moyenne | rapport benchmark §P1-4 |
 
 ## État actuel du projet (2026-08-08)
 

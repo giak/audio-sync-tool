@@ -3,7 +3,7 @@ import WaveSurfer from 'wavesurfer.js';
 import Minimap from 'wavesurfer.js/dist/plugins/minimap.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
 import { api } from '../api.js';
-import { computeBassBand } from '../bassband.js';
+import { computeRGBBands, type RGBBands } from '../bands.js';
 import { _clearMatchCache } from '../matchStatus.js';
 import { beatInterval, buildBeats, detectBPMFromUrl, snapToBeat } from '../beatgrid.js';
 import type { CueDTO } from '../cueModel.js';
@@ -64,9 +64,10 @@ let _beat1Mode = false;
 let _confidence: number | null = null;
 /** Analyse serveur en cours (bouton 🔍 Analyser) — évite le double clic. */
 let _analyzing = false;
-/** Bande d'énergie basse 40-150 Hz (EPIC-012) — barres 0..1 pour valider le calage à l'œil.
+/** Waveform 3-bandes RGB (EPIC-020) : énergies low/mid/high 0..1 pour valider le
+ *  calage à l'œil (kick = rouge, voix = vert, hats = bleu — standard DJ).
  *  Calculée côté client depuis le buffer décodé de wavesurfer (zéro réseau, best-effort). */
-let _bassBand: number[] = [];
+let _rgbBands: RGBBands = { low: [], mid: [], high: [] };
 /** Zoom waveform (EPIC-017) : pixels par seconde, 0 = fit (piste entière). */
 let _zoomPx = 0;
 
@@ -394,46 +395,60 @@ function updateZoomButtons(): void {
   if (one) one.disabled = _bpm === null;
 }
 
-/** Bande d'énergie basse (EPIC-012) : calcule et affiche les barres 0..1 sous la
- *  waveform, depuis le buffer décodé de wavesurfer. Best-effort : un buffer
+/** Waveform 3-bandes RGB (EPIC-020) : calcule les énergies low/mid/high 0..1 sous
+ *  la waveform, depuis le buffer décodé de wavesurfer. Best-effort : un buffer
  *  indisponible (mock, échec de décodage) laisse la bande vide sans erreur. */
-function loadBassBand(): void {
+function loadRGBBands(): void {
   try {
     const buf = ws?.getDecodedData();
     if (!buf) return;
     const ch = buf.getChannelData(0);
-    _bassBand = computeBassBand(ch, buf.sampleRate);
+    _rgbBands = computeRGBBands(ch, buf.sampleRate);
   } catch {
-    _bassBand = [];
+    _rgbBands = { low: [], mid: [], high: [] };
   }
-  renderBassBand();
+  renderRGBBands();
 }
 
-/** Dessine la bande basse sous la waveform (24px, sous la grille, pointer-events none). */
-function renderBassBand(): void {
+/** Dessine la bande RGB sous la waveform (24px, sous la grille, pointer-events none) :
+ *  3 couches de barres superposées (rouge basse / vert médium / bleu aigu), mélangées
+ *  en écran (mix-blend-mode: screen) → rendu additif : kick+voix+hats = blanc, le
+ *  standard des DJ softs. */
+function renderRGBBands(): void {
   const wave = document.getElementById('cue-editor-waveform') as HTMLElement | null;
   if (!wave) return;
-  if (_bassBand.length === 0) {
+  if (_rgbBands.low.length === 0) {
     // Aucune donnée (buffer indisponible/trop court) : pas de bande, ni vide ni fantôme.
-    document.getElementById('cue-editor-bassband')?.remove();
+    document.getElementById('cue-editor-rgbband')?.remove();
     return;
   }
-  let bandEl = document.getElementById('cue-editor-bassband') as HTMLElement | null;
+  let bandEl = document.getElementById('cue-editor-rgbband') as HTMLElement | null;
   if (!bandEl) {
     bandEl = document.createElement('div');
-    bandEl.id = 'cue-editor-bassband';
-    bandEl.title = "Bande d'énergie basse 40–150 Hz (kick) — rouge = basse (standard RGB DJ)";
+    bandEl.id = 'cue-editor-rgbband';
+    bandEl.title =
+      'Waveform 3-bandes RGB — rouge = basse (kick 40–150 Hz), vert = médium (voix 150–2000 Hz), bleu = aigu (hats 2–16 kHz)';
     wave.appendChild(bandEl);
   }
   bandEl.innerHTML = '';
-  const frag = document.createDocumentFragment();
-  for (const v of _bassBand) {
-    const bar = document.createElement('i');
-    bar.className = 'bass-bar';
-    bar.style.height = `${Math.max(2, Math.round(v * 100))}%`;
-    frag.appendChild(bar);
+  const layers: Array<[string, number[]]> = [
+    ['rgb-low', _rgbBands.low],
+    ['rgb-mid', _rgbBands.mid],
+    ['rgb-high', _rgbBands.high],
+  ];
+  for (const [cls, band] of layers) {
+    const layer = document.createElement('div');
+    layer.className = `rgb-layer ${cls}`;
+    const frag = document.createDocumentFragment();
+    for (const v of band) {
+      const bar = document.createElement('i');
+      bar.className = 'rgb-bar';
+      bar.style.height = `${Math.max(2, Math.round(v * 100))}%`;
+      frag.appendChild(bar);
+    }
+    layer.appendChild(frag);
+    bandEl.appendChild(layer);
   }
-  bandEl.appendChild(frag);
 }
 
 /** Persiste la grille courante {bpm, phase, source} dans le cache serveur
@@ -1112,8 +1127,8 @@ export async function renderWaveform(
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = '🔍 Analyser';
   }
-  _bassBand = [];
-  const bandEl = document.getElementById('cue-editor-bassband');
+  _rgbBands = { low: [], mid: [], high: [] };
+  const bandEl = document.getElementById('cue-editor-rgbband');
   if (bandEl) bandEl.innerHTML = '';
   const bpmInput = bpmInputEl();
   if (bpmInput) bpmInput.value = '';
@@ -1242,9 +1257,9 @@ export async function renderWaveform(
       rebuildGrid();
     }
     void loadCachedGrid();
-    // Bande d'énergie basse (EPIC-012) : calcul O(n) différé (setTimeout 0) pour
-    // ne pas bloquer le rendu initial sur les longues pistes ; best-effort.
-    setTimeout(() => loadBassBand(), 0);
+    // Waveform 3-bandes (EPIC-020) : calcul O(n) différé (setTimeout 0) pour ne
+    // pas bloquer le rendu initial sur les longues pistes ; best-effort.
+    setTimeout(() => loadRGBBands(), 0);
   });
   ws.on('play', () => setPlayingUI(true));
   ws.on('pause', () => setPlayingUI(false));
@@ -1292,8 +1307,8 @@ export function destroyCueEditor(): void {
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = '🔍 Analyser';
   }
-  _bassBand = [];
-  const bandEl = document.getElementById('cue-editor-bassband');
+  _rgbBands = { low: [], mid: [], high: [] };
+  const bandEl = document.getElementById('cue-editor-rgbband');
   if (bandEl) bandEl.innerHTML = '';
   const bpmInput = bpmInputEl();
   if (bpmInput) bpmInput.value = '';
