@@ -1,4 +1,4 @@
-// ─── Tests: playlistUI.ts — bouton ⌖ (Task 8) ─────────────────────────────
+// ─── Tests: playlistUI.ts — bouton Cues (Task 8) ──────────────────────────
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockOpenCueEditor = vi.hoisted(() => vi.fn());
@@ -44,7 +44,7 @@ import { renderPlaylistPanel } from './playlistUI.js';
 
 const pendingTracks: { tracks: Array<{ filename: string; fullPath: string; duration?: number }> } = { tracks: [] };
 
-describe('playlistUI bouton ⌖', () => {
+describe('playlistUI bouton Cues', () => {
   beforeEach(() => {
     document.body.innerHTML = `
       <div id="playlist-tabs"></div>
@@ -58,12 +58,13 @@ describe('playlistUI bouton ⌖', () => {
     pendingTracks.tracks = [];
   });
 
-  it('affiche un bouton ⌖ sur chaque piste', () => {
+  it('affiche un bouton « Cues » sur chaque piste', () => {
     pendingTracks.tracks = [{ filename: 'a.mp3', fullPath: '/x/a.mp3', duration: 60 }];
     renderPlaylistPanel();
     const btn = document.querySelector('.cue-btn') as HTMLButtonElement | null;
     expect(btn).not.toBeNull();
-    expect(btn!.textContent).toBe('⌖');
+    expect(btn!.textContent).toBe('Cues');
+    expect(btn!.title).toContain('waveform');
   });
 
   it('le clic ouvre le cue editor avec la piste', () => {
@@ -71,6 +72,25 @@ describe('playlistUI bouton ⌖', () => {
     renderPlaylistPanel();
     const btn = document.querySelector('.cue-btn') as HTMLButtonElement;
     btn.click();
+    expect(mockOpenCueEditor).toHaveBeenCalledWith({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+  });
+
+  it("le menu contextuel propose l'éditeur cues / loops", () => {
+    pendingTracks.tracks = [{ filename: 'a.mp3', fullPath: '/x/a.mp3', duration: 60 }];
+    renderPlaylistPanel();
+    const track = document.querySelector('.pl-track') as HTMLElement;
+    track.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    const items = vi.mocked(showContextMenu).mock.lastCall?.[2] as Array<{ label: string }>;
+    expect(items.map(i => i.label)).toContain('Cues / loops (waveform)');
+  });
+
+  it("l'action du menu contextuel ouvre l'éditeur avec la piste", () => {
+    pendingTracks.tracks = [{ filename: 'a.mp3', fullPath: '/x/a.mp3', duration: 60 }];
+    renderPlaylistPanel();
+    const track = document.querySelector('.pl-track') as HTMLElement;
+    track.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    const items = vi.mocked(showContextMenu).mock.lastCall?.[2] as Array<{ label: string; action: () => void }>;
+    items.find(i => i.label === 'Cues / loops (waveform)')!.action();
     expect(mockOpenCueEditor).toHaveBeenCalledWith({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
   });
 });

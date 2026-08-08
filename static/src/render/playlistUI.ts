@@ -150,7 +150,7 @@ function renderPlaylistTracks(): void {
       }
       html += `</span>`;
       html += `<span class="pl-track-remove" data-fullpath="${escapeHtml(track.fullPath)}">✕</span>`;
-      html += `<button class="cue-btn" data-fullpath="${escapeHtml(track.fullPath)}" data-filename="${escapeHtml(track.filename)}">⌖</button>`;
+      html += `<button class="cue-btn" data-fullpath="${escapeHtml(track.fullPath)}" data-filename="${escapeHtml(track.filename)}" title="Éditeur cues / loops (waveform)">Cues</button>`;
       html += '</div>';
     });
     html += '</div>';
@@ -207,11 +207,13 @@ function renderPlaylistTracks(): void {
       const fullPath = removeBtn?.dataset.fullpath || '';
       const filename = trackEl.querySelector('.pl-track-name')?.textContent || '';
       const items: Array<{ label: string; action: () => void; danger?: boolean }> = [
-        { label: '▶ Jouer', action: () => togglePlay(filename, fullPath, trackEl.querySelector('.play-btn') || trackEl) },
-        { label: '✕ Retirer', action: () => { removeTrack(getActivePlaylistName(), fullPath); /* auto-rendered via eparsPlaylist:changed */ patchPlaylistSourceFile(fullPath, true); }, danger: true },
         {
           label: '▶ Jouer',
           action: () => togglePlay(filename, fullPath, trackEl.querySelector('.play-btn') || trackEl),
+        },
+        {
+          label: 'Cues / loops (waveform)',
+          action: () => openCueEditor({ filename, fullPath }),
         },
         {
           label: '✕ Retirer',

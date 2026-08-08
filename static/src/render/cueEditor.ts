@@ -28,6 +28,8 @@ let _trackPath = '';
 /** hotcue → DISPL_ORDER d'origine (round-trip). wavesurfer perd les metadata custom
  *  des régions, donc on garde un Map séparé peuplé au chargement des cues. */
 let _displOrders = new Map<number, string>();
+/** Mode plein écran (bouton 🗖) : le contenu de la modal remplit tout l'écran. */
+let _fullscreen = false;
 
 const _wired = new WeakSet<Element>();
 
@@ -65,6 +67,23 @@ function setStatus(msg: string): void {
   if (el) el.textContent = msg;
 }
 
+function fullscreenBtnEl(): HTMLButtonElement | null {
+  return document.getElementById('cue-btn-fullscreen') as HTMLButtonElement | null;
+}
+
+/** Bascule la modal en plein écran : la waveform remplit tout l'espace
+ *  (wavesurfer v7 re-rend automatiquement via son ResizeObserver, height 'auto'). */
+export function toggleFullscreen(): void {
+  _fullscreen = !_fullscreen;
+  const modal = document.getElementById('modal-cue-editor');
+  modal?.querySelector('.modal-content')?.classList.toggle('cue-fullscreen', _fullscreen);
+  const btn = fullscreenBtnEl();
+  if (btn) {
+    btn.textContent = _fullscreen ? '🗗' : '🗖';
+    btn.title = _fullscreen ? 'Réduire (plein écran)' : 'Plein écran';
+  }
+}
+
 export function wireControls(root: HTMLElement = document.body): void {
   for (const el of root.querySelectorAll<HTMLElement>('.cue-slot')) {
     if (_wired.has(el)) continue;
@@ -86,6 +105,13 @@ export function wireControls(root: HTMLElement = document.body): void {
       ws?.playPause();
     });
   }
+  const fs = root.querySelector<HTMLButtonElement>('#cue-btn-fullscreen');
+  if (fs && !_wired.has(fs)) {
+    _wired.add(fs);
+    fs.addEventListener('click', toggleFullscreen);
+  }
+}
+
 }
 
 on('activeModal:changed', () => {
@@ -115,6 +141,20 @@ function onModalKeydown(e: KeyboardEvent): void {
   }
 }
 document.addEventListener('keydown', onModalKeydown);
+
+// Échap en plein écran : SORT du plein écran au lieu de fermer la modal.
+// Phase capture (toujours avant le router du registry, en bubble) → on
+// stoppe la propagation pour que le registry ne ferme pas la modal.
+document.addEventListener(
+  'keydown',
+  (e: KeyboardEvent) => {
+    if (state.activeModal !== 'cueEditor' || !_fullscreen || e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    toggleFullscreen();
+  },
+  { capture: true },
+);
 
 function storedIndex(filename: string): number {
   const raw = localStorage.getItem(`cue/sel:${filename}`);
@@ -183,11 +223,18 @@ export async function renderWaveform(path: string, cues: CueDTO[]): Promise<void
   if (!el) return;
   el.innerHTML = '';
   ws = WaveSurfer.create({ container: el, url: `/audio?path=${encodeURIComponent(path)}` });
+  // Détruit l'instance précédente (changement d'entrée homonyme) — évite fuite + chevauchement audio.
+  ws?.destroy();
+  ws = null;
+  _regions = null;
   // DISPL_ORDER d'origine : {hotcue → displ_order} — jamais reconstruit depuis le slot (B9).
   _displOrders = new Map(cues.filter(c => c.hotcue >= 0 && c.hotcue <= 7).map(c => [c.hotcue, c.displ_order]));
   setPlayingUI(false);
   const time = timeEl();
   if (time) time.textContent = '0:00 / 0:00';
+  // height: 'auto' → la waveform remplit le conteneur (200px, ou tout l'écran en plein
+  // écran) ; le ResizeObserver de v7 re-rend à chaque changement de taille.
+  ws = WaveSurfer.create({ container: el, url: `/audio?path=${encodeURIComponent(path)}`, height: 'auto' });
   ws.on('ready', () => {
     _regions = ws!.registerPlugin(Regions.create());
     for (const r of cuesToRegions(cues)) _regions.addRegion(r);
@@ -208,6 +255,15 @@ export function destroyCueEditor(): void {
   _regions = null;
   _entryRef = null;
   _displOrders = new Map();
+  // Sort du plein écran si la modal se ferme dans cet état.
+  _fullscreen = false;
+  const modal = document.getElementById('modal-cue-editor');
+  modal?.querySelector('.modal-content')?.classList.remove('cue-fullscreen');
+  const fsBtn = fullscreenBtnEl();
+  if (fsBtn) {
+    fsBtn.textContent = '🗖';
+    fsBtn.title = 'Plein écran';
+  }
   setPlayingUI(false);
   setStatus('');
 }

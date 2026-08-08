@@ -1628,6 +1628,17 @@ def test_cues_post_valid_still_ok(client, tmp_path, monkeypatch):
     assert rv.json['ok'] is True
 
 
+def test_track_match_exposes_dir_volume(client, tmp_path, monkeypatch):
+    """Le sélecteur d'homonymes reçoit DIR/VOLUME pour discriminer les entrées."""
+    filename, filesize = _setup_cues_nml(client, tmp_path, monkeypatch)
+    local = tmp_path / filename
+    rv = client.get('/api/track/match', query_string={'path': str(local)})
+    assert rv.status_code == 200
+    e = rv.json['entries'][0]
+    assert 'dir' in e and e['dir']
+    assert 'volume' in e and e['volume']
+
+
 def test_cues_post_with_entry_writes_selected(client, tmp_path, monkeypatch):
     """Avec `entry` (désambiguïsation multi-match), le POST écrit la BONNE ENTRY."""
     import nml as nml_mod

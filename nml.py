@@ -56,6 +56,10 @@ def get_entry_meta(entry):
         'artist': entry.get('ARTIST', ''),
         'title': entry.get('TITLE', ''),
     }
+    if loc is not None:
+        # DIR/VOLUME exposés au sélecteur d'homonymes (discrimination réelle, audit B3).
+        meta['dir'] = loc.get('DIR', '')
+        meta['volume'] = loc.get('VOLUME', '')
     info = entry.find('INFO')
     if info is not None:
         meta['filesize'] = info.get('FILESIZE', '')

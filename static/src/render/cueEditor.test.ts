@@ -94,6 +94,10 @@ const MODAL_HTML = `
     <div class="modal-content modal-lg">
       <div class="modal-header">
         <h3>Éditeur — <span id="cue-editor-title"></span></h3>
+        <div class="modal-header-actions">
+          <button id="cue-btn-fullscreen" title="Plein écran">🗖</button>
+        </div>
+      </div>
       <div id="cue-editor-status"></div>
       <div id="cue-editor-waveform"></div>
       <div id="cue-editor-controls">
@@ -183,8 +187,9 @@ describe('render/cueEditor wavesurfer', () => {
     });
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
 
-    const opts = mockWSCreate.mock.calls[0][0] as { url: string };
+    const opts = mockWSCreate.mock.calls[0][0] as { url: string; height: string };
     expect(opts.url).toContain('/audio?path=%2Fx%2Fa.mp3');
+    expect(opts.height).toBe('auto'); // la waveform remplit le conteneur (plein écran)
     const onCalls = ws.on.mock.calls as Array<[string, () => void]>;
     const readyCb = onCalls.find(([evt]) => evt === 'ready')?.[1];
     expect(readyCb).toBeDefined();
@@ -400,23 +405,27 @@ describe('render/cueEditor transport (play/pause + temps, B4)', () => {
   });
 });
 
+  it("affiche le volume/DIR dans le sélecteur d'homonymes", async () => {
+    mockWSCreate.mockReturnValue(makeWS());
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: true,
+      entries: [
+        { filename: 't.mp3', filesize: '1', artist: 'A1', title: 'T1', volume: 'C:', dir: '/:Music/:' },
+        { filename: 't.mp3', filesize: '2', artist: 'A2', title: 'T2', volume: 'D:', dir: '/:Autre/:' },
+      ],
+    });
+    await openCueEditor({ filename: 't.mp3', fullPath: '/x/t.mp3' });
+    const select = document.getElementById('cue-editor-select') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(select.options[0].textContent).toContain('C:');
+    expect(select.options[0].textContent).toContain('/:Music/:');
+    expect(select.options[1].textContent).toContain('D:');
   });
 });
 
 describe('render/cueEditor lifecycle', () => {
-  beforeEach(() => {
-    document.body.innerHTML = `
-      <div id="modal-cue-editor" class="modal hidden">
-        <div id="cue-editor-title"></div>
-        <div id="cue-editor-status"></div>
-        <div id="cue-editor-waveform"></div>
-        <button id="cue-btn-save">💾</button>
-      </div>
-    `;
-    mockApi.mockReset();
-    mockWSCreate.mockReset();
-    mockWSCreate.mockReturnValue(makeWS());
-  });
+  beforeEach(resetMocks);
 
   it('détruit wavesurfer quand activeModal quitte cueEditor', async () => {
     const ws = makeWS();
@@ -448,6 +457,72 @@ describe('render/cueEditor lifecycle', () => {
     select.value = '1';
     select.dispatchEvent(new Event('change'));
     expect(ws.destroy).toHaveBeenCalled();
+  });
+});
+
+describe('render/cueEditor plein écran', () => {
+  beforeEach(resetMocks);
+
+  function openSingle(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  it("le bouton 🗖 bascule la classe cue-fullscreen et l'état du bouton", async () => {
+    openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const content = document.querySelector('.modal-content') as HTMLElement;
+    const btn = document.getElementById('cue-btn-fullscreen') as HTMLButtonElement;
+    expect(content.classList.contains('cue-fullscreen')).toBe(false);
+    btn.click();
+    expect(content.classList.contains('cue-fullscreen')).toBe(true);
+    expect(btn.textContent).toBe('🗗');
+    expect(btn.title).toContain('Réduire');
+    btn.click();
+    expect(content.classList.contains('cue-fullscreen')).toBe(false);
+    expect(btn.textContent).toBe('🗖');
+  });
+
+  it("toggleFullscreen en double appel revient à l'état initial", async () => {
+    openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const content = document.querySelector('.modal-content') as HTMLElement;
+    // État initial propre (pas de fuite d'un test précédent).
+    expect(content.classList.contains('cue-fullscreen')).toBe(false);
+    toggleFullscreen();
+    expect(content.classList.contains('cue-fullscreen')).toBe(true);
+    toggleFullscreen();
+    expect(content.classList.contains('cue-fullscreen')).toBe(false);
+  });
+
+  it('Échap en plein écran sort du plein écran sans fermer la modal', async () => {
+    openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const content = document.querySelector('.modal-content') as HTMLElement;
+    (document.getElementById('cue-btn-fullscreen') as HTMLButtonElement).click();
+    expect(content.classList.contains('cue-fullscreen')).toBe(true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(content.classList.contains('cue-fullscreen')).toBe(false);
+    expect(mockState.activeModal).toBe('cueEditor'); // la modal reste ouverte
+  });
+
+  it('la fermeture de la modal sort du plein écran et réinitialise le bouton', async () => {
+    openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const content = document.querySelector('.modal-content') as HTMLElement;
+    const btn = document.getElementById('cue-btn-fullscreen') as HTMLButtonElement;
+    btn.click();
+    expect(content.classList.contains('cue-fullscreen')).toBe(true);
+    mockState.setModal(null); // fermeture → destroyCueEditor
+    expect(content.classList.contains('cue-fullscreen')).toBe(false);
+    expect(btn.textContent).toBe('🗖');
+    expect(btn.title).toBe('Plein écran');
   });
 });
 

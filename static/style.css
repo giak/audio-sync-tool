@@ -571,10 +571,19 @@ header h1 {
 .pl-track-remove { color: var(--text-muted); cursor: pointer; padding: 0 4px; font-size: 12px; flex-shrink: 0; border-radius: 2px; }
 .pl-track-remove:hover { color: var(--led-red); background: var(--bg-hover); }
 .cue-btn {
-  color: var(--text-muted); cursor: pointer; padding: 0 4px; font-size: 13px;
-  flex-shrink: 0; border-radius: 2px; background: none; border: none; line-height: 1;
+  color: var(--text-secondary); cursor: pointer;
+  padding: 1px 8px; font-size: 12px;
+  flex-shrink: 0; border-radius: 3px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-panel);
+  line-height: 1.5;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.cue-btn:hover { color: var(--accent); background: var(--bg-hover); }
+.cue-btn:hover {
+  color: var(--accent);
+  border-color: var(--border-active);
+  background: var(--bg-focus);
+}
 
 /* Ratings */
 .pl-track-rating {
@@ -678,7 +687,7 @@ header h1 {
 
 /* ===== Cue editor modal ============================================ */
 .modal-content.modal-lg {
-  min-width: 720px; max-width: 960px;
+  min-width: 780px; max-width: 1100px;
 }
 .cue-slot {
   display: inline-block;
@@ -698,6 +707,24 @@ header h1 {
 /* Cue editor transport (play/pause + temps) */
 #cue-editor-waveform { height: 200px; position: relative; }
 
+/* Fullscreen (bouton 🗖 dans le header de la modal) */
+.modal-header-actions { display: flex; align-items: center; gap: 4px; }
+#cue-btn-fullscreen {
+  background: none; border: none;
+  color: var(--text-muted); font-size: 15px;
+  cursor: pointer; padding: 2px 6px; border-radius: 2px; line-height: 1;
+}
+#cue-btn-fullscreen:hover { color: var(--accent); background: var(--bg-hover); }
+.modal-content.modal-lg.cue-fullscreen {
+  position: fixed; inset: 0;
+  width: 100vw; height: 100vh;
+  max-width: none; max-height: none;
+  border: none; border-radius: 0;
+  display: flex; flex-direction: column;
+}
+.cue-fullscreen #cue-editor-waveform {
+  flex: 1; min-height: 0; height: auto;
+}
 #cue-editor-transport {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 0 4px;
