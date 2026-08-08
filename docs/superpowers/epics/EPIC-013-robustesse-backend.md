@@ -24,8 +24,9 @@ fichier de collection est précieux).
       ; `npm start` en mode dev, `npm run prod` (ou équivalent) sans debugger.
 - [ ] **Cache parse NML** : invalidation par mtime pour éviter le re-parse 0,5 s à chaque GET `/match`
       (optionnel — mesure du rapport : 1,5 s/POST acceptable).
-- [ ] Aligner `/api/track/match` sur `is_path_allowed` (le rapport note qu'il lit `getsize()` de
-      n'importe quel chemin existant).
+- [x] ~~Aligner `/api/track/match` sur `is_path_allowed`~~ — **FAIT** (review EPICs 2026-08-08, R2) :
+      garde 403 hors dossiers autorisés + test `test_track_match_blocks_path_outside_allowed_dirs`.
+      Voir `docs/superpowers/reports/2026-08-08-audit-epics-review.md` §4.
 - [ ] Tests : JSON corrompu → défaut ; double scan → verrou ; rotation journal ; mode debug off.
 
 ## Fichiers impactés (prévision)

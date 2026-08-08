@@ -190,6 +190,10 @@ function renderPlaylistTracks(): void {
         });
       }
       trackEl.classList.add('focused');
+      // Synchroniser l'index du clic avec l'auto-focus : sinon un re-render
+      // (ex. édit de rating) ramènerait le focus sur l'ancien index clavier
+      // et Ctrl+↑↓ réordonnerait la mauvaise piste.
+      state.playlistTrackFocusIndex = parseInt(trackEl.dataset.index || '', 10) || 0;
     };
 
     trackEl.ondblclick = () => {
@@ -231,6 +235,10 @@ function renderPlaylistTracks(): void {
   if (state.playlistTrackFocusIndex !== null && tracks.length > 0) {
     const idx = Math.min(state.playlistTrackFocusIndex, tracks.length - 1);
     const trackEls = container.querySelectorAll('.pl-track');
+    // Nettoyer les « focused » existants avant d'auto-focuser : sinon un track
+    // cliqué manuellement + le track indexé cohabitent et le handler reorder
+    // (querySelector premier .focused) agirait sur le mauvais track.
+    for (const el of trackEls) el.classList.remove('focused');
     if (trackEls[idx]) trackEls[idx].classList.add('focused');
   }
 
@@ -253,6 +261,8 @@ function renderPlaylistTracks(): void {
       const toIdx = parseInt(trackEl.dataset.index || '', 10);
       if (!Number.isNaN(fromIdx) && !Number.isNaN(toIdx)) {
         reorderTrack(getActivePlaylistName(), fromIdx, toIdx);
+        // Le track déplacé suit le focus (évite que l'auto-focus saute au re-render).
+        state.playlistTrackFocusIndex = toIdx;
         // auto-rendered via eparsPlaylist:changed
       }
     };

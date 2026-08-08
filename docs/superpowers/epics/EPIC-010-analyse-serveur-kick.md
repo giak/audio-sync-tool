@@ -7,7 +7,8 @@
 
 ## Objectif
 
-Calculer le **calage BPM + phase** côté serveur pour les **76 % de pistes sans grille native**, avec un
+Calculer le **calage BPM + phase** côté serveur pour les **76,3 % de pistes sans grille native** (ni
+TEMPO ni TYPE=4, mesuré sur la collection réelle — voir EPIC-008), avec un
 vrai calage sur la basse/le kick — pas seulement un BPM à phase 0.
 
 ## Contexte (recherche web — plan §4)
@@ -22,8 +23,11 @@ vrai calage sur la basse/le kick — pas seulement un BPM à phase 0.
 
 ## Tâches (proposées)
 
-- [ ] Choisir l'implémentation : pipeline DSP maison (zéro grosse dépendance) vs librosa vs madmom —
-      décision à trancher (précision vs poids vs dépendances).
+- [ ] Choisir l'implémentation : **commencer par le pipeline DSP maison** (filtre passe-bande 40–150 Hz +
+      ODF + autocorrélation + scan de phase, déjà décrit au plan §4) — il réutilise côté serveur la
+      logique de `detectTempoFromOnsets` (beatgrid.ts). **Ne pas installer librosa/madmom tant que le
+      pipeline maison ne s'est pas prouvé insuffisant** (dépendances lourdes ; madmom RNN = sur-dimensionné
+      pour le snap — voir review EPICs `reports/2026-08-08-audit-epics-review.md` §6).
 - [ ] Endpoint `POST /api/track/analyze` (path) → `{bpm, phase, confidence}` ; 404 si fichier absent,
       403 hors dossiers autorisés.
 - [ ] Bouton « 🔍 Analyser (basse/phase) » à la demande dans l'éditeur (état ⏳ analyse…), en plus de

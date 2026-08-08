@@ -143,6 +143,18 @@ function setupTestState(): void {
   state.activePlaylistIndex = 0;
   state.eparsFocusPath = null;
   state.sourceFocusPath = null;
+  // Reset complet de tous les champs d'état restants pour éviter les fuites
+  // entre tests (cause de flakiness en shuffle : playlistTrackFocusIndex laissé
+  // non-null posait un « focused » automatique qui doublonnait avec celui du test).
+  state.audioSeekStep = 20;
+  state.playlistTrackFocusIndex = null;
+  state.sourceManuallyExpanded.clear();
+  state.selectedEparsFiles.clear();
+  state.lastSelectedEparsIndex = null;
+  state.navHistory = [];
+  state.navIndex = -1;
+  state.ratings = {};
+  state.focusListId = 'epars';
 }
 
 function dispatchKey(key: string, opts: Record<string, unknown> = {}): KeyboardEvent {
@@ -194,7 +206,15 @@ beforeEach(async () => {
   await flushRaf();
   // Blur any focused element to prevent isFilterInputFocused leakage
   (document.activeElement as HTMLElement | null)?.blur();
-  vi.clearAllMocks();
+  // clearAllMocks garde les implémentations persistantes (mockResolvedValue posé par
+  // « empty pending tracks ») et les Once non consommés → fuite entre tests (flaky shuffle).
+  // Reset complet d'api + retour au défaut de la factory.
+  vi.mocked(api).mockReset();
+  vi.mocked(api).mockResolvedValue({});
+  // Les tests playlist posent panel-active sur sidebar/source sans le retirer ensuite :
+  // on nettoie les classes avant chaque test pour éviter les fuites d'état (flaky shuffle).
+  document.getElementById('playlist-source')!.classList.remove('panel-active');
+  document.getElementById('playlist-sidebar')!.classList.remove('panel-active');
 });
 
 afterEach(() => {
@@ -1163,6 +1183,71 @@ describe('Playlist mode', () => {
     const reordered = document.querySelectorAll('#playlist-tracks .pl-track');
     expect(reordered.length).toBe(2);
     expect(reordered[1].querySelector('.pl-track-name')!.textContent).toBe(firstName);
+  });
+
+  it('Ctrl+ArrowUp keeps focus on the moved track after reorder', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+    rows[0].classList.remove('focused');
+    rows[1].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    state.playlistFocus = 'sidebar';
+    document.getElementById('playlist-source')!.classList.remove('panel-active');
+    document.getElementById('playlist-sidebar')!.classList.add('panel-active');
+
+    const trackEls = document.querySelectorAll('#playlist-tracks .pl-track');
+    trackEls[1].classList.add('focused');
+    const secondName = trackEls[1].querySelector('.pl-track-name')!.textContent;
+
+    dispatchKey('ArrowUp', { ctrlKey: true });
+    await flush();
+
+    // Le focus suit le track déplacé (playlistTrackFocusIndex mis à jour) :
+    // l'auto-focus du re-render doit rester sur la piste déplacée, pas sauter.
+    const focused = document.querySelector('#playlist-tracks .focused');
+    expect(focused).not.toBeNull();
+    expect(focused!.querySelector('.pl-track-name')!.textContent).toBe(secondName);
+  });
+
+  it('Ctrl+ArrowUp at first track is a no-op and preserves focus', async () => {
+    await enterPlaylist();
+    state.playlistFocus = 'source';
+
+    const rows = document.querySelectorAll('#playlist-source-container .file-row');
+    rows[0].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+    rows[0].classList.remove('focused');
+    rows[1].classList.add('focused');
+    dispatchKey(' ');
+    await flush();
+
+    state.playlistFocus = 'sidebar';
+    document.getElementById('playlist-source')!.classList.remove('panel-active');
+    document.getElementById('playlist-sidebar')!.classList.add('panel-active');
+
+    const trackEls = document.querySelectorAll('#playlist-tracks .pl-track');
+    trackEls[0].classList.add('focused');
+    const firstName = trackEls[0].querySelector('.pl-track-name')!.textContent;
+    const names = Array.from(trackEls).map(el => el.querySelector('.pl-track-name')!.textContent);
+
+    dispatchKey('ArrowUp', { ctrlKey: true });
+    await flush();
+
+    // No-op (déjà en tête) : ordre inchangé ET focus préservé (pas de -1).
+    const after = document.querySelectorAll('#playlist-tracks .pl-track');
+    expect(after.length).toBe(2);
+    expect(Array.from(after).map(el => el.querySelector('.pl-track-name')!.textContent)).toEqual(names);
+    const focused = document.querySelector('#playlist-tracks .focused');
+    expect(focused).not.toBeNull();
+    expect(focused!.querySelector('.pl-track-name')!.textContent).toBe(firstName);
   });
 
   it('ArrowDown/ArrowUp navigates tracks in playlist sidebar', async () => {

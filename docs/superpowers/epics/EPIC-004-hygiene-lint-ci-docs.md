@@ -15,7 +15,7 @@ docs qui reflètent les vrais chiffres.
 - [x] **Lint 0 erreur** : corrigé les ~65 erreurs Biome (imports inutilisés dans `commands/filter.ts`,
       `commands/rating.ts`, etc. + formatage) → `npm run lint` à 0.
 - [x] **CI GitHub Actions minimal** (`.github/workflows/ci.yml`) : typecheck + lint + vitest + pytest.
-- [x] **README.md à jour** : chiffres réels (614 vitest / 127 pytest, nb de fichiers, routes), suppression
+- [x] **README.md à jour** : chiffres réels (616 vitest / 128 pytest, nb de fichiers, routes), suppression
       des références aux fichiers `.js` inexistants (`script.test.js`, `integration.test.js`), statut
       réel du lint.
 - [x] **TESTING-GUIDE.md à jour** : mêmes corrections de fichiers/références.
@@ -27,12 +27,13 @@ docs qui reflètent les vrais chiffres.
 ## Validation
 
 - `npm run lint` → 0 erreur.
-- `npm test` (614) + `./venv/bin/python -m pytest` (127) verts en CI et en local.
+- `npm test` (616) + `./venv/bin/python -m pytest` (128) verts en CI et en local.
 - Workflow YAML validé.
 
 ## Traçabilité (commits)
 
-> Livré en working tree dans la session du 2026-08-08. À commiter en référençant cette EPIC.
+> Commit : `7fe615b` (`chore(ci): lint biome 0 erreur + workflow GitHub Actions
+> (typecheck/lint/vitest/pytest) + docs chiffres réels [EPIC-004]`).
 
 ## Décisions
 

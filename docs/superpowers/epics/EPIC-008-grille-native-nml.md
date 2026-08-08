@@ -7,8 +7,8 @@
 
 ## Objectif
 
-Utiliser la **grille native déjà présente dans la collection** (≈22 % des 56 752 ENTRY) au lieu de la
-recalculer : BPM **et phase** (position du beat 1) exacts de Traktor, zéro analyse.
+Utiliser la **grille native déjà présente dans la collection** (21,8 % des 56 645 ENTRY — mesuré) au
+lieu de la recalculer : BPM **et phase** (position du beat 1) exacts de Traktor, zéro analyse.
 
 ## Contexte & découvertes (mesures sur la collection réelle)
 
@@ -17,14 +17,16 @@ recalculer : BPM **et phase** (position du beat 1) exacts de Traktor, zéro anal
 - La donnée vit dans : `<TEMPO BPM="…" BPM_QUALITY="…">` (13 410) et
   `<CUE_V2 TYPE="4" START="…"><GRID BPM="…"/></CUE_V2>` (12 323) — **START = phase** (position du beat 1),
   **GRID BPM = tempo**. Reconstruction : `t_k = START + k × 60/BPM`.
-- **76,4 % des pistes n'ont rien** → la cascade NML → détection client reste active pour elles.
+- **76,3 % des pistes n'ont rien** (ni TEMPO ni TYPE=4, mesuré sur 56 645) → la cascade NML →
+  détection client reste active pour elles.
 - Valeurs aberrantes mesurées : BPM 1.0 / 17178 → garde de plausibilité nécessaire.
 
 ## Tâches
 
 - [x] **`nml.py::get_beatgrid(entry)`** : parse TEMPO + TYPE=4/GRID → `{bpm, phase, quality}` ou None ;
-      GRID autoritaire sur TEMPO ; `BPM_QUALITY < 50` rejetée (sauf GRID présent) ; **borne 20–400 BPM**
-      (valeurs pourries de la collection).
+      GRID autoritaire sur TEMPO ; `BPM_QUALITY < 50` rejetée (sauf GRID présent) — garde théorique :
+      **BPM_QUALITY vaut toujours 100 sur la collection réelle**, elle ne se déclenche jamais en pratique
+      mais reste une défense correcte ; **borne 20–400 BPM** (valeurs pourries 1.0–17178 mesurées).
 - [x] **`app.py`** : `/api/track/match` expose `grid: {bpm, phase, quality}` par entrée.
 - [x] **`cueEditor.ts`** : état `_phase` + `_gridSource` (`nml`|`detected`|`manual`) ; la grille native
       **pré-remplit le BPM et applique la phase** (`buildBeats(bpm, dur, phase)` — param `startAt`
@@ -47,12 +49,14 @@ recalculer : BPM **et phase** (position du beat 1) exacts de Traktor, zéro anal
 
 ## Validation
 
-- Suite complète : **614 vitest** (+7) / **127 pytest** (+8) / typecheck 0 / lint 0 / build OK.
+- Suite complète : **614 vitest** (+7) / **128 pytest** (+8) / typecheck 0 / lint 0 / build OK — suite
+  stabilisée en `--sequence.shuffle` (voir rapport `2026-08-08-audit-epics-review.md` §3).
 - Bundle servi vérifié (cache-buster).
 
 ## Traçabilité (commits)
 
-> Livré en working tree dans la session du 2026-08-08. À commiter en référençant cette EPIC.
+> Commit : `24d67de` (`feat(beatgrid): grille native Traktor (TEMPO + CUE_V2 TYPE=4/GRID) exposée et
+> appliquée — BPM + phase réels [EPIC-008]`).
 
 ## Décisions
 

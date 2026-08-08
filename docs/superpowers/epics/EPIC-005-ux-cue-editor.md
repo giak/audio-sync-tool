@@ -31,11 +31,12 @@ Rendre l'éditeur cues découvrable et confortable : un accès visible depuis la
 
 - Tests : toggle plein écran, idempotence, Échap en plein écran (modal reste ouverte), reset au destroy,
   bouton Cues, entrée menu contextuel.
-- Suite complète : 614 vitest / 127 pytest / typecheck / lint / build.
+- Suite complète : 614 vitest / 128 pytest / typecheck / lint / build.
 
 ## Traçabilité (commits)
 
-> Livré en working tree dans la session du 2026-08-08. À commiter en référençant cette EPIC.
+> Commit : `5aad88e` (`feat(ui): accès à l'éditeur cues depuis la playlist — bouton Cues, plein écran,
+> sélection homonymes [EPIC-005]`).
 
 ## Décisions
 

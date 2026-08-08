@@ -279,6 +279,11 @@ def track_match():
     local = request.args.get('path', '')
     if not local or not os.path.exists(local):
         return jsonify({'ok': False, 'error': 'fichier introuvable'}), 404
+    # Aligné sur /audio, /delete, /api/track/add : la route lisait getsize() de
+    # n'importe quel chemin existant hors des dossiers autorisés (fuite d'info,
+    # CWE-22 faible). La piste provient toujours de source_data/epars_dirs.
+    if not is_path_allowed(local):
+        return jsonify({'ok': False, 'error': 'chemin hors des dossiers autorisés'}), 403
     tree, idx, nml_path = get_nml_index()
     if not tree:
         return jsonify({'ok': False, 'error': 'NML non configuré ou invalide'}), 400

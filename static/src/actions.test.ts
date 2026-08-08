@@ -14,12 +14,21 @@ const {
   closeAllModals,
   openModal,
   showError,
+  // Références aux éléments config CRÉÉS AVANT l'import d'actions.ts : les
+  // constantes module-level de actions.ts (cfgSelect…) y sont liées à l'import.
+  // Le describe « actions » vide document.body à chaque test ; pour que ces
+  // références restent valides (flaky shuffle), on ré-attache ces éléments
+  // après chaque vidage.
+  cfgElements,
 } = vi.hoisted(() => {
   // Create config DOM elements BEFORE module import so cfgSelect/cfgStatus are initialized
   document.body.innerHTML = `
     <select id="cfg-select"></select>
     <input id="cfg-name" />
     <input id="cfg-source" />
+    <input id="cfg-traktor-nml-path" />
+    <input id="cfg-traktor-export-root" />
+    <input id="cfg-traktor-export-volume" />
     <textarea id="cfg-epars"></textarea>
     <div id="config-status"></div>
   `;
@@ -35,6 +44,11 @@ const {
     closeAllModals: vi.fn(),
     openModal: vi.fn(),
     showError: vi.fn(),
+    cfgElements: Array.from(
+      document.querySelectorAll(
+        '#cfg-select, #cfg-name, #cfg-source, #cfg-traktor-nml-path, #cfg-traktor-export-root, #cfg-traktor-export-volume, #cfg-epars, #config-status',
+      ),
+    ),
   };
 });
 
@@ -56,6 +70,14 @@ describe('config', () => {
     ['btn-add-config', 'btn-del-config', 'btn-save-config', 'status-text'].forEach(id => {
       document.getElementById(id)?.remove();
     });
+    // Le describe « actions » vide document.body à chaque test : si l'ordre
+    // shuffle le fait tourner avant « config », les éléments config du hoisted
+    // sont détachés du DOM. Or actions.ts a capturé ces éléments à l'import
+    // (constantes cfgSelect…), donc il faut ré-attacher ces mêmes éléments,
+    // pas en créer de nouveaux (flaky shuffle).
+    for (const el of cfgElements) {
+      if (!el.isConnected) document.body.appendChild(el);
+    }
   });
 
   it('renderConfigSelect populates the select element', () => {
@@ -141,7 +163,13 @@ describe('actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.mockReset(); // ← clear leftover implementations (mockResolvedValue, etc.)
+    // clearAllMocks garde les implémentations posées par mockReturnValue : le test
+    // « batch copy » pose getBatchCopy={target:/dest,…} qui fuirait sinon (flaky shuffle).
+    getBatchCopy.mockReturnValue({ target: '', files: [] });
     document.body.innerHTML = '';
+    // Ré-attacher les éléments config capturés à l'import par actions.ts :
+    // le describe « config » (qui tourne peut-être après en shuffle) en dépend.
+    for (const el of cfgElements) document.body.appendChild(el);
     state.sourceFiles = {};
     state.eparsFiles = {};
     state.journal = [];

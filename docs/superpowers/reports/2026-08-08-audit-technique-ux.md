@@ -388,7 +388,7 @@ debugger conditionnellement (`--debug` en arg) et servir le mode dev via `npm ru
 | Point | Évaluation |
 |---|---|
 | Path traversal (`/audio`, `/delete`) | ✅ protégé par `is_path_allowed` + `realpath` |
-| `/api/track/match` | ⚠️ lit `getsize()` de **n'importe quel chemin existant** (pas de `is_path_allowed`) — pas grave en local, mais aligner par cohérence |
+| `/api/track/match` | ✅ **aligné** depuis la review EPICs (2026-08-08, R2) : garde `is_path_allowed` → 403 hors dossiers autorisés + test dédié |
 | Écriture NML | ✅ atomique + backup (mieux que les JSON de l'app, cf. B12) |
 | Round-trip NML | ✅ objectif réaliste (attributs + ordre, pas byte-identical) — conforme à l'audit |
 | Parse NML à chaque GET | ⚠️ 0,5 s de parse par requête (`get_nml_index` sans cache). Acceptable (1,5 s/POST mesuré), mais un cache mtime éviterait le re-parse sur `/match` |

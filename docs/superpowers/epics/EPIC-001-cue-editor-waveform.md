@@ -16,8 +16,9 @@
 - 3 routes Flask : `/api/nml/status`, `/api/track/match`, `/api/track/cues`.
 - Composant frontend `cueEditor` (wavesurfer.js 7.12.11 + plugin Regions) branché sur `.pl-track`.
 - Découvertes de l'audit NML (collection réelle 56 645 entrées) : HOTCUE **0..7**, loop = `TYPE=5`,
-  éditable = `TYPE∈{0,5}` ET `HOTCUE 0..7` (masquer TYPE=3/4 et HOTCUE=-1), multi-match ≈ 12 %
-  (sélecteur d'homonymes obligatoire), ne jamais reconstruire `DISPL_ORDER`.
+  éditable = `TYPE∈{0,5}` ET `HOTCUE 0..7` (masquer TYPE=3/4 et HOTCUE=-1), multi-match fréquent
+  (**12,2 % des clés `(FILE, FILESIZE)` ambiguës → 27,8 % des entrées concernées**, soit ~1 piste sur 8
+  avec un homonyme — sélecteur d'homonymes obligatoire), ne jamais reconstruire `DISPL_ORDER`.
 
 ## Tâches (résumé — détail dans le plan)
 

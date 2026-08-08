@@ -37,11 +37,14 @@ Caler les cues/loops dessinés sur une grille de beats et permettre l'écoute co
 
 ## Validation
 
-- 49 tests dédiés (beatgrid + snap + BPM + lecture boucle + pauses), suite complète verte.
+- 9 tests dédiés dans `beatgrid.test.ts` + tests snap/BPM/lecture-boucle dans `cueEditor.test.ts`
+  (62 tests au total sur les 2 fichiers), suite complète verte — stabilisée en `--sequence.shuffle`
+  (voir rapport `2026-08-08-audit-epics-review.md` §3).
 
 ## Traçabilité (commits)
 
-> Livré en working tree dans la session du 2026-08-08. À commiter en référençant cette EPIC.
+> Commit : `e9391b2` (`feat(cue-editor): snap beatgrid + lecture de boucle (🔁 Play) + slots A–H pour
+> les loops [EPIC-006]`).
 
 ## Décisions
 

@@ -1372,7 +1372,8 @@ def test_nml_status_configured(client, tmp_path, monkeypatch):
 def test_track_match_single(client, tmp_path, monkeypatch):
     nml_path = tmp_path / 'c.nml'
     nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
-    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(tmp_path)})
     filename = 'Carbon Decay - In The Warehouse.mp3'  # de la fixture
     local = tmp_path / filename
     local.write_bytes(b'x' * 5243)
@@ -1385,12 +1386,35 @@ def test_track_match_single(client, tmp_path, monkeypatch):
     assert data['entries'][0]['filename'] == filename
 
 
+def test_track_match_blocks_path_outside_allowed_dirs(client, tmp_path, monkeypatch):
+    """B13 : /api/track/match refuse un chemin hors des dossiers autorisés (403)
+    — la route lisait getsize() de n'importe quel fichier existant (fuite d'info)."""
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    allowed = tmp_path / 'allowed'
+    os.makedirs(allowed)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(allowed)})
+    # Fichier EXISTANT mais hors des dossiers autorisés (frère de tmp_path).
+    local = tmp_path / 'Carbon Decay - In The Warehouse.mp3'
+    local.write_bytes(b'x' * 5243)
+    rv = client.get('/api/track/match', query_string={'path': str(local)})
+    assert rv.status_code == 403
+    assert rv.get_json()['ok'] is False
+    # Chemin dans les dossiers autorisés → toujours OK.
+    in_allowed = allowed / 'Carbon Decay - In The Warehouse.mp3'
+    in_allowed.write_bytes(b'x' * 5243)
+    rv2 = client.get('/api/track/match', query_string={'path': str(in_allowed)})
+    assert rv2.status_code == 200
+
+
 def test_track_match_exposes_native_grid(client, tmp_path, monkeypatch):
     """P1 : /api/track/match expose la grille native (TEMPO + TYPE=4/GRID) —
     {bpm, phase, quality} — pour que l'éditeur cale la grille sans détection."""
     nml_path = tmp_path / 'c.nml'
     nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
-    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(tmp_path)})
     filename = 'Carbon Decay - In The Warehouse.mp3'
     local = tmp_path / filename
     local.write_bytes(b'x' * 5243)
@@ -1407,7 +1431,8 @@ def test_track_match_grid_none_without_data(client, tmp_path, monkeypatch):
     """Piste sans TEMPO ni grille TYPE=4 → grid: None (le frontend détectera)."""
     nml_path = tmp_path / 'c.nml'
     nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
-    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(tmp_path)})
     import nml
     tree = nml.load_nml(str(nml_path))
     coll = tree.getroot().find('./COLLECTION')
@@ -1734,7 +1759,10 @@ def _setup_cues_nml(client, tmp_path, monkeypatch, nml_name='c.nml'):
     """Configure un NML jouable + une piste matchée pour les tests de la route cues."""
     nml_path = tmp_path / nml_name
     nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
-    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    # source_data = tmp_path : /api/track/match exige le chemin dans les dossiers
+    # autorisés (garde is_path_allowed, alignée sur /audio — audit B13).
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(tmp_path)})
     filename = 'Carbon Decay - In The Warehouse.mp3'
     filesize = 5243
     local = tmp_path / filename

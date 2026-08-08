@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "test:shuffle": "vitest run --sequence.shuffle",
     "test:watch": "vitest",
     "build": "node build.js && node scripts/validate-build.js",
     "start": "fuser -k 8765/tcp 2>/dev/null; npm run build && ./venv/bin/python app.py",

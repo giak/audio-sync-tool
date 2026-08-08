@@ -43,6 +43,11 @@ jobs:
       - name: Vitest
         run: npm test
 
+      # Ordre d'exécution aléatoire : détecte les fuites d'état entre tests
+      # (flakiness) que le run séquentiel ne voit pas. Cf. review EPICs 2026-08-08.
+      - name: Vitest (shuffle)
+        run: npm run test:shuffle
+
       - name: Pytest
         run: python -m pytest -q
 

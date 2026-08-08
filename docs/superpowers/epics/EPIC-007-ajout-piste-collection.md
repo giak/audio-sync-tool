@@ -37,11 +37,12 @@ Sortir du cul-de-sac « ⚠️ Piste absente de la collection — sauvegarde des
 
 - Tests : ajout OK (fichier + backup + re-match), déjà présent, 404/403/400, override volume, racine
   dossier source, flux complet frontend + erreur + reset + **race**.
-- Suite complète : 614 vitest / 127 pytest / typecheck / lint / build.
+- Suite complète : 614 vitest / 128 pytest / typecheck / lint / build.
 
 ## Traçabilité (commits)
 
-> Livré en working tree dans la session du 2026-08-08. À commiter en référençant cette EPIC.
+> Commit : `f198942` (`feat(api): POST /api/track/add — création d'une entrée absente dans
+> collection.nml [EPIC-007]`).
 
 ## Décisions
 

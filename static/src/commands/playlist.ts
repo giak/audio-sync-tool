@@ -213,8 +213,13 @@ registry.bind({
     if (!focused) return;
     const items = Array.from(focused.parentNode!.children);
     const index = items.indexOf(focused);
-    if (index === -1) return;
+    // Garde miroir de reorderTrack : un move invalide est un no-op silencieux.
+    // Sans cette garde, on mettrait playlistTrackFocusIndex = -1 et le focus
+    // serait perdu au prochain render (trackEls[-1] indéfini).
+    if (index <= 0) return;
     reorderTrack(name, index, index - 1);
+    // Le track déplacé suit le focus (évite que l'auto-focus saute au re-render).
+    state.playlistTrackFocusIndex = index - 1;
     // auto-rendered via eparsPlaylist:changed
   },
 });
@@ -230,8 +235,11 @@ registry.bind({
     if (!focused) return;
     const items = Array.from(focused.parentNode!.children);
     const index = items.indexOf(focused);
-    if (index === -1) return;
+    // Garde miroir de reorderTrack (voir commentaire ci-dessus).
+    if (index === -1 || index >= items.length - 1) return;
     reorderTrack(name, index, index + 1);
+    // Le track déplacé suit le focus (évite que l'auto-focus saute au re-render).
+    state.playlistTrackFocusIndex = index + 1;
     // auto-rendered via eparsPlaylist:changed
   },
 });

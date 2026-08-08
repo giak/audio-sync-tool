@@ -23,7 +23,7 @@ ne testaient pas la forme réelle des données ni le chemin d'exécution réel).
 - **Correctif** : `CueDTO.start/len` élargis `number | string` + `Number()` à la frontière.
 - **Test** : forme réelle de l'API (strings) dans cueModel.test / cueEditor.test.
 
-### B3 — 🔴 Sauvegarde impossible sur homonymes (multi-match, ≈12 %)
+### B3 — 🔴 Sauvegarde impossible sur homonymes (multi-match : 12,2 % des clés / 27,8 % des entrées)
 - **Cause** : `saveCues` omettait le champ `entry` → 409 systématique.
 - **Correctif** : `_entryRef.entry` transporté dans le payload ; sélecteur affiche DIR/VOLUME.
 - **Test** : simulation multi-match → `api` appelé avec `entry: <index>`.
@@ -52,9 +52,10 @@ ne testaient pas la forme réelle des données ni le chemin d'exécution réel).
 
 ## Traçabilité (commits)
 
-> Les correctifs B1–B7 ont été livrés **en working tree** dans la session du 2026-08-08 (avant la création
-> de ce registre). À commiter en référençant cette EPIC. L'état validé : 614 vitest / 127 pytest /
-> typecheck 0 / lint 0 / build OK.
+> Commit : `a21f1ae` (`fix(cue-editor): correctifs bloquants audit — route /api/track/cues après
+> app.run, start/len cohercés, entry multi-match, transport play-pause [EPIC-002]`).
+> L'état validé : 614 vitest / **128** pytest / typecheck 0 / lint 0 / build OK — suite stabilisée en
+> `--sequence.shuffle` (voir rapport `2026-08-08-audit-epics-review.md` §3).
 
 ## Décisions
 

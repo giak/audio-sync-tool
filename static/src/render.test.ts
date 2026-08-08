@@ -445,6 +445,9 @@ describe('patchSourceFileAfterCopy', () => {
 describe('patchEparsFileAfterCopy', () => {
   beforeEach(() => {
     resetState();
+    // clearAllMocks() garde les implémentations posées par mockReturnValue :
+    // un test qui a mis countAllEparsFiles=42 polluerait les suivants (flaky shuffle).
+    vi.mocked(countAllEparsFiles).mockReturnValue(0);
   });
 
   function setupEparsDOM(filename = 'song.mp3', eparDir = '/media/usb', initStatus = 'nouveau'): void {
@@ -1220,6 +1223,10 @@ describe('renderEpars', () => {
     state.sourceFiles = {};
     state.journal = [];
     vi.clearAllMocks();
+    // Restauration du défaut (clearAllMocks garde les implémentations posées) :
+    // « countAllEparsFiles=42 » posé par patchEparsFileAfterCopy ne doit pas fuiter
+    // dans le header count de renderEpars (flaky shuffle).
+    vi.mocked(countAllEparsFiles).mockReturnValue(0);
   });
 
   it('renders empty container when no epars files', () => {
@@ -1288,6 +1295,10 @@ describe('renderSource', () => {
     state.sourceExpanded.clear();
     state.sourceNodeMap.clear();
     vi.clearAllMocks();
+    // Restauration des implémentations par défaut (clearAllMocks ne les retire pas) :
+    // « dirHasMatchingDescendant → true » posé par un test doit être remis à false
+    // sinon il fuit dans renderFilteredSource des tests suivants (flaky shuffle).
+    vi.mocked(dirHasMatchingDescendant).mockReturnValue(false);
   });
 
   it('renders empty container when no source files', () => {

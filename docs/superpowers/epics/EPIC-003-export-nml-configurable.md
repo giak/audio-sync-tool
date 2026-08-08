@@ -35,7 +35,8 @@ Rendre l'export NML configurable depuis l'interface (fin de l'échec silencieux)
 
 ## Traçabilité (commits)
 
-> Livré en working tree dans la session du 2026-08-08. À commiter en référençant cette EPIC.
+> Commit : `df58788` (`feat(export): export NML configurable (traktor_export_root/volume) + DISPL_ORDER
+> préservé au round-trip [EPIC-003]`).
 
 ## Décisions
 
