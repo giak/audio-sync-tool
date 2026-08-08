@@ -743,6 +743,19 @@ header h1 {
   box-shadow: 0 0 8px rgba(255, 204, 0, 0.35);
 }
 .cue-play.snap-on { color: var(--accent); border-color: var(--accent); }
+/* Nudge de phase (EPIC-009) : boutons compacts à côté du champ BPM */
+#cue-btn-nudge-bwd,
+#cue-btn-nudge-fwd {
+  min-width: 30px;
+  height: 30px;
+  font-size: 12px;
+  padding: 0 4px;
+}
+.cue-play.beat1-on {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.35);
+}
 .cue-play.loop-playing {
   color: var(--led-amber); border-color: var(--led-amber);
   box-shadow: 0 0 8px rgba(255, 204, 0, 0.35);

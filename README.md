@@ -183,7 +183,7 @@ npm run format             # Formatage Biome
 #### Frontend (vitest)
 
 ```bash
-npm test                   # 616 tests, 26 fichiers
+npm test                   # 627 tests, 26 fichiers
 npm run coverage           # Clean → test → rapport (~89% lignes)
 ```
 
@@ -192,7 +192,7 @@ npm run coverage           # Clean → test → rapport (~89% lignes)
 | Suite | Tests | Couverture |
 |-------|-------|------------|
 | Pytest | 127 | — |
-| Vitest | 616 | 88.8% lignes, 82.6% branches |
+| Vitest | 627 | 88.8% lignes, 82.6% branches |
 
 ### Évolutions & traçabilité
 

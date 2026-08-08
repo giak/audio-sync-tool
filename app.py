@@ -24,6 +24,9 @@ JOURNAL_PATH = os.path.join(DATA_DIR, 'journal.json')
 CACHE_PATH = os.path.join(DATA_DIR, 'cache.json')
 PLAYLISTS_PATH = os.path.join(DATA_DIR, 'playlists.json')
 RATINGS_PATH = os.path.join(DATA_DIR, 'ratings.json')
+# Cache de grille par piste (EPIC-009) — fichier séparé du cache de scan :
+# {bpm, phase, source} persistés entre sessions pour les pistes sans grille NML.
+BEATGRID_PATH = os.path.join(DATA_DIR, 'beatgrids.json')
 
 
 def load_json(path, default=None):
@@ -836,6 +839,75 @@ def track_cues():
                  'filename': filename, 'details': f'{len(cues)} cues',
                  'status': 'cues'})
     return jsonify({'ok': True})
+
+
+# ── Beatgrid cache (EPIC-009) ─────────────────────────────────────────────
+
+
+def _beatgrid_path_or_error(local):
+    """Valide `local` pour le cache beatgrid → (realpath, None) ou (None, réponse)."""
+    if not local or not os.path.exists(local):
+        return None, (jsonify({'ok': False, 'error': 'fichier introuvable'}), 404)
+    if not is_path_allowed(local):
+        return None, (jsonify({'ok': False, 'error': 'chemin hors des dossiers autorisés'}), 403)
+    return os.path.realpath(local), None
+
+
+@app.route('/api/beatgrid', methods=['GET', 'PUT'])
+def beatgrid_cache():
+    """Cache de grille par piste (data/beatgrids.json), clé = chemin réel du fichier.
+
+    - GET ?path=… → {bpm, phase, source} ou {} si absent / périmé (FILESIZE changé).
+    - PUT {path, bpm, phase, source} → écrit. Le frontend persiste ainsi le BPM/phase
+      détecté ou corrigé manuellement (cascade NML → cache → détection).
+    """
+    if request.method == 'PUT':
+        data = request.json
+        if not data or 'path' not in data:
+            return jsonify({'ok': False, 'error': 'path manquant'}), 400
+        local = data.get('path', '')
+        real, err = _beatgrid_path_or_error(local)
+        if err:
+            return err
+        bpm = data.get('bpm')
+        phase = data.get('phase', 0)
+        source = data.get('source', '')
+        try:
+            bpm = float(bpm)
+            phase = float(phase)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'error': 'bpm/phase non numériques'}), 400
+        # Mêmes bornes que le frontend (garde 20–400) : on ne cache jamais un BPM aberrant.
+        if not math.isfinite(bpm) or bpm <= 20 or bpm >= 400:
+            return jsonify({'ok': False, 'error': 'bpm invalide'}), 400
+        if not math.isfinite(phase) or phase < 0:
+            return jsonify({'ok': False, 'error': 'phase invalide'}), 400
+        if source not in ('nml', 'detected', 'manual'):
+            return jsonify({'ok': False, 'error': 'source invalide'}), 400
+        cache = load_json(BEATGRID_PATH, {})
+        cache[real] = {
+            'bpm': bpm,
+            'phase': phase,
+            'source': source,
+            # Invalidation : le fichier audio a changé (FILESIZE suffit en pratique).
+            'filesize': os.path.getsize(local),
+            'updated': datetime.now().isoformat(),
+        }
+        save_json(BEATGRID_PATH, cache)
+        return jsonify({'ok': True})
+
+    # GET
+    local = request.args.get('path', '')
+    real, err = _beatgrid_path_or_error(local)
+    if err:
+        return err
+    entry = load_json(BEATGRID_PATH, {}).get(real)
+    if not entry:
+        return jsonify({})
+    if entry.get('filesize') != os.path.getsize(local):
+        return jsonify({})  # fichier remplacé → cache périmé
+    return jsonify({'bpm': entry['bpm'], 'phase': entry.get('phase', 0),
+                    'source': entry.get('source', '')})
 
 
 if __name__ == '__main__':

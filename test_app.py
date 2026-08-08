@@ -14,6 +14,7 @@ def clean_state(monkeypatch, tmp_path):
     monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
     monkeypatch.setattr('app.PLAYLISTS_PATH', str(tmp_path / 'playlists.json'))
     monkeypatch.setattr('app.RATINGS_PATH', str(tmp_path / 'ratings.json'))
+    monkeypatch.setattr('app.BEATGRID_PATH', str(tmp_path / 'beatgrids.json'))
 
 
 @pytest.fixture
@@ -1445,6 +1446,89 @@ def test_track_match_grid_none_without_data(client, tmp_path, monkeypatch):
     rv = client.get('/api/track/match', query_string={'path': str(local)})
     assert rv.status_code == 200
     assert rv.get_json()['entries'][0]['grid'] is None
+
+
+# ── Beatgrid cache (EPIC-009) ─────────────────────────────────────────────
+
+
+def test_beatgrid_empty(client, tmp_path):
+    """GET /api/beatgrid renvoie {} quand aucun cache n'existe pour la piste."""
+    mp3 = tmp_path / 'song.mp3'
+    mp3.write_bytes(b'x' * 10)
+    client.post('/config', json=make_cfg(source_data=str(tmp_path)))
+    rv = client.get('/api/beatgrid', query_string={'path': str(mp3)})
+    assert rv.status_code == 200
+    assert rv.get_json() == {}
+
+
+def test_beatgrid_roundtrip(client, tmp_path):
+    """PUT puis GET : {bpm, phase, source} persistés entre requêtes."""
+    mp3 = tmp_path / 'song.mp3'
+    mp3.write_bytes(b'x' * 10)
+    client.post('/config', json=make_cfg(source_data=str(tmp_path)))
+    rv = client.put('/api/beatgrid', json={
+        'path': str(mp3), 'bpm': 128.5, 'phase': 1.25, 'source': 'manual'})
+    assert rv.status_code == 200
+    assert rv.get_json() == {'ok': True}
+    rv = client.get('/api/beatgrid', query_string={'path': str(mp3)})
+    assert rv.status_code == 200
+    assert rv.get_json() == {'bpm': 128.5, 'phase': 1.25, 'source': 'manual'}
+
+
+def test_beatgrid_stale_when_file_changes(client, tmp_path):
+    """Le cache est invalidé si FILESIZE change (fichier audio remplacé)."""
+    mp3 = tmp_path / 'song.mp3'
+    mp3.write_bytes(b'x' * 10)
+    client.post('/config', json=make_cfg(source_data=str(tmp_path)))
+    client.put('/api/beatgrid', json={
+        'path': str(mp3), 'bpm': 128, 'phase': 0, 'source': 'detected'})
+    # Le fichier change de taille → le cache ne s'applique plus.
+    mp3.write_bytes(b'x' * 20)
+    rv = client.get('/api/beatgrid', query_string={'path': str(mp3)})
+    assert rv.status_code == 200
+    assert rv.get_json() == {}
+
+
+def test_beatgrid_outside_allowed_dirs(client, tmp_path):
+    """PUT/GET /api/beatgrid refusent un chemin hors dossiers autorisés (403)."""
+    allowed = tmp_path / 'allowed'
+    allowed.mkdir()
+    client.post('/config', json=make_cfg(source_data=str(allowed)))
+    outside = tmp_path / 'song.mp3'
+    outside.write_bytes(b'x' * 10)
+    rv = client.put('/api/beatgrid', json={
+        'path': str(outside), 'bpm': 128, 'phase': 0, 'source': 'manual'})
+    assert rv.status_code == 403
+    rv = client.get('/api/beatgrid', query_string={'path': str(outside)})
+    assert rv.status_code == 403
+
+
+def test_beatgrid_invalid_payload(client, tmp_path):
+    """PUT avec payload invalide → 400 (bpm hors bornes, source inconnue)."""
+    mp3 = tmp_path / 'song.mp3'
+    mp3.write_bytes(b'x' * 10)
+    client.post('/config', json=make_cfg(source_data=str(tmp_path)))
+    # bpm hors bornes (garde 20–400, comme le frontend)
+    rv = client.put('/api/beatgrid', json={
+        'path': str(mp3), 'bpm': 1.0, 'phase': 0, 'source': 'manual'})
+    assert rv.status_code == 400
+    # source inconnue
+    rv = client.put('/api/beatgrid', json={
+        'path': str(mp3), 'bpm': 128, 'phase': 0, 'source': 'hack'})
+    assert rv.status_code == 400
+    # path manquant
+    rv = client.put('/api/beatgrid', json={'bpm': 128, 'phase': 0, 'source': 'manual'})
+    assert rv.status_code == 400
+
+
+def test_beatgrid_missing_file(client, tmp_path):
+    """GET/PUT sur un fichier inexistant → 404."""
+    client.post('/config', json=make_cfg(source_data=str(tmp_path)))
+    rv = client.get('/api/beatgrid', query_string={'path': str(tmp_path / 'ghost.mp3')})
+    assert rv.status_code == 404
+    rv = client.put('/api/beatgrid', json={
+        'path': str(tmp_path / 'ghost.mp3'), 'bpm': 128, 'phase': 0, 'source': 'manual'})
+    assert rv.status_code == 404
 
 
 def test_cues_write_ok(client, tmp_path, monkeypatch):

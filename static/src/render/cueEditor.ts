@@ -2,7 +2,7 @@
 import WaveSurfer from 'wavesurfer.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
 import { api } from '../api.js';
-import { buildBeats, detectBPMFromUrl, snapToBeat } from '../beatgrid.js';
+import { beatInterval, buildBeats, detectBPMFromUrl, snapToBeat } from '../beatgrid.js';
 import type { CueDTO } from '../cueModel.js';
 import { cuesToRegions, hotToLabel, regionToCue } from '../cueModel.js';
 import { on, state } from '../state.js';
@@ -47,6 +47,8 @@ let _gridSource: 'nml' | 'detected' | 'manual' | null = null;
 let _snapOn = true;
 /** Boucle en cours de lecture (🔁 Play) : {start, end} ou null. */
 let _loopPlay: { start: number; end: number } | null = null;
+/** Mode « poser le beat 1 » (EPIC-009) : le prochain clic sur la waveform fixe la phase. */
+let _beat1Mode = false;
 
 const _wired = new WeakSet<Element>();
 
@@ -134,10 +136,12 @@ function updateBpmBadge(): void {
 
 /** Applique une grille native NML (TEMPO + TYPE=4/GRID) : BPM + phase réels.
  *  Garde de plausibilité : les collections réelles contiennent des BPM aberrants
- *  (1.0, 17178) — on les ignore plutôt que de produire une grille absurde. */
-function applyNativeGrid(grid?: { bpm?: number | null; phase?: number | null } | null): void {
-  if (!grid || typeof grid.bpm !== 'number' || !Number.isFinite(grid.bpm)) return;
-  if (grid.bpm <= 20 || grid.bpm >= 400) return;
+ *  (1.0, 17178) — on les ignore plutôt que de produire une grille absurde.
+ *  Renvoie false si la grille est absente/invalide → l'appelant bascule sur le
+ *  cache serveur / la détection (EPIC-009 : cascade NML → cache → détection). */
+function applyNativeGrid(grid?: { bpm?: number | null; phase?: number | null } | null): boolean {
+  if (!grid || typeof grid.bpm !== 'number' || !Number.isFinite(grid.bpm)) return false;
+  if (grid.bpm <= 20 || grid.bpm >= 400) return false;
   _bpm = grid.bpm;
   _phase = typeof grid.phase === 'number' && Number.isFinite(grid.phase) ? grid.phase : 0;
   _gridSource = 'nml';
@@ -145,10 +149,20 @@ function applyNativeGrid(grid?: { bpm?: number | null; phase?: number | null } |
   if (input) input.value = String(grid.bpm);
   rebuildGrid();
   updateBpmBadge();
+  return true;
 }
 
 function snapBtnEl(): HTMLButtonElement | null {
   return document.getElementById('cue-btn-snap') as HTMLButtonElement | null;
+}
+
+function beat1BtnEl(): HTMLButtonElement | null {
+  return document.getElementById('cue-btn-beat1') as HTMLButtonElement | null;
+}
+
+function updateBeat1Btn(): void {
+  const btn = beat1BtnEl();
+  if (btn) btn.classList.toggle('beat1-on', _beat1Mode);
 }
 
 function loopPlayBtnEl(): HTMLButtonElement | null {
@@ -235,6 +249,84 @@ function renderGrid(): void {
   }
 }
 
+/** Persiste la grille courante {bpm, phase, source} dans le cache serveur
+ *  (EPIC-009) — survit à la fermeture, réutilisée à la prochaine ouverture.
+ *  Best-effort : un échec de cache ne bloque jamais l'édition. */
+function saveGridToCache(): void {
+  if (!_trackPath || _bpm === null || _gridSource === null) return;
+  void Promise.resolve(
+    api('/api/beatgrid', {
+      method: 'PUT',
+      body: JSON.stringify({ path: _trackPath, bpm: _bpm, phase: _phase, source: _gridSource }),
+    }),
+  ).catch(() => {});
+}
+
+/** Nudge de phase : décale la grille d'un quart de beat (EPIC-009).
+ *  Toute correction manuelle marque la grille « manuel » (badge). */
+export function nudgePhase(dir: -1 | 1): void {
+  if (_bpm === null || !ws) {
+    setStatus("⚠️ Saisis un BPM d'abord pour caler la grille.");
+    return;
+  }
+  const quarter = beatInterval(_bpm) / 4;
+  _phase = Math.max(0, _phase + dir * quarter);
+  _gridSource = 'manual';
+  rebuildGrid();
+  updateBpmBadge();
+  saveGridToCache();
+  setStatus(`🎛 Calage ${dir < 0 ? 'reculé' : 'avancé'} d'un quart de beat — beat 1 à ${_phase.toFixed(2)} s.`);
+}
+
+/** Bascule le mode « poser le beat 1 » : le prochain clic sur la waveform
+ *  (événement click wavesurfer, relativeX 0..1) fixe _phase. */
+export function toggleBeat1Mode(): void {
+  _beat1Mode = !_beat1Mode;
+  updateBeat1Btn();
+  setStatus(_beat1Mode ? '◎ Clique sur la waveform pour poser le beat 1 ici.' : '');
+}
+
+/** Cascade grille : NML (native, appliquée au ready) → cache serveur → détection client.
+ *  Règles :
+ *  - Le cache « manual » (correction explicite de l'utilisateur) PRIME sur la grille native.
+ *  - Le cache « detected » ne remplace JAMAIS une grille déjà appliquée (native ou saisie).
+ *  - Grille native aberrante (garde 20–400 rejetée au ready) → le cache s'applique quand même. */
+async function loadCachedGrid(): Promise<void> {
+  if (!_trackPath || !ws) return;
+  let data: { bpm?: number; phase?: number; source?: string } | undefined;
+  try {
+    data = await api<{ bpm?: number; phase?: number; source?: string }>(
+      `/api/beatgrid?path=${encodeURIComponent(_trackPath)}`,
+    );
+  } catch {
+    if (_bpm === null) void detectAndApplyBPM(); // cache indisponible → on détecte
+    return;
+  }
+  if (typeof data?.bpm !== 'number' || !Number.isFinite(data.bpm)) {
+    if (_bpm === null) void detectAndApplyBPM(); // cache vide/périmé → détection client
+    return;
+  }
+  const isManual = data.source === 'manual';
+  // Une grille déjà appliquée (native/saisie) n'est écrasée que par une correction manuelle.
+  if (_bpm !== null && !isManual) return;
+  if (!ws) return;
+  if (data.bpm <= 20 || data.bpm >= 400) {
+    if (_bpm === null) void detectAndApplyBPM();
+    return;
+  }
+  _bpm = data.bpm;
+  _phase = typeof data.phase === 'number' && Number.isFinite(data.phase) && data.phase >= 0 ? data.phase : 0;
+  _gridSource =
+    data.source === 'nml' || data.source === 'detected' || data.source === 'manual' ? data.source : 'detected';
+  const input = bpmInputEl();
+  if (input) input.value = String(data.bpm);
+  rebuildGrid();
+  updateBpmBadge();
+  setStatus(
+    `🎛 Grille chargée du cache (${_gridSource === 'manual' ? 'manuel' : _gridSource === 'nml' ? 'NML' : 'détectée'}) — ${_bpm} BPM.`,
+  );
+}
+
 /** Premier slot A–H libre pour un loop dessiné — les cues/loops sauvegardés
  *  doivent avoir HOTCUE 0..7 (le backend refuse le reste). */
 function nextFreeSlot(): number {
@@ -269,6 +361,7 @@ async function detectAndApplyBPM(): Promise<void> {
   if (input) input.value = String(bpm);
   rebuildGrid();
   updateBpmBadge();
+  saveGridToCache();
 }
 
 /** Bascule la modal en plein écran : la waveform remplit tout l'espace
@@ -363,12 +456,28 @@ export function wireControls(root: HTMLElement = document.body): void {
     _wired.add(bpm);
     bpm.addEventListener('input', () => {
       const v = parseFloat(bpm.value);
-      _bpm = Number.isFinite(v) && v > 20 && v < 300 ? v : null;
+      _bpm = Number.isFinite(v) && v > 20 && v < 400 ? v : null; // même borne que la native/le backend
       _gridSource = _bpm !== null ? 'manual' : null;
       _phase = 0;
       rebuildGrid();
       updateBpmBadge();
+      saveGridToCache();
     });
+  }
+  const nudgeBwd = root.querySelector<HTMLButtonElement>('#cue-btn-nudge-bwd');
+  if (nudgeBwd && !_wired.has(nudgeBwd)) {
+    _wired.add(nudgeBwd);
+    nudgeBwd.addEventListener('click', () => nudgePhase(-1));
+  }
+  const nudgeFwd = root.querySelector<HTMLButtonElement>('#cue-btn-nudge-fwd');
+  if (nudgeFwd && !_wired.has(nudgeFwd)) {
+    _wired.add(nudgeFwd);
+    nudgeFwd.addEventListener('click', () => nudgePhase(1));
+  }
+  const beat1 = root.querySelector<HTMLButtonElement>('#cue-btn-beat1');
+  if (beat1 && !_wired.has(beat1)) {
+    _wired.add(beat1);
+    beat1.addEventListener('click', () => toggleBeat1Mode());
   }
   const fs = root.querySelector<HTMLButtonElement>('#cue-btn-fullscreen');
   if (fs && !_wired.has(fs)) {
@@ -602,6 +711,8 @@ export async function renderWaveform(
   _bpm = null;
   _phase = 0;
   _gridSource = null;
+  _beat1Mode = false;
+  updateBeat1Btn();
   updateSnapBtn();
   updateBpmBadge();
   const bpmInput = bpmInputEl();
@@ -651,16 +762,38 @@ export async function renderWaveform(
       refreshLiveSlot();
     });
     updateTimeUI();
+    // Clic (mode « poser le beat 1 ») : wavesurfer émet (relativeX, relativeY) 0..1.
+    ws!.on('click', (relX: number, _relY: unknown) => {
+      if (!_beat1Mode || !ws) return;
+      if (_bpm === null) {
+        setStatus("⚠️ Saisis un BPM d'abord pour poser le beat 1.");
+        toggleBeat1Mode();
+        return;
+      }
+      const t = relX * (ws.getDuration() || 0);
+      if (!Number.isFinite(t) || t < 0) return;
+      _phase = t;
+      _gridSource = 'manual';
+      rebuildGrid();
+      updateBpmBadge();
+      saveGridToCache();
+      toggleBeat1Mode(); // sort du mode une fois le beat posé
+      setStatus(`◎ Beat 1 posé à ${formatTime(t)} — grille calée.`);
+    });
+    // Cascade EPIC-009 : la grille native est appliquée d'abord, puis le cache
+    // serveur est consulté (une correction manuelle prime sur la native ; une
+    // grille native aberrante ne bloque pas le cache/détection).
     if (grid && typeof grid.bpm === 'number') {
-      // Grille native NML : BPM + phase réels de Traktor — pas de détection client.
-      applyNativeGrid(grid);
-      setStatus(
-        `🎛 Grille native Traktor — ${grid.bpm} BPM${_phase > 0 ? `, beat 1 à ${_phase.toFixed(2)}s` : ''}. Snap calé sur le rythme.`,
-      );
+      const applied = applyNativeGrid(grid);
+      if (applied) {
+        setStatus(
+          `🎛 Grille native Traktor — ${grid.bpm} BPM${_phase > 0 ? `, beat 1 à ${_phase.toFixed(2)}s` : ''}. Snap calé sur le rythme.`,
+        );
+      }
     } else {
       rebuildGrid();
-      void detectAndApplyBPM();
     }
+    void loadCachedGrid();
   });
   ws.on('play', () => setPlayingUI(true));
   ws.on('pause', () => setPlayingUI(false));
@@ -695,6 +828,8 @@ export function destroyCueEditor(): void {
   _bpm = null;
   _phase = 0;
   _gridSource = null;
+  _beat1Mode = false;
+  updateBeat1Btn();
   updateSnapBtn();
   updateBpmBadge();
   const bpmInput = bpmInputEl();

@@ -28,7 +28,7 @@
 | [EPIC-006](EPIC-006-beatgrid-snap-loop.md) | Snap beatgrid (BPM détecté/saisi) + lecture de boucle | 🟢 Livré | — | plan `2026-08-08-beatgrid-calage-bpm-basse.md` |
 | [EPIC-007](EPIC-007-ajout-piste-collection.md) | Ajouter une piste absente au collection.nml (POST /api/track/add) | 🟢 Livré | — | plan beatgrid |
 | [EPIC-008](EPIC-008-grille-native-nml.md) | Grille native Traktor (TEMPO + TYPE=4/GRID) exposée et appliquée (P1) | 🟢 Livré | — | plan beatgrid §P1 |
-| [EPIC-009](EPIC-009-phase-manuelle-cache.md) | Beatgrid P2 : contrôle de phase manuel + cache par piste | ⚪ Backlog | Haute | plan beatgrid §P2 |
+| [EPIC-009](EPIC-009-phase-manuelle-cache.md) | Beatgrid P2 : contrôle de phase manuel + cache par piste | 🟢 Livré | Haute | plan beatgrid §P2 |
 | [EPIC-010](EPIC-010-analyse-serveur-kick.md) | Beatgrid P3 : analyse serveur kick/phase (librosa) + bouton Analyser | ⚪ Backlog | Haute | plan beatgrid §P3 |
 | [EPIC-011](EPIC-011-ecriture-grille-nml.md) | Beatgrid P4 : écrire TEMPO+TYPE=4 dans le NML (le graal) | ⚪ Backlog | Moyenne | plan beatgrid §P4 |
 | [EPIC-012](EPIC-012-bande-basse-barres.md) | Beatgrid P5 : bande d'énergie basse + numéros de barre | ⚪ Backlog | Basse | plan beatgrid §P5 |
@@ -37,10 +37,14 @@
 
 ## État actuel du projet (2026-08-08)
 
-- Tests : **614 vitest** / **127 pytest** — tous verts.
+- Tests : **627 vitest** / **134 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
+- EPIC-009 livrée (phase manuelle + cache beatgrid) : nudge ←/→ 1/4, « ◎ Beat 1 », cascade
+  NML → cache (`data/beatgrids.json`) → détection, invalidation par FILESIZE.
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
-- Les travaux de session récents (EPIC-002 → EPIC-008) sont dans le **working tree** (pas encore commités
-  au moment de la création de ce registre) — à commiter avec des messages référençant les EPIC.
+- EPIC-002 → EPIC-008 livrées et **commitées** (`a21f1ae` → `24d67de`), EPIC-001 à ses commits
+  historiques, ce registre inclus dans `7bb1735`.
+- Review critique des EPICs : `reports/2026-08-08-audit-epics-review.md` (corrections chiffres,
+  stabilisation shuffle, sécurité `/api/track/match`).
 
 ## Créer une nouvelle EPIC
 

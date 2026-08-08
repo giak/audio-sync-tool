@@ -251,10 +251,13 @@
       <span id="cue-editor-time">0:00 / 0:00</span>
       <button id="cue-btn-loop" class="cue-play" title="Mode loop : glisser sur la waveform pour dessiner une boucle (calée sur la grille si active)">⟳ Loop</button>
       <button id="cue-btn-loopplay" class="cue-play" title="Lire la boucle sous le curseur en continu">🔁 Play</button>
+      <button id="cue-btn-nudge-bwd" class="cue-play" title="Décaler la grille d'un quart de beat en arrière">← 1/4</button>
       <label class="cue-bpm">BPM <input id="cue-bpm" type="number" min="60" max="200" step="0.1" placeholder="auto"></label>
-      <span id="cue-bpm-badge" class="cue-bpm-badge hidden" title="Source de la grille : NML = grille native Traktor · auto = détectée · manuel = saisie"></span>
+      <button id="cue-btn-nudge-fwd" class="cue-play" title="Décaler la grille d'un quart de beat en avant">→ 1/4</button>
+      <span id="cue-bpm-badge" class="cue-bpm-badge hidden" title="Source de la grille : NML = grille native Traktor · auto = détectée · manuel = saisie/corrigée"></span>
+      <button id="cue-btn-beat1" class="cue-play" title="Poser le beat 1 : clique ensuite sur la waveform">◎ Beat 1</button>
       <button id="cue-btn-snap" class="cue-play" title="Caler les cues/loops sur la grille de beats">🧲 Snap</button>
-      <span class="cue-hint">←/→ seek ±5s · slot A–H = cue · ⟳ Loop = dessiner une boucle · 🔁 Play = boucle en continu · Suppr = retirer · clic droit = supprimer</span>
+      <span class="cue-hint">←/→ seek ±5s · ←/→ 1/4 = calage grille · ◎ Beat 1 = poser le premier beat · slot A–H = cue · ⟳ Loop = boucle · 🔁 Play = boucle en continu · Suppr = retirer · clic droit = supprimer</span>
     </div>
     <div id="cue-editor-controls">
       <span class="cue-slot" data-slot="0">A</span>

@@ -122,8 +122,11 @@ const MODAL_HTML = `
         <button id="cue-btn-play">▶</button>
         <button id="cue-btn-loop">⟳ Loop</button>
         <button id="cue-btn-loopplay">🔁 Play</button>
+        <button id="cue-btn-nudge-bwd">← 1/4</button>
         <label class="cue-bpm">BPM <input id="cue-bpm" type="number" placeholder="auto"></label>
+        <button id="cue-btn-nudge-fwd">→ 1/4</button>
         <span id="cue-bpm-badge" class="cue-bpm-badge hidden"></span>
+        <button id="cue-btn-beat1">◎ Beat 1</button>
         <button id="cue-btn-snap">🧲 Snap</button>
         <span id="cue-editor-time">0:00 / 0:00</span>
       </div>
@@ -1124,5 +1127,257 @@ describe('render/cueEditor ajout à la collection (POST /api/track/add)', () => 
     const modal = document.getElementById('modal-cue-editor');
     expect(modal!.classList.contains('hidden')).toBe(true); // toujours fermée
     expect(mockState.activeModal).toBeNull();
+  });
+});
+
+describe('render/cueEditor phase manuelle + cache (EPIC-009)', () => {
+  beforeEach(resetMocks);
+
+  function openNoGrid(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  function gridLines(): HTMLElement[] {
+    return Array.from(document.querySelectorAll('.cue-grid-line')) as HTMLElement[];
+  }
+
+  function beatgridPutCalls(): Array<{ path: string; bpm: number; phase: number; source: string }> {
+    return mockApi.mock.calls
+      .filter(([u]: [string]) => u === '/api/beatgrid')
+      .map(([_u, opts]) => JSON.parse((opts as { body: string }).body));
+  }
+
+  it("→ 1/4 décale la grille d'un quart de beat et marque « manuel »", async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120'; // beat = 0.5 s → 1/4 = 0.125 s
+    bpm.dispatchEvent(new Event('input'));
+    expect(gridLines()[0].style.left).toBe('0%');
+    (document.getElementById('cue-btn-nudge-fwd') as HTMLButtonElement).click();
+    const lines = gridLines();
+    expect(lines[0].style.left).toBe('0.125%'); // premier beat à 0.125 s / 100 s
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('manuel');
+    expect(badge.classList.contains('src-manual')).toBe(true);
+    // Le snap suit la grille décalée : un loop à 10.26 → beat 10.125 (pas 10.5).
+    const region = { id: 'region-abc', start: 10.26, end: 14.3, setOptions: vi.fn(), remove: vi.fn() };
+    const created = (ws.regions.on.mock.calls as Array<[string, (...a: unknown[]) => void]>).find(
+      ([evt]) => evt === 'region-created',
+    )?.[1];
+    created!(region);
+    expect(region.setOptions).toHaveBeenCalledWith({ start: 10.125, end: 14.125 });
+    // Persistance : PUT /api/beatgrid avec la phase corrigée.
+    const puts = beatgridPutCalls();
+    expect(puts.length).toBeGreaterThan(0);
+    expect(puts[puts.length - 1]).toMatchObject({ path: '/x/a.mp3', bpm: 120, source: 'manual' });
+    expect(puts[puts.length - 1].phase).toBeCloseTo(0.125, 5);
+  });
+
+  it('← 1/4 recule la phase (et reste borné à 0)', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input'));
+    (document.getElementById('cue-btn-nudge-fwd') as HTMLButtonElement).click();
+    (document.getElementById('cue-btn-nudge-bwd') as HTMLButtonElement).click();
+    expect(gridLines()[0].style.left).toBe('0%');
+    // Encore en arrière : reste à 0 (pas de phase négative).
+    (document.getElementById('cue-btn-nudge-bwd') as HTMLButtonElement).click();
+    expect(gridLines()[0].style.left).toBe('0%');
+  });
+
+  it('nudge sans BPM → message explicite, grille inchangée', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    (document.getElementById('cue-btn-nudge-fwd') as HTMLButtonElement).click();
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('BPM');
+    expect(gridLines().length).toBe(0); // pas de grille → rien à décaler
+  });
+
+  it('« poser le beat 1 » : clic sur la waveform fixe la phase (relativeX → secondes)', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input'));
+    const btn = document.getElementById('cue-btn-beat1') as HTMLButtonElement;
+    btn.click();
+    expect(btn.classList.contains('beat1-on')).toBe(true);
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('poser le beat 1');
+    // wavesurfer émet click(relativeX, relativeY) : 0.42 × 100 s = 42 s.
+    ws.emit('click', 0.42, 0.5);
+    expect(btn.classList.contains('beat1-on')).toBe(false); // sort du mode
+    expect(gridLines()[0].style.left).toBe('42%');
+    expect(status!.textContent).toContain('Beat 1 posé à 0:42');
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('manuel');
+    const puts = beatgridPutCalls();
+    expect(puts[puts.length - 1].phase).toBeCloseTo(42, 5);
+  });
+
+  it('clic hors mode beat 1 → seek normal, phase inchangée', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input'));
+    ws.emit('click', 0.9, 0.5); // clic simple, mode beat 1 désactivé
+    expect(gridLines()[0].style.left).toBe('0%'); // phase inchangée
+  });
+
+  it('charge la grille depuis le cache serveur (cascade NML → cache → détection)', async () => {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({
+        ok: true,
+        multiple: false,
+        entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+      })
+      .mockResolvedValueOnce({ bpm: 124, phase: 2.5, source: 'manual' }); // cache hit
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0)); // laisse le fetch du cache se résoudre
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    expect(bpm.value).toBe('124'); // appliqué depuis le cache, pas de détection
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('manuel');
+    expect(gridLines()[0].style.left).toBe('2.5%'); // phase 2.5 s / 100 s
+  });
+
+  it('cache vide → détection client (fallback, aucune grille appliquée)', async () => {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({
+        ok: true,
+        multiple: false,
+        entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+      })
+      .mockResolvedValueOnce({}); // cache miss
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0));
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    expect(bpm.value).toBe(''); // pas de grille (détection échoue en test)
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.classList.contains('hidden')).toBe(true);
+  });
+
+  it('la saisie manuelle du BPM persiste dans le cache (source manual)', async () => {
+    const ws = openNoGrid();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '128';
+    bpm.dispatchEvent(new Event('input'));
+    const puts = beatgridPutCalls();
+    expect(puts[puts.length - 1]).toMatchObject({ path: '/x/a.mp3', bpm: 128, phase: 0, source: 'manual' });
+  });
+
+  it('une grille native aberrante (BPM hors bornes) ne bloque pas le cache (cascade)', async () => {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({
+        ok: true,
+        multiple: false,
+        entries: [
+          {
+            filename: 'a.mp3',
+            filesize: '1',
+            artist: 'X',
+            title: 'Y',
+            cues: [],
+            grid: { bpm: 1.0, phase: 0, quality: 100 }, // valeur pourrie de la collection
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ bpm: 124, phase: 0, source: 'manual' }); // correction persistée
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0));
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    expect(bpm.value).toBe('124'); // le cache s'applique malgré la grille native pourrie
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('manuel');
+  });
+
+  it('une correction manuelle en cache prime sur la grille native NML', async () => {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({
+        ok: true,
+        multiple: false,
+        entries: [
+          {
+            filename: 'a.mp3',
+            filesize: '1',
+            artist: 'X',
+            title: 'Y',
+            cues: [],
+            grid: { bpm: 133, phase: 55, quality: 100 }, // native correcte
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ bpm: 134, phase: 1.5, source: 'manual' }); // l'utilisateur a corrigé
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0));
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    expect(bpm.value).toBe('134'); // correction manuelle appliquée, pas la native
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('manuel');
+    expect(gridLines()[0].style.left).toBe('1.5%');
+  });
+
+  it("une grille native correcte n'est jamais remplacée par un cache détecté", async () => {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({
+        ok: true,
+        multiple: false,
+        entries: [
+          {
+            filename: 'a.mp3',
+            filesize: '1',
+            artist: 'X',
+            title: 'Y',
+            cues: [],
+            grid: { bpm: 133, phase: 55, quality: 100 },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ bpm: 128, phase: 0, source: 'detected' }); // détection plus ancienne
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0));
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    expect(bpm.value).toBe('133'); // la native reste prioritaire
+    const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
+    expect(badge.textContent).toBe('NML');
   });
 });
