@@ -1347,3 +1347,38 @@ def test_get_audio_meta_flac():
         assert duration == 1  # 44100 samples / 44100 Hz = 1.0 sec
         assert codec is not None
         assert 'FLAC' in codec
+
+
+def test_nml_status_unconfigured(client):
+    rv = client.get('/api/nml/status')
+    data = rv.get_json()
+    assert data == {'configured': False, 'path': '', 'lastModified': None}
+
+
+def test_nml_status_configured(client, tmp_path, monkeypatch):
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': '', 'epars_dirs': []})
+    rv = client.get('/api/nml/status')
+    assert rv.status_code == 200
+    data = rv.get_json()
+    assert data['configured'] is True
+    assert data['path'] == str(nml_path)
+    assert data['lastModified'] is not None
+
+
+def test_track_match_single(client, tmp_path, monkeypatch):
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    filename = 'Carbon Decay - In The Warehouse.mp3'  # de la fixture
+    local = tmp_path / filename
+    local.write_bytes(b'x' * 5243)
+    rv = client.get('/api/track/match', query_string={'path': str(local)})
+    assert rv.status_code == 200
+    data = rv.get_json()
+    assert data['ok'] is True
+    assert len(data['entries']) == 1
+    assert data['multiple'] is False
+    assert data['entries'][0]['filename'] == filename

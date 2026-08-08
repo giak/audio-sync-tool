@@ -5,6 +5,8 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, send_file, abort
+import nml as nml_module
+from xml.etree import ElementTree as ET
 
 try:
     from mutagen import File as MutagenFile
@@ -210,6 +212,50 @@ def get_active_config():
     if configs and 0 <= idx < len(configs):
         return configs[idx]
     return {'source_data': '', 'epars_dirs': []}
+
+
+def get_traktor_nml_path():
+    cfg = get_active_config()
+    return cfg.get('traktor_nml_path', '')
+
+
+def get_nml_index():
+    """Retourne (tree, index, nml_path) ou (None, {}, '') si non configuré/invalide."""
+    path = get_traktor_nml_path()
+    if not path or not os.path.exists(path):
+        return None, {}, path or ''
+    try:
+        tree = nml_module.load_nml(path)
+        return tree, nml_module.build_index(tree), path
+    except ET.ParseError:
+        return None, {}, path
+
+
+@app.route('/api/nml/status')
+def nml_status():
+    path = get_traktor_nml_path()
+    if not path or not os.path.exists(path):
+        return jsonify({'configured': False, 'path': path or '', 'lastModified': None})
+    mtime = os.path.getmtime(path)
+    return jsonify({'configured': True, 'path': path, 'lastModified': mtime})
+
+
+@app.route('/api/track/match')
+def track_match():
+    local = request.args.get('path', '')
+    if not local or not os.path.exists(local):
+        return jsonify({'ok': False, 'error': 'fichier introuvable'}), 404
+    tree, idx, nml_path = get_nml_index()
+    if not tree:
+        return jsonify({'ok': False, 'error': 'NML non configuré ou invalide'}), 400
+    filename = os.path.basename(local)
+    filesize = str(os.path.getsize(local))
+    hits = idx.get((filename, filesize), [])
+    entries = []
+    for e in hits:
+        meta = nml_module.get_entry_meta(e)
+        entries.append({**meta, 'cues': nml_module.get_cues(e)})
+    return jsonify({'ok': True, 'entries': entries, 'multiple': len(entries) > 1})
 
 
 @app.route('/scan')
