@@ -83,7 +83,7 @@ documentées dans `bands.ts`.
 
 | Commit | Message |
 |---|---|
-| `…` | `feat(ui): EPIC-020 — waveform 3-bandes RGB (low/mid/high, standard DJ)` |
+| `3f37540` | `feat(ui): EPIC-020 — waveform 3-bandes RGB complète (low/mid/high, standard DJ)` |
 
 ## Décisions (KISS, vérité forensique)
 

@@ -93,6 +93,11 @@
   round-trip NML complet (lecture `NAME`/`RED/GREEN/BLUE` affichés, écriture au save) via la
   source de vérité `_cueMeta` (les régions wavesurfer ne portent pas les métadonnées, même
   pattern que `_displOrders`). 6 tests, 113 tests cueEditor+cuemodel.
+- EPIC-020 livrée (P1-4 du benchmark) : **waveform 3-bandes RGB complète** — `bands.ts` (ex
+  `bassband.ts`) : `computeRGBBands` par FFT fenêtrée (séparation spectrale quasi parfaite ;
+  découverte forensique : le biquad RBJ à Q faible fuit 20-35 % du hors-bande, cascade ordre 8
+  nécessaire → FFT) ; rendu 3 couches superposées (rouge basse / vert médium / bleu aigu) en
+  `mix-blend-mode: screen` (mélange additif), masquée en zoom. 10 tests, 723 vitest shuffle.
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
 - EPIC-002 → EPIC-009 livrées et **commitées** (`a21f1ae` → `3f3b669`), EPIC-001 à ses commits
   historiques, ce registre inclus dans `7bb1735`.
