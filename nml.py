@@ -8,6 +8,16 @@ NML_DEFAULT = {
     'len': '0.000000',
 }
 
+def filesize_kb(size_bytes):
+    """Taille locale (octets) → FILESIZE NML Traktor (Ko ARRONDI, half-up).
+
+    Mesuré sur la collection réelle (EPIC-015) : le NML stocke le FILESIZE en Ko
+    arrondis (ex. 5 368 832 octets → '5243', 13 013 827 octets → '12709').
+    `(size + 512) // 1024` = arrondi half-up en entier — pas de flottant ni
+    d'arrondi bancaire Python sur le cas .5 exact.
+    """
+    return str((int(size_bytes) + 512) // 1024)
+
 def load_nml(path):
     """Parse le fichier NML (ElementTree). Lève ET.ParseError si invalide."""
     return ET.parse(path)
@@ -105,7 +115,8 @@ def build_entry_element(meta, filesize, playtime, volume, dir_attr):
 
     Traktor régénère l'analyse (AUDIO_ID, BPM, beatgrid…) au prochain scan : les
     champs critiques sont LOCATION (FILE/DIR/VOLUME — où trouver le fichier) et
-    INFO/FILESIZE (clé de match de l'app). Le reste est un minimum viable.
+    INFO/FILESIZE (clé de match de l'app, en Ko — convention Traktor, EPIC-015).
+    Le reste est un minimum viable.
     """
     now = datetime.now()
     entry = ET.Element('ENTRY', attrib={
@@ -277,10 +288,11 @@ def traktor_dir(relpath, volume):
 def build_export_nml(playlist_tracks, nml_path, export_root, volume, pl_dir):
     """Écrit export_root/collection.nml : ENTRIES de la playlist, LOCATION réécrites.
 
-    Match : clé (FILE, FILESIZE) — basename de la piste + os.path.getsize du fichier
-    local. Multi-match : premier hit (l'UI a déjà tranché la même clé au moment de
-    l'édition — même série de hits, ordre stable). Retourne le chemin écrit, ou None
-    si aucune piste ne matche.
+    Match : clé (FILE, FILESIZE) — basename de la piste + taille locale convertie
+    en Ko arrondi (filesize_kb, convention Traktor — EPIC-015). Multi-match :
+    premier hit (l'UI a déjà tranché la même clé au moment de l'édition — même
+    série de hits, ordre stable). Retourne le chemin écrit, ou None si aucune
+    piste ne matche.
 
     DIR : calculé depuis l'emplacement RÉEL des fichiers exportés (pl_dir, le dossier
     dans lequel la playlist a été matérialisée) relativement à export_root — plus depuis
@@ -304,7 +316,9 @@ def build_export_nml(playlist_tracks, nml_path, export_root, volume, pl_dir):
     for t in playlist_tracks:
         fn = t.get('filename', '')
         local = t.get('fullPath', '')
-        size = str(os.path.getsize(local)) if local and os.path.exists(local) else ''
+        # FILESIZE en Ko arrondi (convention Traktor) — EPIC-015 : comparer en
+        # octets laissait l'export sans match sur la collection réelle.
+        size = filesize_kb(os.path.getsize(local)) if local and os.path.exists(local) else ''
         hits = index.get((fn, size), [])
         if not hits and size:
             hits = index.get((fn, ''), [])

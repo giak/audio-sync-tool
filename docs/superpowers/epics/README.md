@@ -34,10 +34,11 @@
 | [EPIC-012](EPIC-012-bande-basse-barres.md) | Beatgrid P5 : bande d'énergie basse + numéros de barre | 🟢 Livré | Basse | plan beatgrid §P5 |
 | [EPIC-013](EPIC-013-robustesse-backend.md) | Robustesse backend : JSON atomique, verrou scan, cache parse, debug off | 🟢 Livré | Moyenne | rapport audit §6/B11/B12 |
 | [EPIC-014](EPIC-014-ux-generale.md) | UX générale : focus trap, aria, police locale, prompt→modales, responsive | 🟢 Livré | Moyenne | rapport audit §4 |
+| [EPIC-015](EPIC-015-filesize-ko-octets.md) | FILESIZE en Ko (convention Traktor) : match/add/export réparés sur la collection réelle | 🟢 Livré | Haute | rapport `2026-08-08-smoke-test-navigateur.md` |
 
 ## État actuel du projet (2026-08-08)
 
-- Tests : **672 vitest** / **168 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
+- Tests : **672 vitest** / **173 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
 - EPIC-009 livrée (phase manuelle + cache beatgrid) : nudge ←/→ 1/4, « ◎ Beat 1 », cascade
   NML → cache (`data/beatgrids.json`) → détection, invalidation par FILESIZE.
 - EPIC-010 livrée (analyse serveur kick/phase) : pipeline DSP maison pur Python (`analysis.py`,
@@ -60,6 +61,12 @@
   modales, `prompt()`/`confirm()` → `confirmDialog`/`promptDialog` custom, canal toast séparé de la
   barre d'état, états vides (`.panel-empty`), responsive minimal < 1024 px, validation rating 0-100
   à la frappe. Cache-buster CSS déjà en place (vérifié).
+- EPIC-015 livrée (FILESIZE Ko, découvert par le smoke test navigateur) : le NML Traktor stocke
+  INFO/FILESIZE en **Ko arrondis** (prouvé : 581/600 match avec `round(size/1024)` sur la collection
+  réelle, 0/600 en octets) alors que le serveur comparait `os.path.getsize()` → match impossible
+  (cue editor « visualisation seule » partout). Helper `filesize_kb()` (half-up `(size+512)//1024`),
+  `track_match`/`track_add`/`build_export_nml` en Ko, `build_entry_element` écrit le Ko. Résultat :
+  **97,5 % de match (78/80) sur la collection réelle via HTTP** (les non-matchés sont absents du NML).
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
 - EPIC-002 → EPIC-009 livrées et **commitées** (`a21f1ae` → `3f3b669`), EPIC-001 à ses commits
   historiques, ce registre inclus dans `7bb1735`.

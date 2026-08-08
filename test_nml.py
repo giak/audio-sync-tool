@@ -2,9 +2,24 @@ import os
 import xml.etree.ElementTree as ET
 import pytest
 from nml import (load_nml, build_index, get_cues, get_beatgrid, get_entry_meta, write_cues,
-                 save_nml, build_export_nml, build_entry_element, append_entry, upsert_beatgrid)
+                 save_nml, build_export_nml, build_entry_element, append_entry, upsert_beatgrid,
+                 filesize_kb)
 
 DATA = os.path.join('tests', 'fixtures', 'nml-sample.xml')
+
+
+def test_filesize_kb_rounds_half_up():
+    """EPIC-015 : FILESIZE NML = Ko ARRONDI half-up de la taille disque (octets).
+    Mesuré sur la collection réelle : 5 368 832 octets → '5243', 13 013 827 → '12709'."""
+    assert filesize_kb(5368832) == '5243'
+    assert filesize_kb(13013827) == '12709'
+    # half-up : 5243*1024 + 511 → 5243 ; + 512 → 5244 (basculé au-dessus de .5)
+    assert filesize_kb(5243 * 1024 + 511) == '5243'
+    assert filesize_kb(5243 * 1024 + 512) == '5244'
+    assert filesize_kb(0) == '0'
+    assert filesize_kb(512) == '1'   # 0,5 Ko → half-up → 1
+    assert filesize_kb(1023) == '1'  # 0,999 Ko → half-up → 1
+    assert filesize_kb(1024) == '1'
 
 
 def test_load_nml_parses():
@@ -321,7 +336,7 @@ def test_build_export_nml_rewrites_location(tmp_path):
     export_root = tmp_path / 'export'
     pl_dir = export_root / '_playlists' / 'mon-set'
     local = tmp_path / 'Carbon Decay - In The Warehouse.mp3'
-    local.write_bytes(b'x' * 5243)  # FILESIZE réel de la fixture
+    local.write_bytes(b'x' * 5243 * 1024)  # FILESIZE réel de la fixture
 
     out = build_export_nml(
         [{'filename': 'Carbon Decay - In The Warehouse.mp3', 'fullPath': str(local)}],
@@ -344,7 +359,7 @@ def test_build_export_nml_dir_at_root(tmp_path):
     nml_path = _copy_fixture(tmp_path)
     export_root = tmp_path / 'export'
     local = tmp_path / 'Carbon Decay - In The Warehouse.mp3'
-    local.write_bytes(b'x' * 5243)
+    local.write_bytes(b'x' * 5243 * 1024)
 
     out = build_export_nml(
         [{'filename': 'Carbon Decay - In The Warehouse.mp3', 'fullPath': str(local)}],
@@ -370,3 +385,29 @@ def test_build_export_nml_requires_pl_dir_under_root(tmp_path):
     outside = tmp_path / 'ailleurs'  # PAS sous export_root
     with pytest.raises(ValueError, match='n\'est pas sous la racine'):
         build_export_nml([], nml_path, str(export_root), 'TRAKTOR_USB', str(outside))
+
+
+def test_build_export_nml_match_uses_kib_not_bytes(tmp_path):
+    """EPIC-015 : build_export_nml matche (FILE, FILESIZE) en Ko — un fichier réel
+    (≥ 3 Mo) dont le nombre de Ko diffère du nombre d'octets doit matcher la
+    fixture (FILESIZE='5243' en Ko, fichier de 5243*1024 octets). Un fichier de
+    5243 octets (le vieux bug octets) ne matche PAS."""
+    nml_path = _copy_fixture(tmp_path)
+    export_root = tmp_path / 'export'
+
+    # Cas réel : 5243 Ko = 5 368 832 octets → match (convention Traktor)
+    local = tmp_path / 'Carbon Decay - In The Warehouse.mp3'
+    local.write_bytes(b'x' * 5243 * 1024)
+    out = build_export_nml(
+        [{'filename': 'Carbon Decay - In The Warehouse.mp3', 'fullPath': str(local)}],
+        nml_path, str(export_root), 'TRAKTOR_USB', str(export_root / '_playlists' / 's'))
+    assert out is not None
+
+    # Le bug octets : 5243 octets ≠ 5243 Ko → la clé (FILE, '5243') n'est pas
+    # celle du disque → build_export_nml ne trouve aucun ENTRY → None.
+    local2 = tmp_path / 'Carbon Decay - In The Warehouse.mp3'
+    local2.write_bytes(b'x' * 5243)
+    out2 = build_export_nml(
+        [{'filename': 'Carbon Decay - In The Warehouse.mp3', 'fullPath': str(local2)}],
+        nml_path, str(export_root), 'TRAKTOR_USB', str(export_root / '_playlists' / 's'))
+    assert out2 is None

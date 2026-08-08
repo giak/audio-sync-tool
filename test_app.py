@@ -1390,7 +1390,7 @@ def test_track_match_single(client, tmp_path, monkeypatch):
         'traktor_nml_path': str(nml_path), 'source_data': str(tmp_path)})
     filename = 'Carbon Decay - In The Warehouse.mp3'  # de la fixture
     local = tmp_path / filename
-    local.write_bytes(b'x' * 5243)
+    local.write_bytes(b'x' * 5243 * 1024)
     rv = client.get('/api/track/match', query_string={'path': str(local)})
     assert rv.status_code == 200
     data = rv.get_json()
@@ -1411,13 +1411,13 @@ def test_track_match_blocks_path_outside_allowed_dirs(client, tmp_path, monkeypa
         'traktor_nml_path': str(nml_path), 'source_data': str(allowed)})
     # Fichier EXISTANT mais hors des dossiers autorisés (frère de tmp_path).
     local = tmp_path / 'Carbon Decay - In The Warehouse.mp3'
-    local.write_bytes(b'x' * 5243)
+    local.write_bytes(b'x' * 5243 * 1024)
     rv = client.get('/api/track/match', query_string={'path': str(local)})
     assert rv.status_code == 403
     assert rv.get_json()['ok'] is False
     # Chemin dans les dossiers autorisés → toujours OK.
     in_allowed = allowed / 'Carbon Decay - In The Warehouse.mp3'
-    in_allowed.write_bytes(b'x' * 5243)
+    in_allowed.write_bytes(b'x' * 5243 * 1024)
     rv2 = client.get('/api/track/match', query_string={'path': str(in_allowed)})
     assert rv2.status_code == 200
 
@@ -1431,7 +1431,7 @@ def test_track_match_exposes_native_grid(client, tmp_path, monkeypatch):
         'traktor_nml_path': str(nml_path), 'source_data': str(tmp_path)})
     filename = 'Carbon Decay - In The Warehouse.mp3'
     local = tmp_path / filename
-    local.write_bytes(b'x' * 5243)
+    local.write_bytes(b'x' * 5243 * 1024)
     rv = client.get('/api/track/match', query_string={'path': str(local)})
     assert rv.status_code == 200
     grid = rv.get_json()['entries'][0]['grid']
@@ -1455,7 +1455,7 @@ def test_track_match_grid_none_without_data(client, tmp_path, monkeypatch):
     ET.SubElement(e, 'INFO', {'FILESIZE': '42'})
     nml.save_nml(str(nml_path), tree)
     local = tmp_path / 'NOGRID.mp3'
-    local.write_bytes(b'x' * 42)
+    local.write_bytes(b'x' * 42 * 1024)
     rv = client.get('/api/track/match', query_string={'path': str(local)})
     assert rv.status_code == 200
     assert rv.get_json()['entries'][0]['grid'] is None
@@ -1651,7 +1651,8 @@ def test_cues_write_ok(client, tmp_path, monkeypatch):
     filename = 'Carbon Decay - In The Warehouse.mp3'
     filesize = 5243
     local = tmp_path / filename
-    local.write_bytes(b'x' * filesize)
+    # EPIC-015 : FILESIZE en Ko — fichier de 5243 Ko pour matcher la fixture.
+    local.write_bytes(b'x' * filesize * 1024)
     rv = client.post('/api/track/cues', json={
         'path': str(local),
         'filename': filename,
@@ -1764,7 +1765,7 @@ def test_export_nml_written(client, tmp_path, monkeypatch):
         {'filename': 'Carbon Decay - In The Warehouse.mp3',
          'fullPath': str(tmp_path / 'Carbon Decay - In The Warehouse.mp3'),
          'duration': 132}]})
-    (tmp_path / 'Carbon Decay - In The Warehouse.mp3').write_bytes(b'x' * 5243)
+    (tmp_path / 'Carbon Decay - In The Warehouse.mp3').write_bytes(b'x' * 5243 * 1024)
     rv = client.post('/playlists/export', json={'name': pl_name})
     assert rv.status_code == 200
     assert os.path.exists(export_root / 'collection.nml')
@@ -1800,7 +1801,7 @@ def test_export_nml_error_message_without_root(client, tmp_path, monkeypatch):
     src = tmp_path / 'source'
     os.makedirs(src)
     track = src / 'Carbon Decay - In The Warehouse.mp3'
-    track.write_bytes(b'x' * 5243)
+    track.write_bytes(b'x' * 5243 * 1024)
     monkeypatch.setattr('app.get_active_config', lambda: {
         'traktor_nml_path': str(nml_path), 'source_data': str(src),
         'traktor_export_root': '', 'traktor_export_volume': 'TRAKTOR_USB'})
@@ -1825,7 +1826,7 @@ def test_export_nml_location_rewritten_via_route(client, tmp_path, monkeypatch):
     src = tmp_path / 'source'
     os.makedirs(src)
     track = src / 'Carbon Decay - In The Warehouse.mp3'
-    track.write_bytes(b'x' * 5243)
+    track.write_bytes(b'x' * 5243 * 1024)
     export_root = tmp_path / 'export'
     monkeypatch.setattr('app.get_active_config', lambda: {
         'traktor_nml_path': str(nml_path), 'source_data': str(src),
@@ -1861,7 +1862,7 @@ def test_track_add_ok(client, tmp_path, monkeypatch):
     """Ajoute une piste absente : ENTRY écrit dans le fichier + backup + re-match OK."""
     nml_path, src = _setup_nml_and_src(tmp_path)
     track = src / 'new-track.mp3'
-    track.write_bytes(b'x' * 999)
+    track.write_bytes(b'x' * 999 * 1024)
     monkeypatch.setattr('app.get_active_config', lambda: {
         'traktor_nml_path': str(nml_path), 'source_data': str(src),
         'traktor_export_volume': ''})
@@ -1892,7 +1893,7 @@ def test_track_add_already_present(client, tmp_path, monkeypatch):
     """Piste déjà dans la collection → already:True, aucun doublon créé."""
     nml_path, src = _setup_nml_and_src(tmp_path)
     track = src / 'Carbon Decay - In The Warehouse.mp3'  # présent dans la fixture
-    track.write_bytes(b'x' * 5243)
+    track.write_bytes(b'x' * 5243 * 1024)
     monkeypatch.setattr('app.get_active_config', lambda: {
         'traktor_nml_path': str(nml_path), 'source_data': str(src),
         'traktor_export_volume': ''})
@@ -2023,7 +2024,9 @@ def _setup_cues_nml(client, tmp_path, monkeypatch, nml_name='c.nml'):
     filename = 'Carbon Decay - In The Warehouse.mp3'
     filesize = 5243
     local = tmp_path / filename
-    local.write_bytes(b'x' * filesize)
+    # FILESIZE NML en Ko (EPIC-015) : le fichier doit faire 5243 Ko = 5243*1024
+    # octets pour matcher — un fichier de 5243 octets (l'ancien bug) ne matche pas.
+    local.write_bytes(b'x' * filesize * 1024)
     return filename, str(filesize)
 
 
@@ -2243,3 +2246,73 @@ def test_nml_cache_by_mtime(client, monkeypatch, tmp_path):
     tree3, idx3, _ = get_nml_index()
     assert len(calls) == 2
     assert tree3 is not tree1
+
+
+# ── EPIC-015 : FILESIZE en Ko (convention Traktor) ────────────────────────
+
+
+def test_track_match_matches_real_sized_file_in_kib(client, tmp_path, monkeypatch):
+    """EPIC-015 : un fichier RÉEL (≥ 3 Mo, Ko ≠ octets) matche la fixture dont le
+    FILESIZE est en Ko — avant le fix, le match en octets renvoyait toujours []."""
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(tmp_path)})
+    filename = 'Carbon Decay - In The Warehouse.mp3'  # FILESIZE='5243' (Ko) dans la fixture
+    local = tmp_path / filename
+    local.write_bytes(b'x' * 5243 * 1024)  # 5 368 832 octets = 5243 Ko
+    rv = client.get('/api/track/match', query_string={'path': str(local)})
+    assert rv.status_code == 200
+    data = rv.get_json()
+    assert len(data['entries']) == 1
+    assert data['entries'][0]['filename'] == filename
+    # La valeur exposée est le FILESIZE du NML (Ko) — pas la taille disque en octets.
+    assert data['entries'][0]['filesize'] == '5243'
+
+
+def test_track_add_writes_filesize_in_kib(client, tmp_path, monkeypatch):
+    """EPIC-015 : la piste ajoutée (EPIC-007) écrit INFO/FILESIZE en Ko (convention
+    Traktor) — sinon elle serait introuvable au re-match et Traktor lirait une
+    taille fausse."""
+    nml_path, src = _setup_nml_and_src(tmp_path)
+    track = src / 'new-track.mp3'
+    track.write_bytes(b'x' * 999 * 1024)  # 999 Ko = 1 022 976 octets
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src),
+        'traktor_export_volume': ''})
+
+    rv = client.post('/api/track/add', json={'path': str(track)})
+    assert rv.status_code == 200
+    assert rv.get_json()['already'] is False
+
+    import nml as nml_mod
+    tree = nml_mod.load_nml(str(nml_path))
+    idx = nml_mod.build_index(tree)
+    # FILESIZE écrit = 999 Ko (et non 1 022 976 octets — le bug octets).
+    assert ('new-track.mp3', '999') in idx
+    assert ('new-track.mp3', '1022976') not in idx
+    # Re-match OK (round-trip add → match, le flux EPIC-007).
+    rv2 = client.get('/api/track/match', query_string={'path': str(track)})
+    assert rv2.status_code == 200
+    assert len(rv2.get_json()['entries']) == 1
+
+
+def test_track_add_already_present_matches_in_kib(client, tmp_path, monkeypatch):
+    """EPIC-015 : already=True détecté en Ko — un fichier de 5243 Ko est reconnu
+    comme présent (avant le fix : détecté absent → doublon créé)."""
+    nml_path, src = _setup_nml_and_src(tmp_path)
+    track = src / 'Carbon Decay - In The Warehouse.mp3'  # présent (FILESIZE='5243' Ko)
+    track.write_bytes(b'x' * 5243 * 1024)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src),
+        'traktor_export_volume': ''})
+
+    rv = client.post('/api/track/add', json={'path': str(track)})
+    assert rv.status_code == 200
+    data = rv.get_json()
+    assert data['ok'] is True
+    assert data['already'] is True
+    import nml as nml_mod
+    tree = nml_mod.load_nml(str(nml_path))
+    idx = nml_mod.build_index(tree)
+    assert len(idx[('Carbon Decay - In The Warehouse.mp3', '5243')]) == 1  # pas de doublon

@@ -341,7 +341,9 @@ def track_match():
     if not tree:
         return jsonify({'ok': False, 'error': 'NML non configuré ou invalide'}), 400
     filename = os.path.basename(local)
-    filesize = str(os.path.getsize(local))
+    # FILESIZE NML en Ko arrondi (convention Traktor) — EPIC-015 : la taille
+    # disque en octets ne matchait jamais la collection réelle (0/300 fichiers).
+    filesize = nml_module.filesize_kb(os.path.getsize(local))
     hits = idx.get((filename, filesize), [])
     entries = []
     for e in hits:
@@ -370,8 +372,11 @@ def track_add():
     if not tree:
         return jsonify({'ok': False, 'error': 'NML non configuré ou invalide'}), 400
     filename = os.path.basename(local)
-    filesize = os.path.getsize(local)
-    hits = idx.get((filename, str(filesize)), [])
+    # FILESIZE NML en Ko arrondi (convention Traktor, EPIC-015) : c'est aussi la
+    # valeur écrite dans INFO/FILESIZE (build_entry_element) — cohérente avec
+    # l'index, sinon la piste ajoutée serait introuvable au prochain match.
+    filesize = nml_module.filesize_kb(os.path.getsize(local))
+    hits = idx.get((filename, filesize), [])
     if hits:
         return jsonify({'ok': True, 'already': True,
                         'entry': nml_module.get_entry_meta(hits[0])})
