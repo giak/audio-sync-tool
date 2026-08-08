@@ -1,5 +1,6 @@
 """Lecture bas niveau du collection.nml de Traktor — parse+index+lecture."""
 import os
+from datetime import datetime
 import xml.etree.ElementTree as ET
 
 NML_DEFAULT = {

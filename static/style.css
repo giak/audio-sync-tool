@@ -755,6 +755,33 @@ header h1 {
 #cue-editor-time { font-variant-numeric: tabular-nums; min-width: 120px; }
 .cue-hint { color: var(--text-dim); font-size: 12px; }
 
+/* Ajout d'une piste absente à la collection Traktor */
+#cue-editor-addrow {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 6px 0; padding: 8px 10px;
+  background: rgba(255, 170, 0, 0.07);
+  border: 1px solid var(--led-amber);
+  border-radius: 6px;
+}
+#cue-editor-addrow label {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--text-secondary); white-space: nowrap;
+}
+#cue-editor-addrow input {
+  width: 130px; padding: 4px 8px;
+  background: var(--bg-focus); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; font-size: 13px;
+}
+#cue-editor-addrow input:focus { border-color: var(--border-active); outline: none; }
+#cue-btn-add {
+  background: var(--led-amber); color: #1e1e2e;
+  border: none; border-radius: 6px;
+  padding: 5px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+#cue-btn-add:hover { filter: brightness(1.1); }
+#cue-btn-add:disabled { opacity: 0.5; cursor: default; }
+#cue-editor-status { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+
 /* Champ BPM manuel (grille recalculée) */
 .cue-bpm {
   display: inline-flex; align-items: center; gap: 4px;

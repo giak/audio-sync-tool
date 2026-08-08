@@ -16,6 +16,7 @@ export function renderJournal(): void {
       if (e.status === 'copied') return `<div class="copied">[${ts}] 📋 ${e.filename} → ${e.destination}</div>`;
       if (e.status === 'scan') return `<div class="scanned">[${ts}] 🔍 ${e.action} — ${e.details}</div>`;
       if (e.status === 'config') return `<div class="configured">[${ts}] ⚙️ ${e.action} — ${e.details}</div>`;
+      if (e.status === 'collection') return `<div class="configured">[${ts}] 📚 ${e.action} — ${e.details}</div>`;
       return `<div class="error">[${ts}] ${e.action || e.filename || '?'}</div>`;
     })
     .join('');

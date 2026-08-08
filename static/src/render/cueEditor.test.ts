@@ -14,6 +14,9 @@ const mockState = vi.hoisted(() => {
     },
     setModal(v: string | null) {
       this.activeModal = v;
+      // Fidèle à ui.ts closeAllModals : la fermeture masque la modal (DOM).
+      const modal = document.getElementById('modal-cue-editor');
+      if (modal) modal.classList.toggle('hidden', v !== 'cueEditor');
       for (const fn of listeners['activeModal:changed'] ?? []) fn();
     },
   };
@@ -99,6 +102,10 @@ const MODAL_HTML = `
         </div>
       </div>
       <div id="cue-editor-status"></div>
+      <div id="cue-editor-addrow" class="hidden">
+        <label>Volume Traktor : <input type="text" id="cue-add-volume" placeholder="TRAKTOR_USB"></label>
+        <button id="cue-btn-add">➕ Ajouter à la collection</button>
+      </div>
       <div id="cue-editor-waveform"></div>
       <div id="cue-editor-controls">
         <span class="cue-slot" data-slot="0">A</span>
@@ -151,25 +158,87 @@ describe('render/cueEditor scaffold', () => {
       multiple: false,
       entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
     });
+    mockWSCreate.mockReturnValue(makeWS());
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     expect(mockState.activeModal).toBe('cueEditor');
     expect(mockApi).toHaveBeenCalledWith('/api/nml/status');
   });
+
+  it('ouvre quand même la modal en visualisation seule si la piste est absente de la collection', async () => {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [],
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    expect(mockState.activeModal).toBe('cueEditor');
+    const modal = document.getElementById('modal-cue-editor');
+    expect(modal!.classList.contains('hidden')).toBe(false);
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('absente de la collection');
+    const saveBtn = document.getElementById('cue-btn-save') as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(true);
+    // La ligne « Ajouter à la collection » est visible en mode visualisation seule.
+    const addRow = document.getElementById('cue-editor-addrow') as HTMLElement;
+    expect(addRow.classList.contains('hidden')).toBe(false);
+    // La waveform est quand même créée (lecture possible) — sans cues.
+    const opts = mockWSCreate.mock.calls[0][0] as { url: string };
+    expect(opts.url).toContain('/audio?path=%2Fx%2Fa.mp3');
+  });
+
+  it('ré-active le bouton save après une ouverture en visualisation seule', async () => {
+    mockWSCreate.mockReturnValue(makeWS());
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({ ok: true, multiple: false, entries: [] });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const saveBtn = document.getElementById('cue-btn-save') as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(true);
+    // Ensuite une piste matchée → save ré-activé.
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    expect(saveBtn.disabled).toBe(false);
+  });
+
+  it("retire le sélecteur d'homonymes périmé en mode visualisation seule", async () => {
+    mockWSCreate.mockReturnValue(makeWS());
+    // 1) Ouverture multi-match → sélecteur créé.
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: true,
+      entries: [
+        { filename: 't.mp3', filesize: '1', artist: 'A1', title: 'T1', cues: [] },
+        { filename: 't.mp3', filesize: '2', artist: 'A2', title: 'T2', cues: [] },
+      ],
+    });
+    await openCueEditor({ filename: 't.mp3', fullPath: '/x/t.mp3' });
+    expect(document.getElementById('cue-editor-select')).not.toBeNull();
+    // 2) Ouverture suivante : piste absente de la collection → le sélecteur est retiré.
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({ ok: true, multiple: false, entries: [] });
+    await openCueEditor({ filename: 'b.mp3', fullPath: '/x/b.mp3' });
+    expect(document.getElementById('cue-editor-select')).toBeNull();
+  });
+
+  it('affiche un toast quand le match échoue côté serveur (fichier introuvable)', async () => {
+    mockWSCreate.mockReturnValue(makeWS());
+    mockApi.mockResolvedValueOnce({ configured: true });
+    mockApi.mockRejectedValueOnce(new Error('fichier introuvable'));
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    expect(mockState.activeModal).toBeNull();
+    expect(showToast).toHaveBeenCalledWith('⚠️ fichier introuvable');
+  });
 });
 
 describe('render/cueEditor wavesurfer', () => {
-  beforeEach(() => {
-    document.body.innerHTML = `
-      <div id="modal-cue-editor" class="modal hidden">
-        <div id="cue-editor-title"></div>
-        <div id="cue-editor-status"></div>
-        <div id="cue-editor-waveform"><span>placeholder</span></div>
-      </div>
-    `;
-    mockApi.mockReset();
-    mockWSCreate.mockReset();
-    mockRegionsCreate.mockReset();
-  });
+  beforeEach(resetMocks);
 
   it("crée un WaveSurfer avec l'URL audio et le plugin Regions sur ready", async () => {
     const ws = makeWS();
@@ -779,4 +848,127 @@ describe('render/cueEditor lecture de boucle (🔁 Play)', () => {
   });
 });
 
+describe('render/cueEditor ajout à la collection (POST /api/track/add)', () => {
+  beforeEach(resetMocks);
+
+  function openReadOnly(): Promise<void> {
+    mockWSCreate.mockReturnValue(makeWS());
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({ ok: true, multiple: false, entries: [] });
+    return openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+  }
+
+  const flush = () => new Promise(r => setTimeout(r, 0));
+
+  it('le bouton Ajouter POST /api/track/add puis bascule en mode édition', async () => {
+    await openReadOnly();
+    const addRow = document.getElementById('cue-editor-addrow') as HTMLElement;
+    const saveBtn = document.getElementById('cue-btn-save') as HTMLButtonElement;
+    expect(addRow.classList.contains('hidden')).toBe(false);
+    expect(saveBtn.disabled).toBe(true);
+    // POST add puis re-match → édition active
+    mockApi
+      .mockResolvedValueOnce({
+        ok: true,
+        already: false,
+        entry: { filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', dir: '/:D:/:', volume: 'D:' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        multiple: false,
+        entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+      });
+    (document.getElementById('cue-btn-add') as HTMLButtonElement).click();
+    await flush();
+    const addCall = mockApi.mock.calls.find(([u]: [string]) => u === '/api/track/add');
+    expect(addCall).toBeDefined();
+    const body = JSON.parse((addCall[1] as { body: string }).body);
+    expect(body.path).toBe('/x/a.mp3');
+    expect(saveBtn.disabled).toBe(false); // sauvegarde ré-activée
+    expect(addRow.classList.contains('hidden')).toBe(true); // ligne retirée
+    expect(document.getElementById('cue-editor-title')!.textContent).toContain('X');
+    expect(showToast).toHaveBeenCalledWith('✅ piste ajoutée à la collection');
+  });
+
+  it('le volume saisi est envoyé au POST', async () => {
+    await openReadOnly();
+    const input = document.getElementById('cue-add-volume') as HTMLInputElement;
+    input.value = 'D:';
+    mockApi.mockResolvedValueOnce({ ok: true, already: false, entry: {} }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    (document.getElementById('cue-btn-add') as HTMLButtonElement).click();
+    await flush();
+    const addCall = mockApi.mock.calls.find(([u]: [string]) => u === '/api/track/add');
+    const body = JSON.parse((addCall[1] as { body: string }).body);
+    expect(body.volume).toBe('D:');
+  });
+
+  it('pré-remplit le volume depuis la config active', async () => {
+    mockWSCreate.mockReturnValue(makeWS());
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({ ok: true, multiple: false, entries: [] })
+      .mockResolvedValueOnce({ active: 0, configs: [{ traktor_export_volume: 'D:' }] });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    await flush();
+    const input = document.getElementById('cue-add-volume') as HTMLInputElement;
+    expect(input.value).toBe('D:');
+  });
+
+  it("toast d'erreur et bouton ré-activé si l'ajout échoue", async () => {
+    await openReadOnly();
+    mockApi.mockRejectedValueOnce(new Error('NML non configuré'));
+    const btn = document.getElementById('cue-btn-add') as HTMLButtonElement;
+    btn.click();
+    await flush();
+    expect(showToast).toHaveBeenCalledWith('❌ NML non configuré');
+    expect(btn.disabled).toBe(false);
+  });
+
+  it("déjà présent → pas d'erreur, mode édition direct (already)", async () => {
+    await openReadOnly();
+    mockApi.mockResolvedValueOnce({ ok: true, already: true, entry: { filename: 'a.mp3' } }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    (document.getElementById('cue-btn-add') as HTMLButtonElement).click();
+    await flush();
+    expect(showToast).toHaveBeenCalledWith('✅ déjà dans la collection');
+    const saveBtn = document.getElementById('cue-btn-save') as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(false);
+  });
+
+  it("fermer la modal réinitialise la ligne d'ajout", async () => {
+    await openReadOnly();
+    const addRow = document.getElementById('cue-editor-addrow') as HTMLElement;
+    expect(addRow.classList.contains('hidden')).toBe(false);
+    mockState.setModal(null); // fermeture → destroyCueEditor
+    expect(addRow.classList.contains('hidden')).toBe(true);
+  });
+
+  it("fermer la modal pendant l'ajout ne la ré-ouvre pas (race)", async () => {
+    await openReadOnly();
+    let release: (v: unknown) => void = () => {};
+    const gate = new Promise(r => {
+      release = r;
+    });
+    mockApi.mockImplementationOnce(() => gate as Promise<unknown>); // POST en attente
+    mockApi.mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    (document.getElementById('cue-btn-add') as HTMLButtonElement).click();
+    mockState.setModal(null); // l'utilisateur ferme pendant la requête (~1,5 s)
+    release({ ok: true, already: false, entry: {} });
+    await flush();
+    const modal = document.getElementById('modal-cue-editor');
+    expect(modal!.classList.contains('hidden')).toBe(true); // toujours fermée
+    expect(mockState.activeModal).toBeNull();
+  });
 });

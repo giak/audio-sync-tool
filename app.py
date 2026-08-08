@@ -105,6 +105,39 @@ def get_audio_meta(path):
     return year, duration, codec
 
 
+def get_audio_tags(path):
+    """Tags audio (title, artist, album) + bitrate/playtime — fallback nom de fichier."""
+    stem = os.path.splitext(os.path.basename(path))[0]
+    title = stem
+    artist = album = ''
+    bitrate = None
+    playtime = None
+    if not HAS_MUTAGEN:
+        return title, artist, album, bitrate, playtime
+    try:
+        audio = MutagenFile(path, easy=False)
+        if audio is None:
+            return title, artist, album, bitrate, playtime
+        if hasattr(audio.info, 'length') and audio.info.length is not None:
+            playtime = audio.info.length
+        if hasattr(audio.info, 'bitrate') and audio.info.bitrate:
+            bitrate = audio.info.bitrate
+        tags = getattr(audio, 'tags', None)
+        if tags:
+            def first(*keys):
+                for k in keys:
+                    v = tags.get(k)
+                    if v:
+                        return str(v[0] if isinstance(v, (list, tuple)) else v)
+                return ''
+            title = first('TIT2', 'title', 'TITLE') or title
+            artist = first('TPE1', 'artist', 'ARTIST')
+            album = first('TALB', 'album', 'ALBUM')
+    except Exception:
+        pass
+    return title, artist, album, bitrate, playtime
+
+
 def log_journal(entry):
     """Append an entry to the journal."""
     journal = load_json(JOURNAL_PATH, [])
@@ -257,6 +290,70 @@ def track_match():
         meta = nml_module.get_entry_meta(e)
         entries.append({**meta, 'cues': nml_module.get_cues(e)})
     return jsonify({'ok': True, 'entries': entries, 'multiple': len(entries) > 1})
+
+
+@app.route('/api/track/add', methods=['POST'])
+def track_add():
+    """Ajoute une piste ABSENTE de la collection au collection.nml (ENTRY créé).
+
+    VOLUME : celui de la requête, sinon traktor_export_volume de la config, sinon
+    TRAKTOR_USB. DIR : chemin relatif au dossier source (ou dossier parent sinon).
+    Traktor régénérera l'analyse (AUDIO_ID, BPM, beatgrid…) au prochain scan.
+    """
+    data = request.json
+    if not data or 'path' not in data:
+        return jsonify({'ok': False, 'error': 'path manquant'}), 400
+    local = data.get('path', '')
+    if not local or not os.path.exists(local):
+        return jsonify({'ok': False, 'error': 'fichier introuvable'}), 404
+    if not is_path_allowed(local):
+        return jsonify({'ok': False, 'error': 'chemin hors des dossiers autorisés'}), 403
+    tree, idx, nml_path = get_nml_index()
+    if not tree:
+        return jsonify({'ok': False, 'error': 'NML non configuré ou invalide'}), 400
+    filename = os.path.basename(local)
+    filesize = os.path.getsize(local)
+    hits = idx.get((filename, str(filesize)), [])
+    if hits:
+        return jsonify({'ok': True, 'already': True,
+                        'entry': nml_module.get_entry_meta(hits[0])})
+    cfg = get_active_config()
+    volume = str(data.get('volume') or cfg.get('traktor_export_volume') or 'TRAKTOR_USB').strip()
+    if not volume:
+        volume = 'TRAKTOR_USB'
+    elif len(volume) > 64:
+        return jsonify({'ok': False, 'error': 'volume invalide (max 64 caractères)'}), 400
+    title, artist, album, _bitrate, playtime = get_audio_tags(local)
+    source = cfg.get('source_data', '') or ''
+    parent = os.path.dirname(local)
+    # normpath des deux côtés : source_data peut porter un slash final (config
+    # réelle) — un fichier À LA RACINE du dossier source donne rel='' (DIR=volume).
+    src_norm = os.path.normpath(source) if source else ''
+    par_norm = os.path.normpath(parent)
+    try:
+        if src_norm and (par_norm == src_norm or par_norm.startswith(src_norm + os.sep)):
+            rel = os.path.relpath(par_norm, src_norm)
+            if rel == '.':
+                rel = ''  # fichier à la racine du dossier source → DIR = volume seul
+        else:
+            rel = parent.strip(os.sep)
+    except ValueError:
+        rel = parent.strip(os.sep)
+    dir_attr = nml_module.traktor_dir(rel, volume)
+    meta = {'filename': filename, 'title': title, 'artist': artist, 'album': album}
+    entry_el = nml_module.build_entry_element(meta, filesize, playtime, volume, dir_attr)
+    nml_module.append_entry(tree, entry_el)
+    try:
+        nml_module.save_nml(nml_path, tree)
+    except OSError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    log_journal({'timestamp': datetime.now().isoformat(),
+                 'action': 'Piste ajoutée à la collection',
+                 'filename': filename, 'details': f'VOLUME={volume} DIR={dir_attr}',
+                 'status': 'collection'})
+    return jsonify({'ok': True, 'already': False,
+                    'entry': nml_module.get_entry_meta(entry_el),
+                    'volume': volume, 'dir': dir_attr})
 
 
 @app.route('/scan')

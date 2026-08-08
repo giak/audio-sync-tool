@@ -26,6 +26,8 @@ let ws: WaveSurfer | null = null;
 let _regions: any = null;
 let _entryRef: CueEntryRef | null = null;
 let _trackPath = '';
+/** Piste courante (filename + fullPath) — re-match après ajout à la collection. */
+let _trackLite: PlaylistTrackLite | null = null;
 /** hotcue → DISPL_ORDER d'origine (round-trip). wavesurfer perd les metadata custom
  *  des régions, donc on garde un Map séparé peuplé au chargement des cues. */
 let _displOrders = new Map<number, string>();
@@ -115,6 +117,44 @@ function snapBtnEl(): HTMLButtonElement | null {
 
 function loopPlayBtnEl(): HTMLButtonElement | null {
   return document.getElementById('cue-btn-loopplay') as HTMLButtonElement | null;
+}
+
+function addRowEl(): HTMLElement | null {
+  return document.getElementById('cue-editor-addrow');
+}
+
+function addVolumeInput(): HTMLInputElement | null {
+  return document.getElementById('cue-add-volume') as HTMLInputElement | null;
+}
+
+function addBtnEl(): HTMLButtonElement | null {
+  return document.getElementById('cue-btn-add') as HTMLButtonElement | null;
+}
+
+function showAddRow(): void {
+  const row = addRowEl();
+  if (row) row.classList.remove('hidden');
+  void prefillVolumeInput();
+}
+
+function hideAddRow(): void {
+  const row = addRowEl();
+  if (row) row.classList.add('hidden');
+  const btn = addBtnEl();
+  if (btn) btn.disabled = false;
+}
+
+/** Pré-remplit le volume depuis la config active (traktor_export_volume). */
+async function prefillVolumeInput(): Promise<void> {
+  const input = addVolumeInput();
+  if (!input || input.value.trim()) return;
+  try {
+    const cfg = await api<{ active?: number; configs?: Array<{ traktor_export_volume?: string }> }>('/config');
+    const profile = cfg?.configs?.[cfg.active ?? 0];
+    if (profile && !input.value.trim()) input.value = profile.traktor_export_volume || 'TRAKTOR_USB';
+  } catch {
+    /* silencieux — le serveur applique son propre défaut */
+  }
 }
 
 function updateSnapBtn(): void {
@@ -250,6 +290,11 @@ export function wireControls(root: HTMLElement = document.body): void {
     _wired.add(loop);
     loop.addEventListener('click', () => toggleLoopMode());
   }
+  const addBtn = root.querySelector<HTMLButtonElement>('#cue-btn-add');
+  if (addBtn && !_wired.has(addBtn)) {
+    _wired.add(addBtn);
+    addBtn.addEventListener('click', () => void onAddToCollectionClicked());
+  }
   const loopPlay = root.querySelector<HTMLButtonElement>('#cue-btn-loopplay');
   if (loopPlay && !_wired.has(loopPlay)) {
     _wired.add(loopPlay);
@@ -347,29 +392,74 @@ export async function openCueEditor(track: PlaylistTrackLite): Promise<void> {
     showToast('⚠️ Configurer traktor_nml_path pour éditer les cues');
     return;
   }
-  const data = await api<{ ok: boolean; entries: any[]; multiple: boolean }>(
-    `/api/track/match?path=${encodeURIComponent(track.fullPath)}`);
-  if (!data.ok || data.entries.length === 0) {
-    showToast('⚠️ Aucune piste matchée dans la collection');
+  let data: { ok: boolean; entries: any[]; multiple: boolean; error?: string };
+  try {
+    data = await api<{ ok: boolean; entries: any[]; multiple: boolean; error?: string }>(
+      `/api/track/match?path=${encodeURIComponent(track.fullPath)}`,
+    );
+  } catch (err) {
+    // api() lève ApiError sur 404 (fichier introuvable) / 400 (NML invalide).
+    showToast(`⚠️ ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  if (!data.ok) {
+    showToast(`⚠️ ${data.error || 'fichier introuvable'}`);
     return;
   }
   _trackPath = track.fullPath;
+  _trackLite = track;
+  const title = document.getElementById('cue-editor-title') as HTMLElement | null;
+  const saveBtn = document.getElementById('cue-btn-save') as HTMLButtonElement | null;
+  // Retire le sélecteur d'homonymes d'une ouverture précédente (ses closures
+  // pointeraient vers l'ancienne piste — mélange de données sinon).
+  const staleSelect = document.getElementById('cue-editor-select');
+  if (staleSelect) staleSelect.remove();
+  if (data.entries.length === 0) {
+    // Mode visualisation seule : le fichier existe mais n'est pas dans la collection.
+    // Le bouton doit TOUJOURS donner accès à l'outil waveform — sauvegarde désactivée,
+    // mais la piste peut être AJOUTÉE à la collection (le vrai correctif).
+    if (title) title.textContent = track.filename;
+    setStatus('⚠️ Piste absente de la collection Traktor — ➕ Ajoute-la pour pouvoir sauvegarder les cues.');
+    _entryRef = null;
+    if (saveBtn) saveBtn.disabled = true;
+    showAddRow();
+    state.activeModal = 'cueEditor';
+    const modal = document.getElementById('modal-cue-editor');
+    if (modal) modal.classList.remove('hidden');
+    wireControls(document.body);
+    await renderWaveform(track.fullPath, []);
+    return;
+  }
+  await renderMatchedEntry(track, data);
+}
+
+/** Bascule en mode édition avec une entrée matchée (titre, statut, homonymes,
+ *  modal, waveform). Aussi utilisé après l'ajout à la collection. */
+async function renderMatchedEntry(
+  track: PlaylistTrackLite,
+  data: { ok: boolean; entries: any[]; multiple: boolean },
+): Promise<void> {
+  const saveBtn = document.getElementById('cue-btn-save') as HTMLButtonElement | null;
+  if (saveBtn) saveBtn.disabled = false;
+  hideAddRow();
   const stored = storedIndex(track.filename);
   const idx = stored >= 0 && stored < data.entries.length ? stored : 0;
   const entry = data.entries[idx];
-  _entryRef = { filename: entry.filename, filesize: entry.filesize };
+  _entryRef = { filename: entry.filename, filesize: entry.filesize, entry: idx };
   const title = document.getElementById('cue-editor-title') as HTMLElement | null;
   if (title) title.textContent = `${entry.artist || ''} — ${entry.title || entry.filename}`;
+  setStatus(
+    `Piste éditée : ${entry.volume || '—'}${entry.dir ? ` ${entry.dir}` : ''} — ▶ pour écouter, slot A–H pour poser un cue.`,
+  );
   const controls = document.getElementById('cue-editor-controls') as HTMLElement | null;
-  const existing = document.getElementById('cue-editor-select');
-  if (existing) existing.remove();
   if (data.multiple && controls) {
     const select = document.createElement('select');
     select.id = 'cue-editor-select';
     data.entries.forEach((e, i) => {
       const opt = document.createElement('option');
       opt.value = String(i);
-      opt.textContent = `${e.artist || e.filename} — ${e.title || e.filename}`;
+      // DIR/VOLUME discriminent les homonymes réels (audit B3).
+      opt.textContent = `${e.artist || e.filename} — ${e.title || e.filename} (${e.volume || '?'}${e.dir ? ` ${e.dir}` : ''})`;
       if (i === idx) opt.selected = true;
       select.appendChild(opt);
     });
@@ -385,6 +475,39 @@ export async function openCueEditor(track: PlaylistTrackLite): Promise<void> {
   if (modal) modal.classList.remove('hidden');
   wireControls(document.body);
   await renderWaveform(track.fullPath, entry.cues || []);
+/** Ajoute la piste courante à la collection (mode visualisation seule) puis
+ *  re-matche pour basculer en mode édition. */
+export async function onAddToCollectionClicked(): Promise<void> {
+  const btn = addBtnEl();
+  const track = _trackLite; // capturé : la fermeture de la modal pendant la requête
+  if (!btn || !_trackPath || !track) return;
+  btn.disabled = true;
+  setStatus('⏳ Ajout à la collection…');
+  try {
+    const volume = addVolumeInput()?.value.trim() || undefined;
+    const res = await api<{ ok: boolean; already?: boolean; error?: string }>('/api/track/add', {
+      method: 'POST',
+      body: JSON.stringify({ path: _trackPath, volume }),
+    });
+    if (!res.ok) throw new Error(res.error || 'ajout refusé');
+    const data = await api<{ ok: boolean; entries: any[]; multiple: boolean }>(
+      `/api/track/match?path=${encodeURIComponent(_trackPath)}`,
+    );
+    if (!data.ok || data.entries.length === 0) {
+      setStatus('⚠️ Entrée créée mais introuvable au re-match — recharge la page.');
+      return;
+    }
+    // Modal fermée pendant la requête (~1,5 s) → ne pas la ré-ouvrir.
+    if (!_trackLite || state.activeModal !== 'cueEditor') return;
+    await renderMatchedEntry(track, data);
+    showToast(res.already ? '✅ déjà dans la collection' : '✅ piste ajoutée à la collection');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    setStatus(`❌ ${msg}`);
+    showToast(`❌ ${msg}`);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function renderEntry(idx: number, entries: any[]): Promise<void> {
@@ -488,8 +611,10 @@ export function destroyCueEditor(): void {
   _dragCleanup = null;
   _loopMode = false;
   _entryRef = null;
+  _trackLite = null;
   _displOrders = new Map();
   stopLoopPlay();
+  hideAddRow();
   _grid = [];
   _bpm = null;
   updateSnapBtn();

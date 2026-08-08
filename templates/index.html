@@ -238,7 +238,15 @@
       </div>
     </div>
     <div id="cue-editor-status"></div>
+    <div id="cue-editor-addrow" class="hidden">
+      <label>Volume Traktor :
+        <input type="text" id="cue-add-volume" placeholder="TRAKTOR_USB" spellcheck="false" autocomplete="off" title="Volume que Traktor verra (ex. D:, TRAKTOR_USB)">
+      </label>
+      <button id="cue-btn-add">➕ Ajouter à la collection</button>
+      <span class="cue-hint">Ajoute un ENTRY au collection.nml (backup .bak automatique) — la sauvegarde des cues devient alors possible.</span>
+    </div>
     <div id="cue-editor-waveform"></div>
+    <div id="cue-editor-transport">
       <button id="cue-btn-play" class="cue-play" title="Lecture / pause (Espace)">▶</button>
       <span id="cue-editor-time">0:00 / 0:00</span>
       <button id="cue-btn-loop" class="cue-play" title="Mode loop : glisser sur la waveform pour dessiner une boucle (calée sur la grille si active)">⟳ Loop</button>

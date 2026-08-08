@@ -1,7 +1,7 @@
 import os
 import xml.etree.ElementTree as ET
 import pytest
-from nml import load_nml, build_index, get_cues, get_entry_meta, write_cues, save_nml, build_export_nml
+from nml import load_nml, build_index, get_cues, get_entry_meta, write_cues, save_nml, build_export_nml, build_entry_element, append_entry
 
 DATA = os.path.join('tests', 'fixtures', 'nml-sample.xml')
 
@@ -109,10 +109,59 @@ def test_save_nml_header_and_half_not_commit(tmp_path):
     assert '<?xml version="1.0" encoding="UTF-8" standalone="no" ?>' in raw
 
 
+def test_build_entry_element_shape():
+    """L'ENTRY construit pour une piste absente porte LOCATION + INFO/FILESIZE
+    (clé de match) et les métadonnées fournies."""
+    el = build_entry_element(
+        {'filename': 'new-track.mp3', 'title': 'Titre', 'artist': 'Artiste', 'album': 'Album'},
+        1234, 200.5, 'D:', '/:D:/:Mix/:',)
+    assert el.tag == 'ENTRY'
+    assert el.get('TITLE') == 'Titre'
+    assert el.get('ARTIST') == 'Artiste'
+    loc = el.find('LOCATION')
+    assert loc is not None
+    assert loc.get('FILE') == 'new-track.mp3'
+    assert loc.get('DIR') == '/:D:/:Mix/:'
+    assert loc.get('VOLUME') == 'D:'
+    info = el.find('INFO')
+    assert info is not None
+    assert info.get('FILESIZE') == '1234'
+    assert info.get('PLAYTIME') == '200'
+    assert info.get('PLAYTIME_FLOAT') == '200.500000'
+    assert info.get('PLAYCOUNT') == '0'
+    assert el.find('MODIFICATION_INFO').get('AUTHOR_TYPE') == 'user'
+    assert el.find('ALBUM').get('TITLE') == 'Album'
+
+
+def test_build_entry_element_fallback_title_artist():
+    """Sans tags : TITLE = nom de fichier (sans extension), ARTIST vide."""
+    el = build_entry_element({'filename': 'only-file.mp3', 'artist': '', 'album': ''},
+                             1, None, 'TRAKTOR_USB', '/:TRAKTOR_USB/:',)
+    assert el.get('TITLE') == 'only-file'
+    assert el.get('ARTIST') == ''
+    assert el.find('INFO').get('PLAYTIME') is None
+
+
+def test_append_entry_updates_count_and_index(tmp_path):
+    """append_entry : ENTRIES incrémenté ET l'entrée est indexable (FILE, FILESIZE)."""
+    tree = load_nml(DATA)
+    coll = tree.getroot().find('./COLLECTION')
+    before = int(coll.get('ENTRIES'))
+    el = build_entry_element({'filename': 'added.mp3', 'title': 'A', 'artist': '', 'album': ''},
+                             99, None, 'D:', '/:D:/:x/:',)
+    append_entry(tree, el)
+    assert int(coll.get('ENTRIES')) == before + 1
+    idx = build_index(tree)
+    assert ('added.mp3', '99') in idx
+    assert len(idx[('added.mp3', '99')]) == 1
+
+
 def test_traktor_dir():
     from nml import traktor_dir
     assert traktor_dir('Mix/Folder', 'TRAKTOR_USB') == '/:TRAKTOR_USB/:Mix/:Folder/:'
     assert traktor_dir('', 'TRAKTOR_USB') == '/:TRAKTOR_USB/:'
+
+
 def _copy_fixture(tmp_path, name='c.nml'):
     dst = tmp_path / name
     dst.write_text(open(DATA).read(), encoding='utf-8')

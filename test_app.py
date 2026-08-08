@@ -1527,6 +1527,157 @@ def test_export_nml_location_rewritten_via_route(client, tmp_path, monkeypatch):
 # ── Cue editor — régressions de l'audit 2026-08-08 ──────────────────────────
 
 
+# ── POST /api/track/add — piste absente → ENTRY créé dans la collection ────
+
+
+def _setup_nml_and_src(tmp_path):
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    src = tmp_path / 'source'
+    os.makedirs(src)
+    return nml_path, src
+
+
+def test_track_add_ok(client, tmp_path, monkeypatch):
+    """Ajoute une piste absente : ENTRY écrit dans le fichier + backup + re-match OK."""
+    nml_path, src = _setup_nml_and_src(tmp_path)
+    track = src / 'new-track.mp3'
+    track.write_bytes(b'x' * 999)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src),
+        'traktor_export_volume': ''})
+
+    rv = client.post('/api/track/add', json={'path': str(track)})
+    assert rv.status_code == 200
+    data = rv.get_json()
+    assert data['ok'] is True
+    assert data['already'] is False
+    assert data['entry']['filename'] == 'new-track.mp3'
+    assert data['volume'] == 'TRAKTOR_USB'  # défaut config
+    assert (tmp_path / 'c.nml.bak.nml').exists()
+
+    import nml
+    tree = nml.load_nml(str(nml_path))
+    idx = nml.build_index(tree)
+    assert ('new-track.mp3', '999') in idx
+    # re-match → l'entrée est trouvée (sauvegarde des cues désormais possible)
+    rv2 = client.get('/api/track/match', query_string={'path': str(track)})
+    assert rv2.status_code == 200
+    assert len(rv2.get_json()['entries']) == 1
+    # journal
+    rv3 = client.get('/journal')
+    assert any(e['status'] == 'collection' for e in rv3.get_json())
+
+
+def test_track_add_already_present(client, tmp_path, monkeypatch):
+    """Piste déjà dans la collection → already:True, aucun doublon créé."""
+    nml_path, src = _setup_nml_and_src(tmp_path)
+    track = src / 'Carbon Decay - In The Warehouse.mp3'  # présent dans la fixture
+    track.write_bytes(b'x' * 5243)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src),
+        'traktor_export_volume': ''})
+
+    rv = client.post('/api/track/add', json={'path': str(track)})
+    assert rv.status_code == 200
+    data = rv.get_json()
+    assert data['ok'] is True
+    assert data['already'] is True
+    import nml
+    tree = nml.load_nml(str(nml_path))
+    idx = nml.build_index(tree)
+    assert len(idx[('Carbon Decay - In The Warehouse.mp3', '5243')]) == 1  # pas de doublon
+
+
+def test_track_add_file_at_source_root(client, tmp_path, monkeypatch):
+    """Fichier À LA RACINE du dossier source (config avec slash final — cas réel)
+    → DIR = volume seul, pas le chemin Linux absolu."""
+    nml_path, src = _setup_nml_and_src(tmp_path)
+    track = src / 'root.mp3'
+    track.write_bytes(b'x' * 7)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src) + os.sep,
+        'traktor_export_volume': 'TRAKTOR_USB'})
+
+    rv = client.post('/api/track/add', json={'path': str(track)})
+    assert rv.status_code == 200
+    import nml
+    tree = nml.load_nml(str(nml_path))
+    locs = [e for e in tree.getroot().findall('./COLLECTION/ENTRY/LOCATION')
+            if e.get('FILE') == 'root.mp3']
+    assert len(locs) == 1
+    assert locs[0].get('DIR') == '/:TRAKTOR_USB/:'
+
+
+def test_track_add_volume_too_long(client, tmp_path, monkeypatch):
+    """Volume de plus de 64 caractères → 400 (le NML reste intact)."""
+    nml_path, src = _setup_nml_and_src(tmp_path)
+    track = src / 'v.mp3'
+    track.write_bytes(b'x' * 3)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src)})
+    rv = client.post('/api/track/add', json={'path': str(track), 'volume': 'V' * 100})
+    assert rv.status_code == 400
+    assert 'volume' in rv.get_json()['error']
+
+
+def test_track_add_volume_override(client, tmp_path, monkeypatch):
+    """Le volume fourni dans la requête est respecté (LOCATION/VOLUME + DIR)."""
+    nml_path, src = _setup_nml_and_src(tmp_path)
+    sub = src / 'house' / '2024'
+    os.makedirs(sub)
+    track = sub / 'over.mp3'
+    track.write_bytes(b'x' * 42)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src),
+        'traktor_export_volume': 'TRAKTOR_USB'})
+
+    rv = client.post('/api/track/add', json={'path': str(track), 'volume': 'D:'})
+    assert rv.status_code == 200
+    assert rv.get_json()['volume'] == 'D:'
+    import nml
+    tree = nml.load_nml(str(nml_path))
+    locs = [e for e in tree.getroot().findall('./COLLECTION/ENTRY/LOCATION') if e.get('FILE') == 'over.mp3']
+    assert len(locs) == 1
+    loc = locs[0]
+    assert loc.get('VOLUME') == 'D:'
+    # DIR relatif au dossier source : house/2024
+    assert loc.get('DIR') == '/:D:/:house/:2024/:'
+
+
+def test_track_add_missing_file(client, tmp_path, monkeypatch):
+    """Fichier inexistant → 404."""
+    nml_path, src = _setup_nml_and_src(tmp_path)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src)})
+    rv = client.post('/api/track/add', json={'path': str(src / 'ghost.mp3')})
+    assert rv.status_code == 404
+
+
+def test_track_add_no_nml(client, tmp_path, monkeypatch):
+    """NML non configuré → 400."""
+    with tempfile.TemporaryDirectory() as tmp:
+        track = os.path.join(tmp, 'x.mp3')
+        open(track, 'w').close()
+        monkeypatch.setattr('app.get_active_config', lambda: {'source_data': tmp})
+        rv = client.post('/api/track/add', json={'path': track})
+        assert rv.status_code == 400
+        assert 'NML' in rv.get_json()['error']
+
+
+def test_track_add_outside_allowed(client, tmp_path, monkeypatch):
+    """Fichier hors des dossiers autorisés → 403 (cohérent avec /audio)."""
+    nml_path, src = _setup_nml_and_src(tmp_path)
+    outside = tmp_path / 'elsewhere'
+    os.makedirs(outside)
+    track = outside / 'leak.mp3'
+    track.write_bytes(b'x' * 5)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src)})
+    rv = client.post('/api/track/add', json={'path': str(track)})
+    assert rv.status_code == 403
+
+
 def test_main_execution_registers_track_cues_route(monkeypatch):
     """Régression B1 : en exécution `python app.py` (run_name='__main__'), la route
     /api/track/cues DOIT être enregistrée. Elle était déclarée après le bloc
