@@ -34,7 +34,6 @@ const cfgStatus = document.getElementById('config-status') as HTMLElement | null
 
 export function renderConfigSelect(): void {
   if (!cfgSelect) return;
-  const prev = cfgSelect.value;
   cfgSelect.innerHTML = '';
   configData.configs.forEach((c, i) => {
     const opt = document.createElement('option');
@@ -42,7 +41,7 @@ export function renderConfigSelect(): void {
     opt.textContent = c.name || `config-${i}`;
     cfgSelect.appendChild(opt);
   });
-  cfgSelect.value = parseInt(prev, 10) < configData.configs.length ? prev : '0';
+  cfgSelect.value = configData.active < configData.configs.length ? String(configData.active) : '0';
   loadActiveConfig();
 }
 

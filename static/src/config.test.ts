@@ -165,4 +165,15 @@ describe('initConfigUI', () => {
     expect(select.options[0].textContent).toBe('alpha');
     expect(select.options[1].textContent).toBe('beta');
   });
+
+  it('renderConfigSelect présélectionne le profil actif, pas toujours 0', () => {
+    configData.configs = [
+      { name: 'smoke-test', source_data: '/tmp/x', epars_dirs: [] },
+      { name: 'travail', source_data: '/home/music', epars_dirs: [] },
+    ];
+    configData.active = 1;
+    renderConfigSelect();
+    const select = document.getElementById('cfg-select') as HTMLSelectElement;
+    expect(select.value).toBe('1');
+  });
 });
