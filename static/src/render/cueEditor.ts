@@ -6,6 +6,7 @@ import { state, on } from '../state.js';
 import { showToast } from '../ui.js';
 import { cuesToRegions, regionToCue, hotToLabel } from '../cueModel.js';
 import type { CueDTO } from '../cueModel.js';
+import { formatTime } from '../utils.js';
 
 export interface PlaylistTrackLite {
   filename: string;
@@ -15,6 +16,8 @@ export interface PlaylistTrackLite {
 export interface CueEntryRef {
   filename: string;
   filesize: string;
+  /** Index de l'entrée choisie dans la liste /api/track/match — désambiguïsation multi-match. */
+  entry: number;
 }
 
 let _saving = false;
@@ -24,6 +27,40 @@ let _entryRef: CueEntryRef | null = null;
 let _trackPath = '';
 
 const _wired = new WeakSet<Element>();
+
+// ── Transport (play/pause + temps courant) ─────────────────────────────────
+
+function playBtnEl(): HTMLButtonElement | null {
+  return document.getElementById('cue-btn-play') as HTMLButtonElement | null;
+}
+
+function timeEl(): HTMLElement | null {
+  return document.getElementById('cue-editor-time') as HTMLElement | null;
+}
+
+function setPlayingUI(playing: boolean): void {
+  const btn = playBtnEl();
+  if (!btn) return;
+  btn.textContent = playing ? '⏸' : '▶';
+  btn.classList.toggle('playing', playing);
+}
+
+function updateTimeUI(): void {
+  if (!ws) return;
+  const el = timeEl();
+  if (!el) return;
+  const dur = ws.getDuration() || 0;
+  el.textContent = `${formatTime(ws.getCurrentTime())} / ${formatTime(dur)}`;
+}
+
+function statusEl(): HTMLElement | null {
+  return document.getElementById('cue-editor-status');
+}
+
+function setStatus(msg: string): void {
+  const el = statusEl();
+  if (el) el.textContent = msg;
+}
 
 export function wireControls(root: HTMLElement = document.body): void {
   for (const el of root.querySelectorAll<HTMLElement>('.cue-slot')) {
@@ -37,11 +74,44 @@ export function wireControls(root: HTMLElement = document.body): void {
     _wired.add(btn);
     btn.addEventListener('click', () => void onSaveClicked());
   }
+  const play = root.querySelector<HTMLButtonElement>('#cue-btn-play');
+  if (play && !_wired.has(play)) {
+    _wired.add(play);
+    play.addEventListener('click', () => {
+      // ▶ coupe aussi la lecture en boucle en cours.
+      if (_loopPlay) stopLoopPlay();
+      ws?.playPause();
+    });
+  }
 }
 
 on('activeModal:changed', () => {
   if (state.activeModal !== 'cueEditor') destroyCueEditor();
 });
+
+// Transport clavier quand la modal cueEditor est ouverte : le registry global
+// (script.ts) bloque les touches hors Échap dès qu'une modale est ouverte.
+function onModalKeydown(e: KeyboardEvent): void {
+  if (state.activeModal !== 'cueEditor') return;
+  const t = e.target as HTMLElement | null;
+  // BUTTON exclu : Espace sur un bouton focusé déclenche déjà son click natif (double toggle sinon).
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.tagName === 'BUTTON'))
+    return;
+  if (e.key === ' ') {
+    e.preventDefault();
+    ws?.playPause();
+  } else if (e.key === 'ArrowLeft' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    if (ws) ws.setTime(Math.max(0, ws.getCurrentTime() - 5));
+  } else if (e.key === 'ArrowRight' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    if (ws) ws.setTime(Math.min(ws.getDuration(), ws.getCurrentTime() + 5));
+  } else if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    deleteRegionAtCursor();
+  }
+}
+document.addEventListener('keydown', onModalKeydown);
 
 function storedIndex(filename: string): number {
   const raw = localStorage.getItem(`cue/sel:${filename}`);
@@ -96,9 +166,10 @@ export async function openCueEditor(track: PlaylistTrackLite): Promise<void> {
 }
 
 async function renderEntry(idx: number, entries: any[]): Promise<void> {
-  const entry = entries[idx] ?? entries[0];
+  const valid = idx >= 0 && idx < entries.length;
+  const entry = valid ? entries[idx] : entries[0];
   if (!entry) return;
-  _entryRef = { filename: entry.filename, filesize: entry.filesize };
+  _entryRef = { filename: entry.filename, filesize: entry.filesize, entry: valid ? idx : 0 };
   const title = document.getElementById('cue-editor-title') as HTMLElement | null;
   if (title) title.textContent = `${entry.artist || ''} — ${entry.title || entry.filename}`;
   await renderWaveform(_trackPath, entry.cues || []);
@@ -109,9 +180,20 @@ export async function renderWaveform(path: string, cues: CueDTO[]): Promise<void
   if (!el) return;
   el.innerHTML = '';
   ws = WaveSurfer.create({ container: el, url: `/audio?path=${encodeURIComponent(path)}` });
+  setPlayingUI(false);
+  const time = timeEl();
+  if (time) time.textContent = '0:00 / 0:00';
   ws.on('ready', () => {
     _regions = ws!.registerPlugin(Regions.create());
     for (const r of cuesToRegions(cues)) _regions.addRegion(r);
+    updateTimeUI();
+  ws.on('play', () => setPlayingUI(true));
+  ws.on('pause', () => setPlayingUI(false));
+  ws.on('timeupdate', () => {
+    updateTimeUI();
+  ws.on('error', (err: unknown) => {
+    setPlayingUI(false);
+    setStatus(`⚠️ Lecture impossible : ${err instanceof Error ? err.message : String(err)}`);
   });
 }
 
@@ -120,6 +202,8 @@ export function destroyCueEditor(): void {
   ws = null;
   _regions = null;
   _entryRef = null;
+  setPlayingUI(false);
+  setStatus('');
 }
 
 export function onSlotClicked(slot: number): void {
@@ -136,6 +220,7 @@ export async function saveCues(cues: CueDTO[]): Promise<void> {
   const payload = {
     filename: _entryRef.filename,
     filesize: _entryRef.filesize,
+    entry: _entryRef.entry,
     cues,
   };
   const res = await api<{ ok: boolean }>('/api/track/cues', {

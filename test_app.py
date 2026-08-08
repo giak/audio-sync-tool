@@ -1459,3 +1459,137 @@ def test_config_preserves_traktor_nml_path(client):
     rv = client.get('/config')
     assert rv.status_code == 200
     assert rv.json['configs'][0]['traktor_nml_path'] == '/data/collection.nml'
+def test_main_execution_registers_track_cues_route(monkeypatch):
+    """Régression B1 : en exécution `python app.py` (run_name='__main__'), la route
+    /api/track/cues DOIT être enregistrée. Elle était déclarée après le bloc
+    `if __name__ == '__main__': app.run(...)` → 404 réel alors que pytest passait."""
+    import runpy
+    import flask
+
+    # Neutralise app.run() : on vérifie l'enregistrement des routes, pas le serveur.
+    monkeypatch.setattr(flask.Flask, 'run', lambda self, **kw: None)
+    mod = runpy.run_path('app.py', run_name='__main__')
+    rules = {str(r.rule) for r in mod['app'].url_map.iter_rules()}
+    assert '/api/track/cues' in rules
+    assert '/api/nml/status' in rules
+
+
+def _setup_cues_nml(client, tmp_path, monkeypatch, nml_name='c.nml'):
+    """Configure un NML jouable + une piste matchée pour les tests de la route cues."""
+    nml_path = tmp_path / nml_name
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    filename = 'Carbon Decay - In The Warehouse.mp3'
+    filesize = 5243
+    local = tmp_path / filename
+    local.write_bytes(b'x' * filesize)
+    return filename, str(filesize)
+
+
+def test_cues_post_rejects_bad_type(client, tmp_path, monkeypatch):
+    """B6 : type de cue hors {0,5} → 400 (le serveur reste la ligne de défense)."""
+    filename, filesize = _setup_cues_nml(client, tmp_path, monkeypatch)
+    rv = client.post('/api/track/cues', json={
+        'filename': filename, 'filesize': filesize,
+        'cues': [{'type': '9', 'start': '10.0', 'len': '0', 'hotcue': 0}]})
+    assert rv.status_code == 400
+    assert 'type' in rv.json['error']
+
+
+def test_cues_post_rejects_bad_hotcue(client, tmp_path, monkeypatch):
+    """B6 : hotcue hors 0..7 ou non entier → 400."""
+    filename, filesize = _setup_cues_nml(client, tmp_path, monkeypatch)
+    rv = client.post('/api/track/cues', json={
+        'filename': filename, 'filesize': filesize,
+        'cues': [{'type': '0', 'start': '10.0', 'len': '0', 'hotcue': 8}]})
+    assert rv.status_code == 400
+    assert 'hotcue' in rv.json['error']
+
+    rv = client.post('/api/track/cues', json={
+        'filename': filename, 'filesize': filesize,
+        'cues': [{'type': '0', 'start': '10.0', 'len': '0', 'hotcue': 'abc'}]})
+    assert rv.status_code == 400
+    assert 'hotcue' in rv.json['error']
+
+
+def test_cues_post_rejects_negative_start(client, tmp_path, monkeypatch):
+    """B6 : start ou len négatif ou non numérique → 400."""
+    filename, filesize = _setup_cues_nml(client, tmp_path, monkeypatch)
+    rv = client.post('/api/track/cues', json={
+        'filename': filename, 'filesize': filesize,
+        'cues': [{'type': '0', 'start': '-5', 'len': '0', 'hotcue': 0}]})
+    assert rv.status_code == 400
+    assert 'start' in rv.json['error']
+
+    rv = client.post('/api/track/cues', json={
+        'filename': filename, 'filesize': filesize,
+        'cues': [{'type': '5', 'start': '10.0', 'len': 'x', 'hotcue': 1}]})
+    assert rv.status_code == 400
+    assert 'len' in rv.json['error']
+
+
+def test_cues_post_rejects_nan_and_inf(client, tmp_path, monkeypatch):
+    """B6 : start/len 'nan' ou 'inf' passeraient `val < 0` → rejetés par isfinite."""
+    filename, filesize = _setup_cues_nml(client, tmp_path, monkeypatch)
+    for bad in ('nan', 'inf'):
+        rv = client.post('/api/track/cues', json={
+            'filename': filename, 'filesize': filesize,
+            'cues': [{'type': '0', 'start': bad, 'len': '0', 'hotcue': 0}]})
+        assert rv.status_code == 400, f'start={bad} doit être rejeté'
+        assert 'start' in rv.json['error']
+
+
+def test_cues_post_rejects_float_hotcue(client, tmp_path, monkeypatch):
+    """B6 : un hotcue flottant (2.5) ne doit pas être tronqué silencieusement."""
+    filename, filesize = _setup_cues_nml(client, tmp_path, monkeypatch)
+    rv = client.post('/api/track/cues', json={
+        'filename': filename, 'filesize': filesize,
+        'cues': [{'type': '0', 'start': '10.0', 'len': '0', 'hotcue': 2.5}]})
+    assert rv.status_code == 400
+    assert 'hotcue' in rv.json['error']
+
+
+def test_cues_post_valid_still_ok(client, tmp_path, monkeypatch):
+    """B6 : un cue valide passe toujours la validation (200)."""
+    filename, filesize = _setup_cues_nml(client, tmp_path, monkeypatch)
+    rv = client.post('/api/track/cues', json={
+        'filename': filename, 'filesize': filesize,
+        'cues': [{'type': '0', 'start': '10.0', 'len': '0.000000', 'hotcue': 0,
+                  'name': 'n.n.', 'displ_order': '0'}]})
+    assert rv.status_code == 200
+    assert rv.json['ok'] is True
+
+
+def test_cues_post_with_entry_writes_selected(client, tmp_path, monkeypatch):
+    """Avec `entry` (désambiguïsation multi-match), le POST écrit la BONNE ENTRY."""
+    import nml as nml_mod
+
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+
+    # 2 ENTRIES ambiguës (même FILE + même FILESIZE)
+    tree = nml_mod.load_nml(str(nml_path))
+    coll = tree.getroot().find('./COLLECTION')
+    for i in range(2):
+        e = ET.SubElement(coll, 'ENTRY', {'ARTIST': 'A', 'TITLE': f'T{i}', 'TYPE': 'TRACK'})
+        ET.SubElement(e, 'LOCATION', {'DIR': '/:', 'FILE': 'DUP.mp3', 'VOLUME': 'X'})
+        ET.SubElement(e, 'INFO', {'FILESIZE': '1'})
+    nml_mod.save_nml(str(nml_path), tree)
+
+    rv = client.post('/api/track/cues', json={
+        'path': str(tmp_path / 'x.mp3'), 'filename': 'DUP.mp3', 'filesize': '1',
+        'entry': 1,
+        'cues': [{'type': '0', 'start': '42.0', 'len': '0.000000', 'hotcue': 0,
+                  'name': 'n.n.', 'displ_order': '0'}]
+    })
+    assert rv.status_code == 200
+    assert rv.get_json()['ok'] is True
+
+    tree2 = nml_mod.load_nml(str(nml_path))
+    entries = tree2.getroot().findall('./COLLECTION/ENTRY')
+    hits = [e for e in entries if e.find('LOCATION').get('FILE') == 'DUP.mp3']
+    assert len(hits) == 2
+    assert nml_mod.get_cues(hits[0]) == []
+    cues1 = nml_mod.get_cues(hits[1])
+    assert cues1 and cues1[0]['start'] == '42.0'

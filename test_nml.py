@@ -61,6 +61,28 @@ def test_write_cues_replace_only_editable(tmp_path):
     assert '4' in types
 
 
+def test_write_cues_preserves_hotcue_minus1(tmp_path):
+    """B5 : les CUE_V2 TYPE∈{0,5} à HOTCUE=-1 (non éditables) ne sont PAS effacés
+    par write_cues — ils ne sont pas restitués par get_cues mais doivent survivre."""
+    tree = load_nml(DATA)
+    entry = tree.getroot().find('./COLLECTION/ENTRY')
+    # Ajoute un cue TYPE=0 HOTCUE=-1 (existe en vraie collection) + un TYPE=5 HOTCUE=-1
+    ET.SubElement(entry, 'CUE_V2', {'TYPE': '0', 'HOTCUE': '-1', 'START': '1.0'})
+    ET.SubElement(entry, 'CUE_V2', {'TYPE': '5', 'HOTCUE': '-1', 'START': '2.0'})
+
+    cues = get_cues(entry)  # ne restitue PAS les HOTCUE=-1
+    assert all(c['hotcue'] >= 0 for c in cues)
+    write_cues(entry, cues)
+
+    kept = [c for c in entry.findall('CUE_V2') if c.get('HOTCUE') == '-1']
+    # Les 2 ajoutés (START 1.0 / 2.0) survivent — le compte exact dépend des
+    # CUE_V2 de la fixture (ex. TYPE=4 HOTCUE=-1, légitimement conservé).
+    starts = {c.get('START') for c in kept}
+    assert {'1.0', '2.0'} <= starts, 'les HOTCUE=-1 doivent survivre à la sauvegarde'
+    added = [c for c in kept if c.get('START') in ('1.0', '2.0')]
+    assert all(c.get('TYPE') in ('0', '5') for c in added)
+
+
 def test_save_nml_atomic_and_backup(tmp_path):
     dst = tmp_path / 'collection.nml'
     dst.write_text(open(DATA).read())

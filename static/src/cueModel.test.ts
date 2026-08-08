@@ -42,4 +42,21 @@ describe('cueModel', () => {
     expect(cue.type).toBe('5');
     expect(cue.len).toBe(4);
   });
-});
+  it("normalise les start/len chaînes de l'API en nombres (régression B2)", () => {
+    const regs = cuesToRegions([
+      { type: '0', start: '60.125000', len: '0.000000', hotcue: 0, name: '', displ_order: '0' },
+      { type: '5', start: '10.000000', len: '4.000000', hotcue: 1, name: '', displ_order: '1' },
+    ]);
+    expect(regs[0].start).toBe(60.125);
+    expect(regs[0].end).toBeCloseTo(60.205, 3); // 60.125 + 0.08 (pas de concaténation)
+    expect(regs[1].start).toBe(10);
+    expect(regs[1].end).toBe(14); // 10 + 4
+  });
+  it('ignore les cues aux positions non numériques (NaN)', () => {
+    const regs = cuesToRegions([
+      { type: '0', start: 'abc', len: '0', hotcue: 0, name: '', displ_order: '0' },
+      { type: '0', start: '5', len: '0', hotcue: 1, name: '', displ_order: '1' },
+    ]);
+    expect(regs).toHaveLength(1);
+    expect(regs[0].id).toBe(1);
+  });

@@ -1,5 +1,6 @@
 import os
 import json
+import math
 import shutil
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -643,10 +644,6 @@ def update_or_delete_playlist(name):
     return jsonify({'ok': True})
 
 
-if __name__ == '__main__':
-    app.run(debug=True, threaded=True, port=8765)
-
-
 @app.route('/api/track/cues', methods=['POST'])
 def track_cues():
     data = request.json
@@ -677,10 +674,32 @@ def track_cues():
     for c in data['cues']:
         if not isinstance(c, dict) or not any(k in c for k in ('type', 'start')):
             return jsonify({'ok': False, 'error': 'cue invalide'}), 400
-        cues.append({'type': str(c.get('type', '0')),
+        # Validation serveur (audit B6) : type ∈ {0,5}, hotcue entier 0..7,
+        # start/len numériques ≥ 0. Le client peut être défaillant (ancien bundle) ;
+        # le serveur reste la ligne de défense contre un NML corrompu.
+        cue_type = str(c.get('type', '0'))
+        if cue_type not in ('0', '5'):
+            return jsonify({'ok': False, 'error': f'type de cue invalide: {cue_type}'}), 400
+        try:
+            hotcue = float(c.get('hotcue', -1))
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'error': 'hotcue non entier'}), 400
+        if not hotcue.is_integer() or hotcue < 0 or hotcue > 7:
+            return jsonify({'ok': False, 'error': f'hotcue invalide: {c.get("hotcue")!r}'}), 400
+        hotcue = int(hotcue)
+        for key in ('start', 'len'):
+            raw = c.get(key, '0')
+            try:
+                val = float(raw)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'error': f'{key} non numérique: {raw!r}'}), 400
+            # isfinite : rejette aussi nan/inf qui passeraient `val < 0` (audit B6).
+            if not math.isfinite(val) or val < 0:
+                return jsonify({'ok': False, 'error': f'{key} invalide: {raw!r}'}), 400
+        cues.append({'type': cue_type,
                      'start': str(c.get('start', '0.0')),
                      'len': str(c.get('len', '0.000000')),
-                     'hotcue': int(c.get('hotcue', -1)),
+                     'hotcue': hotcue,
                      'name': str(c.get('name', 'n.n.')),
                      'displ_order': str(c.get('displ_order', '0')),
                      'color': c.get('color', '')})
@@ -694,3 +713,7 @@ def track_cues():
                  'filename': filename, 'details': f'{len(cues)} cues',
                  'status': 'cues'})
     return jsonify({'ok': True})
+
+
+if __name__ == '__main__':
+    app.run(debug=True, threaded=True, port=8765)

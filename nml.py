@@ -79,9 +79,12 @@ def _cue_to_element(cue: dict, tag: str = 'CUE_V2') -> ET.Element:
 
 
 def write_cues(entry, cues):
-    """Remplace les CUE_V2 éditables (TYPE 0/5) de l'ENTRY par la liste fournie.
-    Les CUE_V2 TYPE∉{0,5} (grille, flip…) et tous les autres nœuds sont conservés."""
-    kept = [c for c in entry.findall('CUE_V2') if c.get('TYPE') not in ('0', '5')]
+    """Remplace les CUE_V2 éditables (TYPE∈{0,5} ET HOTCUE 0..7) de l'ENTRY par la liste
+    fournie. Sont conservés : les TYPE∉{0,5} (grille, flip…) ET les TYPE∈{0,5} à
+    HOTCUE=-1 (non éditables, pas restitués par get_cues) — sinon ils seraient
+    silencieusement effacés à la première sauvegarde (audit B5)."""
+    kept = [c for c in entry.findall('CUE_V2')
+            if c.get('TYPE') not in ('0', '5') or c.get('HOTCUE', '-1') == '-1']
     for c in list(entry.findall('CUE_V2')):
         entry.remove(c)
     new_els = [_cue_to_element(cue) for cue in cues]

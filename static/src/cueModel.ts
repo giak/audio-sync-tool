@@ -2,8 +2,9 @@
 
 export interface CueDTO {
   type: string;
-  start: number;
-  len: number;
+  /** L'API renvoie les positions NML en chaînes ("60.125000") — l'UI les convertit en nombres. */
+  start: number | string;
+  len: number | string;
   hotcue: number;
   name: string;
   displ_order: string;
@@ -19,14 +20,23 @@ export function labelToHot(l: string): number {
 }
 
 export function cuesToRegions(cues: CueDTO[]): Array<{ start: number; end: number; id: number; color?: string }> {
-  return cues
-    .filter(c => (c.type === '0' || c.type === '5') && c.hotcue >= 0 && c.hotcue <= 7)
-    .map(c => ({
-      start: c.start,
-      end: c.type === '5' && c.len > 0 ? c.start + c.len : c.start + 0.08,
-      id: c.hotcue,
-      color: c.color || (c.type === '5' ? '#ffaa00' : '#55aaff'),
-    }));
+  return (
+    cues
+      .filter(c => (c.type === '0' || c.type === '5') && c.hotcue >= 0 && c.hotcue <= 7)
+      .map(c => {
+        // Number() : le backend renvoie des chaînes NML — évite la concaténation (régression B2).
+        const start = Number(c.start);
+        const len = Number(c.len);
+        return {
+          start,
+          end: c.type === '5' && len > 0 ? start + len : start + 0.08,
+          id: c.hotcue,
+          color: c.color || (c.type === '5' ? '#ffaa00' : '#55aaff'),
+        };
+      })
+      // Ignore les positions non numériques (NML corrompu) — NaN casserait wavesurfer.
+      .filter(r => Number.isFinite(r.start) && Number.isFinite(r.end))
+  );
 }
 
 export function regionToCue(r: { start: number; end: number; id: number; color?: string }): CueDTO {
