@@ -14,6 +14,7 @@ import { setActivePanel } from './focus.js';
 import { createNewPlaylist, loadPlaylists, savePlaylist, setPendingTracks } from './playlist.js';
 import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
 import {
+  clearJournal,
   renderJournal,
   renderPlaylistManager,
   renderPlaylistPanel,
@@ -88,6 +89,9 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   renderJournal();
   openModal('journal');
 };
+(document.getElementById('journal-clear') as HTMLElement | null)?.addEventListener('click', () => {
+  if (confirm('Vider tout le journal ?')) void clearJournal();
+});
 (document.getElementById('btn-scan') as HTMLElement | null)!.onclick = runScan;
 (document.getElementById('pl-manage') as HTMLElement | null)!.onclick = () => {
   renderPlaylistManager();

@@ -1,6 +1,8 @@
 // ─── Journal modal rendering ───────────────────────────────────────────────
 
+import { api } from '../api.js';
 import { type JournalEntry, state } from '../state.js';
+import { showToast } from '../ui.js';
 
 export function renderJournal(): void {
   const container = document.getElementById('journal-content');
@@ -20,4 +22,21 @@ export function renderJournal(): void {
       return `<div class="error">[${ts}] ${e.action || e.filename || '?'}</div>`;
     })
     .join('');
+}
+
+/** Vide le journal (EPIC-013) : confirmation + DELETE /journal + re-render. */
+export async function clearJournal(): Promise<void> {
+  const btn = document.getElementById('journal-clear') as HTMLButtonElement | null;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await api<{ ok: boolean; error?: string }>('/journal', { method: 'DELETE' });
+    if (!res.ok) throw new Error(res.error || 'vidage refusé');
+    state.journal = [];
+    showToast('🗑 Journal vidé');
+  } catch (err) {
+    showToast(`❌ ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    if (btn) btn.disabled = false;
+    renderJournal();
+  }
 }

@@ -32,12 +32,12 @@
 | [EPIC-010](EPIC-010-analyse-serveur-kick.md) | Beatgrid P3 : analyse serveur kick/phase (DSP maison) + bouton Analyser | 🟢 Livré | Haute | plan beatgrid §P3 |
 | [EPIC-011](EPIC-011-ecriture-grille-nml.md) | Beatgrid P4 : écrire TEMPO+TYPE=4 dans le NML (le graal) | 🟢 Livré | Moyenne | plan beatgrid §P4 |
 | [EPIC-012](EPIC-012-bande-basse-barres.md) | Beatgrid P5 : bande d'énergie basse + numéros de barre | 🟢 Livré | Basse | plan beatgrid §P5 |
-| [EPIC-013](EPIC-013-robustesse-backend.md) | Robustesse backend : JSON atomique, verrou scan, cache parse, debug off | ⚪ Backlog | Moyenne | rapport audit §6/B11/B12 |
+| [EPIC-013](EPIC-013-robustesse-backend.md) | Robustesse backend : JSON atomique, verrou scan, cache parse, debug off | 🟢 Livré | Moyenne | rapport audit §6/B11/B12 |
 | [EPIC-014](EPIC-014-ux-generale.md) | UX générale : focus trap, aria, police locale, prompt→modales, responsive | ⚪ Backlog | Moyenne | rapport audit §4 |
 
 ## État actuel du projet (2026-08-08)
 
-- Tests : **654 vitest** / **160 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
+- Tests : **658 vitest** / **168 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
 - EPIC-009 livrée (phase manuelle + cache beatgrid) : nudge ←/→ 1/4, « ◎ Beat 1 », cascade
   NML → cache (`data/beatgrids.json`) → détection, invalidation par FILESIZE.
 - EPIC-010 livrée (analyse serveur kick/phase) : pipeline DSP maison pur Python (`analysis.py`,
@@ -52,6 +52,10 @@
 - EPIC-012 livrée (P5, validation visuelle) : bande d'énergie basse 40-150 Hz sous la waveform
   (`bassband.ts`, biquad RBJ → décimation → RMS, calculée côté client depuis le buffer wavesurfer,
   différée, best-effort) + numéros de barre tous les 4 beats (masqués si trop serrés).
+- EPIC-013 livrée (robustesse backend) : `save_json` atomique (.tmp+replace), `load_json` corrompu →
+  défaut (+ journal error, sans récursion), verrou `/scan` (409, relâché en finally), journal borné
+  500 + bouton « 🗑 Vider » (DELETE /journal), `app.run(debug)` via `--debug` uniquement, cache parse
+  NML par (mtime+taille) — le graal EPIC-008→011 ne re-parse plus ~0,5 s à chaque GET.
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
 - EPIC-002 → EPIC-009 livrées et **commitées** (`a21f1ae` → `3f3b669`), EPIC-001 à ses commits
   historiques, ce registre inclus dans `7bb1735`.

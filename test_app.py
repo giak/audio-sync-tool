@@ -4,7 +4,20 @@ import struct
 import tempfile
 import pytest
 from xml.etree import ElementTree as ET
-from app import app, get_audio_meta, log_journal, save_json, load_json, index_files, get_active_config, is_path_allowed
+from app import (
+    app,
+    JOURNAL_MAX_ENTRIES,
+    _invalidate_nml_cache,
+    _scan_progress,
+    get_audio_meta,
+    get_nml_index,
+    log_journal,
+    save_json,
+    load_json,
+    index_files,
+    get_active_config,
+    is_path_allowed,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -2132,3 +2145,101 @@ def test_cues_post_with_entry_writes_selected(client, tmp_path, monkeypatch):
     assert nml_mod.get_cues(hits[0]) == []
     cues1 = nml_mod.get_cues(hits[1])
     assert cues1 and cues1[0]['start'] == '42.0'
+
+
+# ── EPIC-013 : robustesse backend ──────────────────────────────────────────
+
+def test_save_json_atomic_no_tmp_leftover(tmp_path):
+    """save_json écrit via .tmp + os.replace : pas de fichier .tmp résiduel."""
+    p = tmp_path / 'x.json'
+    save_json(str(p), {'a': 1})
+    assert p.exists()
+    assert not (tmp_path / 'x.json.tmp').exists()
+    assert json.loads(p.read_text()) == {'a': 1}
+
+
+def test_load_json_corrupt_returns_default(tmp_path):
+    """JSON corrompu → défaut, pas d'exception (et une entrée journal 'error')."""
+    p = tmp_path / 'corrupt.json'
+    p.write_text('{pas du json')
+    assert load_json(str(p), []) == []
+    # L'incident est journalisé (le journal est indépendant du fichier corrompu).
+    from app import JOURNAL_PATH
+    journal = json.loads(open(JOURNAL_PATH).read())
+    assert any(e['status'] == 'error' and 'JSON' in e['action'] for e in journal)
+
+
+def test_load_json_missing_returns_default(tmp_path):
+    assert load_json(str(tmp_path / 'absent.json'), {'x': 1}) == {'x': 1}
+
+
+def test_journal_rotation_bounded():
+    """Le journal est borné à JOURNAL_MAX_ENTRIES (rotation de tête)."""
+    for i in range(JOURNAL_MAX_ENTRIES + 50):
+        log_journal({'timestamp': f't{i}', 'action': f'a{i}', 'details': '', 'status': 'scan'})
+    from app import JOURNAL_PATH
+    data = json.loads(open(JOURNAL_PATH).read())
+    assert len(data) == JOURNAL_MAX_ENTRIES
+    # Les 50 plus anciennes ont été tronquées — la plus ancienne restante est t50.
+    assert data[0]['action'] == 'a50'
+    assert data[-1]['action'] == f'a{JOURNAL_MAX_ENTRIES + 49}'
+
+
+def test_scan_verrou_409(client, monkeypatch):
+    """Un second scan pendant un scan en cours → 409 (verrou serveur)."""
+    _scan_progress['running'] = True
+    try:
+        rv = client.get('/scan')
+        assert rv.status_code == 409
+    finally:
+        _scan_progress['running'] = False
+
+
+def test_scan_relache_le_verrou_apres_erreur(client, monkeypatch, tmp_path):
+    """Le verrou est relâché même si le scan lève (finally)."""
+    def boom(*a, **k):
+        raise RuntimeError('indexation plantée')
+    monkeypatch.setattr('app.index_files', boom)
+    monkeypatch.setattr('app.get_active_config',
+                        lambda: {'source_data': '', 'epars_dirs': ['/nonexistent']})
+    # Flask en mode TESTING propage l'exception → pytest.raises.
+    with pytest.raises(RuntimeError):
+        client.get('/scan')
+    assert _scan_progress['running'] is False
+
+
+def test_journal_delete_clears(client):
+    """DELETE /journal vide le journal et le GET renvoie []."""
+    log_journal({'timestamp': 't', 'action': 'a', 'details': '', 'status': 'scan'})
+    rv = client.delete('/journal')
+    assert rv.status_code == 200
+    assert rv.get_json() == {'ok': True}
+    assert client.get('/journal').get_json() == []
+
+
+def test_nml_cache_by_mtime(client, monkeypatch, tmp_path):
+    """get_nml_index cache par (realpath, mtime+size) : pas de re-parse inutile."""
+    import app as app_mod
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_traktor_nml_path', lambda: str(nml_path))
+    _invalidate_nml_cache()
+
+    calls = []
+    orig_load = app_mod.nml_module.load_nml
+    def counting_load(p):
+        calls.append(p)
+        return orig_load(p)
+    monkeypatch.setattr(app_mod.nml_module, 'load_nml', counting_load)
+
+    tree1, idx1, path1 = get_nml_index()
+    tree2, idx2, path2 = get_nml_index()  # cache hit — load_nml pas rappelé
+    assert len(calls) == 1
+    assert tree1 is tree2
+    assert idx1 is idx2
+
+    # Le fichier change → re-parse (mtime+size différents).
+    nml_path.write_text('<NML><COLLECTION><ENTRY TYPE="TRACK"><INFO/></ENTRY></COLLECTION></NML>')
+    tree3, idx3, _ = get_nml_index()
+    assert len(calls) == 2
+    assert tree3 is not tree1

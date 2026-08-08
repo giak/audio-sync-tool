@@ -6,7 +6,7 @@ import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.
 import { getBatchCopy } from './render/batchCopy.js';
 import { doDragCopy } from './render/dragDrop.js';
 import { renderEpars } from './render/eparsUI.js';
-import { renderJournal } from './render/journalUI.js';
+import { clearJournal, renderJournal } from './render/journalUI.js';
 import {
   patchPlaylistSourceFile,
   renderPlaylistManager,
@@ -19,6 +19,7 @@ import { on, state } from './state.js';
 
 export {
   _ratingClickHandler,
+  clearJournal,
   doDragCopy,
   getBatchCopy,
   patchEparsFileAfterCopy,

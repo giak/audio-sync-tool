@@ -37,6 +37,7 @@ vi.mock('./ratings.js', () => ({
 }));
 
 vi.mock('./render/journalUI.js', () => ({
+  clearJournal: vi.fn(),
   renderJournal: vi.fn(),
 }));
 

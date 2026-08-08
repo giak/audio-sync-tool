@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import math
 import shutil
@@ -30,17 +31,40 @@ RATINGS_PATH = os.path.join(DATA_DIR, 'ratings.json')
 BEATGRID_PATH = os.path.join(DATA_DIR, 'beatgrids.json')
 
 
-def load_json(path, default=None):
+def load_json(path, default=None, log_corrupt=True):
+    """Charge un JSON avec un retour au défaut sur fichier corrompu (EPIC-013).
+
+    Plus jamais de 500 non formaté sur un JSON partiellement écrit (crash,
+    disque plein…) : on retourne le défaut et on journalise l'incident.
+    """
     if not os.path.exists(path):
         return default
-    with open(path) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        if log_corrupt:
+            try:
+                log_journal({'timestamp': datetime.now().isoformat(),
+                             'action': 'JSON corrompu (défaut utilisé)',
+                             'details': os.path.basename(path),
+                             'status': 'error'})
+            except Exception:
+                pass  # ne jamais bloquer le retour au défaut
+        return default
 
 
 def save_json(path, data):
+    """Écriture atomique : .tmp + os.replace — jamais de fichier à moitié écrit.
+
+    Même rigueur que save_nml (EPIC-013) : un crash pendant l'écriture laisse le
+    fichier précédent intact, pas un JSON tronqué.
+    """
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w') as f:
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
 
 
 MUSIC_EXTENSIONS = ('.mp3', '.flac', '.wav', '.ogg', '.m4a', '.wma')
@@ -142,10 +166,17 @@ def get_audio_tags(path):
     return title, artist, album, bitrate, playtime
 
 
+JOURNAL_MAX_ENTRIES = 500
+
+
 def log_journal(entry):
-    """Append an entry to the journal."""
-    journal = load_json(JOURNAL_PATH, [])
+    """Append an entry to the journal, borné à JOURNAL_MAX_ENTRIES (rotation tête)."""
+    # log_corrupt=False : un journal corrompu retourne [] sans re-journaliser
+    # (sinon récursion load_json → log_journal → load_json…).
+    journal = load_json(JOURNAL_PATH, [], log_corrupt=False)
     journal.append(entry)
+    if len(journal) > JOURNAL_MAX_ENTRIES:
+        journal = journal[-JOURNAL_MAX_ENTRIES:]
     save_json(JOURNAL_PATH, journal)
 
 
@@ -257,16 +288,34 @@ def get_traktor_nml_path():
     return cfg.get('traktor_nml_path', '')
 
 
+# Cache parse NML (EPIC-013) : l'index est reconstruit uniquement si le fichier
+# change (mtime+taille) — le parse de la collection réelle coûte ~0,5 s.
+# Clé = chemin réel : chaque fichier (y compris les fixtures de test) a sa propre
+# entrée, aucune fuite entre collections.
+_nml_cache: dict = {}
+
+
+def _invalidate_nml_cache():
+    _nml_cache.clear()
+
+
 def get_nml_index():
     """Retourne (tree, index, nml_path) ou (None, {}, '') si non configuré/invalide."""
     path = get_traktor_nml_path()
     if not path or not os.path.exists(path):
         return None, {}, path or ''
+    real = os.path.realpath(path)
+    key = os.path.getmtime(real), os.path.getsize(real)
+    cached = _nml_cache.get(real)
+    if cached and cached[0] == key:
+        return cached[1], cached[2], real
     try:
-        tree = nml_module.load_nml(path)
-        return tree, nml_module.build_index(tree), path
+        tree = nml_module.load_nml(real)
+        idx = nml_module.build_index(tree)
+        _nml_cache[real] = (key, tree, idx)
+        return tree, idx, real
     except ET.ParseError:
-        return None, {}, path
+        return None, {}, real
 
 
 @app.route('/api/nml/status')
@@ -367,35 +416,42 @@ def track_add():
 
 @app.route('/scan')
 def scan():
+    # Verrou (EPIC-013) : ligne de défense serveur — le bouton est déjà désactivé
+    # côté UI, mais un double GET (rechargement, script) ne doit pas lancer deux
+    # indexations concurrentes.
+    if _scan_progress['running']:
+        return jsonify({'error': 'Scan déjà en cours'}), 409
     active = get_active_config()
     source_dir = active.get('source_data', '')
     epars_dirs = active.get('epars_dirs', [])
 
     reset_scan_progress()
 
-    result = {
-        'source': {},
-        'epars': {}
-    }
-    if source_dir:
-        result['source'][source_dir] = index_files(source_dir, 'Source Data')
-    for d in epars_dirs:
-        result['epars'][d] = index_files(d, 'Éparpillé')
+    try:
+        result = {
+            'source': {},
+            'epars': {}
+        }
+        if source_dir:
+            result['source'][source_dir] = index_files(source_dir, 'Source Data')
+        for d in epars_dirs:
+            result['epars'][d] = index_files(d, 'Éparpillé')
 
-    _scan_progress['running'] = False
-    save_json(CACHE_PATH, result)
+        save_json(CACHE_PATH, result)
 
-    src_count = sum(len(v) for v in result['source'].values())
-    epars_count = sum(len(v) for v in result['epars'].values())
-    dirs_count = len(result['epars'])
-    log_journal({
-        'timestamp': datetime.now().isoformat(),
-        'action': 'Scan terminé',
-        'details': f'{src_count} fichiers source, {epars_count} fichiers épars ({dirs_count} dossier{"s" if dirs_count > 1 else ""})',
-        'status': 'scan'
-    })
-
-    return jsonify(result)
+        src_count = sum(len(v) for v in result['source'].values())
+        epars_count = sum(len(v) for v in result['epars'].values())
+        dirs_count = len(result['epars'])
+        log_journal({
+            'timestamp': datetime.now().isoformat(),
+            'action': 'Scan terminé',
+            'details': f'{src_count} fichiers source, {epars_count} fichiers épars ({dirs_count} dossier{"s" if dirs_count > 1 else ""})',
+            'status': 'scan'
+        })
+        return jsonify(result)
+    finally:
+        # Toujours relâcher le verrou, même en cas d'erreur (sinon plus aucun scan).
+        _scan_progress['running'] = False
 
 
 @app.route('/load')
@@ -504,8 +560,12 @@ def delete_file():
     return jsonify({'ok': True, 'filename': filename})
 
 
-@app.route('/journal')
+@app.route('/journal', methods=['GET', 'DELETE'])
 def journal():
+    if request.method == 'DELETE':
+        # Vider le journal (EPIC-013) — rotation bornée + remise à zéro explicite.
+        save_json(JOURNAL_PATH, [])
+        return jsonify({'ok': True})
     return jsonify(load_json(JOURNAL_PATH, []))
 
 
@@ -1017,4 +1077,7 @@ def track_analyze():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, threaded=True, port=8765)
+    # Debugger Werkzeug uniquement en développement (EPIC-013) : le reloader et
+    # le débogueur interactif n'ont pas leur place en usage quotidien.
+    debug = '--debug' in sys.argv
+    app.run(debug=debug, threaded=True, port=8765)
