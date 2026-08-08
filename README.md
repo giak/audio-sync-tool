@@ -145,6 +145,7 @@ audio-sync-tool/
 │   └── dist/              # Compilés par esbuild (gitignored)
 ├── data/                  # Config, journal, cache, playlists, ratings
 ├── docs/superpowers/      # Specs + plans d'implémentation
+│   └── epics/             # ⭐ Registre des EPICs (traçabilité de toute évolution)
 ├── .github/workflows/     # CI : typecheck + lint + vitest + pytest
 ├── biome.json             # Linter + formateur Biome
 ├── vitest.config.js       # Tests frontend + coverage
@@ -190,18 +191,22 @@ npm run coverage           # Clean → test → rapport (~89% lignes)
 
 | Suite | Tests | Couverture |
 |-------|-------|------------|
-| Pytest | 59 | — |
-| Vitest | 313 | 90% lignes, 79% branches |
 | Pytest | 127 | — |
 | Vitest | 614 | 88.8% lignes, 82.6% branches |
 
+### Évolutions & traçabilité
+
+Toute évolution/amélioration du projet est tracée dans une **EPIC**
+(`docs/superpowers/epics/`) : registre central `README.md` + un fichier par
+évolution (objectif, tâches cochables, fichiers, validation, commits, décisions).
+Créer une nouvelle EPIC = copier `_template.md` + l'ajouter à l'index.
 
 ## Architecture (v0.2)
 
 Le frontend utilise le **Command Pattern** pour router les entrées clavier.
 Un `CommandRegistry` déclaratif remplace l'ancien handler monolithique
 de 593 lignes. Les touches sont dispatchées vers 8 modules de commandes
-(`navigation`, `audio`, `copy`, `filter`, `rating`, `playlist`, `modals`).
+(`registry`, `navigation`, `audio`, `copy`, `filter`, `rating`, `playlist`, `modals`).
 
 ```
 script.ts (~120 lignes, orchestrateur)

@@ -77,7 +77,10 @@ $  → scope/périmètre (était ⟐ dans source)
     playlist.js ← CRUD + drag-drop
     utils.js ← formatTime, formatDuration, computeStatus
   data/ ← NE PAS TOUCHER
-  docs/superpowers/ ← specs + plans
+  docs/superpowers/ ← specs + plans + rapports
+  docs/superpowers/epics/ ← REGISTRE des évolutions (README index + 1 fichier par EPIC)
+    #règle: toute évolution/amélioration → nouvelle EPIC + entrée à l'index
+    #règle: EPIC livrée → statut 🟢 + commits + tests dans le fichier
   AGENT.md ← ce fichier
 
 %ARCHITECTURE
