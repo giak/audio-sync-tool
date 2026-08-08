@@ -46,12 +46,11 @@ vi.mock('./playlist.js', () => ({
 }));
 
 // Partially mock state.js to spy on on() without breaking state/emit
-vi.mock('./state.js', async (importOriginal) => {
+vi.mock('./state.js', async importOriginal => {
   const mod = await importOriginal();
   return { ...mod, on: vi.fn() };
 });
 
-import { on } from './state.js';
 import {
   patchEparsFileAfterCopy,
   patchSourceFileAfterCopy,
@@ -59,11 +58,12 @@ import {
   renderJournal,
   renderSource,
   setupRenderSubscriptions,
-  toggleSourceDir,
   togglePlaylistSourceDir,
+  toggleSourceDir,
 } from './render.js';
-import { countAllEparsFiles, dirHasMatchingDescendant } from './utils.js';
+import { on } from './state.js';
 import { showContextMenu } from './ui.js';
+import { countAllEparsFiles, dirHasMatchingDescendant } from './utils.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -963,9 +963,7 @@ describe('showDirContextMenu (right-click on directory)', () => {
     expect(showContextMenu).toHaveBeenCalledWith(
       100,
       200,
-      expect.arrayContaining([
-        expect.objectContaining({ label: expect.stringContaining('Déplier') }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ label: expect.stringContaining('Déplier') })]),
     );
   });
 
@@ -980,9 +978,7 @@ describe('showDirContextMenu (right-click on directory)', () => {
     expect(showContextMenu).toHaveBeenCalledWith(
       50,
       80,
-      expect.arrayContaining([
-        expect.objectContaining({ label: expect.stringContaining('Refermer') }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ label: expect.stringContaining('Refermer') })]),
     );
   });
 
@@ -1000,9 +996,7 @@ describe('showDirContextMenu (right-click on directory)', () => {
     expect(showContextMenu).toHaveBeenCalledWith(
       30,
       40,
-      expect.arrayContaining([
-        expect.objectContaining({ label: expect.stringContaining('Copier 2 fichiers ici') }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ label: expect.stringContaining('Copier 2 fichiers ici') })]),
     );
   });
 

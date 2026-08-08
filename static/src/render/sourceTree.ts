@@ -1,15 +1,15 @@
 // ─── Source Data panel: tree building, toggle, filtering, rendering ───────
 
 import { focusItemByElement, setActivePanel } from '../focus.js';
-import { showContextMenu } from '../ui.js';
 import { getActivePlaylistName, getPendingTracks } from '../playlist.js';
 import { state, type TreeNode } from '../state.js';
+import { showContextMenu } from '../ui.js';
 import { dirHasMatchingDescendant, type FileStatus } from '../utils.js';
+import { setBatchCopy } from './batchCopy.js';
+import { openCueEditor } from './cueEditor.js';
+import { doDragCopy } from './dragDrop.js';
 import { makeFileEl } from './fileRow.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
-import { doDragCopy } from './dragDrop.js';
-
-import { setBatchCopy } from './batchCopy.js';
 
 // ── Internal types ────────────────────────────────────────────────────────
 
@@ -133,7 +133,9 @@ function buildSourceChildren(
         try {
           const { filename, eparDir } = JSON.parse(raw);
           doDragCopy(filename, eparDir, subFullPath);
-        } catch (_) { /* invalid data */ }
+        } catch (_) {
+          /* invalid data */
+        }
       }
     };
     childContainer.appendChild(dirEl);
@@ -148,7 +150,18 @@ function buildSourceChildren(
     const status: FileStatus = inPlaylistPaths ? 'nouveau' : 'doublon';
     for (const f of (node.__files__ || []) as FileEntry[]) {
       const fullFilePath = `${baseDir}/${f.relPath}`;
-      const row = makeFileEl(f.filename, f.relPath, status, fullFilePath, f.year, f.duration, f.codec, undefined, startSourceRatingEdit);
+      const row = makeFileEl(
+        f.filename,
+        f.relPath,
+        status,
+        fullFilePath,
+        f.year,
+        f.duration,
+        f.codec,
+        undefined,
+        startSourceRatingEdit,
+        (fname, fpath) => openCueEditor({ filename: fname, fullPath: fpath }),
+      );
       if (inPlaylistPaths?.has(fullFilePath)) {
         const label = row.querySelector('.file');
         if (label) label.classList.add('in-playlist');
@@ -265,7 +278,9 @@ export function renderDirTree(node: TreeNode, container: HTMLElement, basePath: 
         try {
           const { filename, eparDir } = JSON.parse(raw);
           doDragCopy(filename, eparDir, fullPath);
-        } catch (_) { /* invalid data */ }
+        } catch (_) {
+          /* invalid data */
+        }
       }
     };
     container.appendChild(dirEl);
@@ -344,7 +359,9 @@ function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath:
       try {
         const { filename, eparDir } = JSON.parse(raw);
         doDragCopy(filename, eparDir, fullPath);
-      } catch (_) { /* invalid data */ }
+      } catch (_) {
+        /* invalid data */
+      }
     }
   };
   container.appendChild(dirEl);
@@ -414,5 +431,7 @@ export function renderSource(): void {
     }
   }
 
-  requestAnimationFrame(() => { container.scrollTop = savedScrollTop; });
+  requestAnimationFrame(() => {
+    container.scrollTop = savedScrollTop;
+  });
 }

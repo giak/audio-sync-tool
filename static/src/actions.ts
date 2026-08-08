@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
 import { loadRatings } from './ratings.js';
-import { getBatchCopy, renderSource } from './render.js';
+import { getBatchCopy } from './render.js';
 import { type FileIndex, state } from './state.js';
 import { closeAllModals, openModal, showError } from './ui.js';
 

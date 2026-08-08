@@ -49,5 +49,17 @@
   "files": {
     "includes": ["**/static/src/**/*.ts"],
     "ignoreUnknown": true
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["static/src/commands/navigation.test.ts"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "useLiteralKeys": "off"
+          }
+        }
+      }
+    }
+  ]
 }

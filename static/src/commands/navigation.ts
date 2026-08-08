@@ -1,9 +1,18 @@
 // ─── Navigation commands: ↑↓ ←→ Tab Backspace Enter Space ────────────────
-import { registry } from './registry.js';
-import { focusItemByElement, getFocusedItem, getItems, navigateColumn, navigateFocus, navigateHistory, setActivePanel } from '../focus.js';
+
+import {
+  focusItemByElement,
+  getFocusedItem,
+  getItems,
+  navigateColumn,
+  navigateFocus,
+  navigateHistory,
+  setActivePanel,
+} from '../focus.js';
 import { renderSource } from '../render/index.js';
-import { closeFilterPalette } from '../ui.js';
 import { state } from '../state.js';
+import { closeFilterPalette } from '../ui.js';
+import { registry } from './registry.js';
 
 // Tab — switch panels (Sync mode)
 registry.bind({
@@ -24,9 +33,10 @@ registry.bind({
   key: 'ArrowDown',
   playlistMode: false,
   handler: () => {
-    const container = state.activePanel === 'source'
-      ? document.getElementById('source-container')
-      : document.getElementById('epars-container');
+    const container =
+      state.activePanel === 'source'
+        ? document.getElementById('source-container')
+        : document.getElementById('epars-container');
     if (container && getItems(container).length > 0) navigateFocus(container, 1);
   },
 });
@@ -36,9 +46,10 @@ registry.bind({
   key: 'ArrowUp',
   playlistMode: false,
   handler: () => {
-    const container = state.activePanel === 'source'
-      ? document.getElementById('source-container')
-      : document.getElementById('epars-container');
+    const container =
+      state.activePanel === 'source'
+        ? document.getElementById('source-container')
+        : document.getElementById('epars-container');
     if (container && getItems(container).length > 0) navigateFocus(container, -1);
   },
 });
@@ -66,17 +77,32 @@ registry.bind({
 });
 
 // ←→ in épars (no-op — skip when audio playing or shift held, so audio seek can match)
-registry.bind({ key: 'ArrowLeft', activePanel: 'epars', playlistMode: false, isAudioPlaying: false, shiftKey: false, handler: () => {} });
-registry.bind({ key: 'ArrowRight', activePanel: 'epars', playlistMode: false, isAudioPlaying: false, shiftKey: false, handler: () => {} });
+registry.bind({
+  key: 'ArrowLeft',
+  activePanel: 'epars',
+  playlistMode: false,
+  isAudioPlaying: false,
+  shiftKey: false,
+  handler: () => {},
+});
+registry.bind({
+  key: 'ArrowRight',
+  activePanel: 'epars',
+  playlistMode: false,
+  isAudioPlaying: false,
+  shiftKey: false,
+  handler: () => {},
+});
 
 // Enter / Space Sync
 registry.bind({
   key: 'Enter',
   playlistMode: false,
   handler: () => {
-    const container = state.activePanel === 'source'
-      ? document.getElementById('source-container')
-      : document.getElementById('epars-container');
+    const container =
+      state.activePanel === 'source'
+        ? document.getElementById('source-container')
+        : document.getElementById('epars-container');
     if (!container) return;
     const el = getFocusedItem(container) as HTMLElement | null;
     if (!el) return;
@@ -92,9 +118,10 @@ registry.bind({
   key: ' ',
   playlistMode: false,
   handler: () => {
-    const container = state.activePanel === 'source'
-      ? document.getElementById('source-container')
-      : document.getElementById('epars-container');
+    const container =
+      state.activePanel === 'source'
+        ? document.getElementById('source-container')
+        : document.getElementById('epars-container');
     if (!container) return;
     const el = getFocusedItem(container) as HTMLElement | null;
     if (!el) return;
@@ -113,9 +140,10 @@ registry.bind({
   activeModal: null,
   playlistMode: false,
   handler: () => {
-    const container = state.activePanel === 'source'
-      ? document.getElementById('source-container')
-      : document.getElementById('epars-container');
+    const container =
+      state.activePanel === 'source'
+        ? document.getElementById('source-container')
+        : document.getElementById('epars-container');
     const focused = container?.querySelector('.focused') as HTMLElement | null;
     if (focused) {
       const parentChildren = focused.closest('.children') as HTMLElement | null;
@@ -175,10 +203,16 @@ registry.bind({
 registry.bind({
   key: 'ArrowDown',
   isFilterInputFocused: true,
-  handler: () => { closeFilterPalette(renderSource); setActivePanel('source'); },
+  handler: () => {
+    closeFilterPalette(renderSource);
+    setActivePanel('source');
+  },
 });
 registry.bind({
   key: 'Tab',
   isFilterInputFocused: true,
-  handler: () => { closeFilterPalette(renderSource); setActivePanel('epars'); },
+  handler: () => {
+    closeFilterPalette(renderSource);
+    setActivePanel('epars');
+  },
 });

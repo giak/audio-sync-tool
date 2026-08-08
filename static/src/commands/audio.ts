@@ -1,6 +1,7 @@
 // ─── Audio commands: seek, stop, play ──────────────────────────────────────
-import { registry } from './registry.js';
+
 import { seekAudio, stopPlayer } from '../audio.js';
+import { registry } from './registry.js';
 
 // ←→ — seek audio when playing
 registry.bind({

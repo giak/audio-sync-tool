@@ -1,7 +1,7 @@
 // ─── Unit tests for CommandRegistry ────────────────────────────────────────
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { registry, buildContext } from './registry.js';
 import { state } from '../state.js';
+import { buildContext, registry } from './registry.js';
 
 // Mock isAudioPlaying
 vi.mock('../audio.js', () => ({ isAudioPlaying: vi.fn(() => false) }));

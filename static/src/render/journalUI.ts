@@ -1,6 +1,6 @@
 // ─── Journal modal rendering ───────────────────────────────────────────────
 
-import { state, type JournalEntry } from '../state.js';
+import { type JournalEntry, state } from '../state.js';
 
 export function renderJournal(): void {
   const container = document.getElementById('journal-content');

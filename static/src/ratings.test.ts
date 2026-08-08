@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deleteRating, getRating, loadRatings, saveRating } from './ratings.js';
 import { state } from './state.js';
-import { loadRatings, getRating, saveRating, deleteRating } from './ratings.js';
 
 // Mock api
 vi.mock('./api.js', () => ({

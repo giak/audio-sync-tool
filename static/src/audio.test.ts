@@ -56,7 +56,7 @@ vi.mock('./utils.js', () => ({
 }));
 
 // Partially mock state.js to spy on emit() while keeping real state
-vi.mock('./state.js', async (importOriginal) => {
+vi.mock('./state.js', async importOriginal => {
   const mod = await importOriginal();
   return { ...mod, emit: vi.fn() };
 });
@@ -77,8 +77,8 @@ afterEach(() => {
   delete (globalThis as any).Audio;
 });
 
-import { emit } from './state.js';
 import { initAudioUI, isAudioPlaying, seekAudio, stopPlayer, togglePlay } from './audio.js';
+import { emit } from './state.js';
 
 /** Wait for pending microtasks (e.g. .then() callbacks from play promise) */
 function flush(): Promise<void> {

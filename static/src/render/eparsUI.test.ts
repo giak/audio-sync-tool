@@ -2,25 +2,26 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from '../state.js';
 
-const { focusItemByElement, setActivePanel, computeStatus, countAllEparsFiles, makeFileEl, startSourceRatingEdit } = vi.hoisted(() => ({
-  focusItemByElement: vi.fn(),
-  setActivePanel: vi.fn(),
-  computeStatus: vi.fn(() => 'nouveau' as const),
-  countAllEparsFiles: vi.fn(() => 3),
-  makeFileEl: vi.fn(() => {
-    const el = document.createElement('div');
-    el.className = 'file-row mocked';
-    const span = document.createElement('span');
-    span.className = 'file nouveau';
-    span.dataset.filename = 'test.mp3';
-    span.dataset.fullpath = '/dir/test.mp3';
-    span.dataset.epardir = '/dir';
-    span.onclick = vi.fn();
-    el.appendChild(span);
-    return el;
-  }),
-  startSourceRatingEdit: vi.fn(),
-}));
+const { focusItemByElement, setActivePanel, computeStatus, countAllEparsFiles, makeFileEl, startSourceRatingEdit } =
+  vi.hoisted(() => ({
+    focusItemByElement: vi.fn(),
+    setActivePanel: vi.fn(),
+    computeStatus: vi.fn(() => 'nouveau' as const),
+    countAllEparsFiles: vi.fn(() => 3),
+    makeFileEl: vi.fn(() => {
+      const el = document.createElement('div');
+      el.className = 'file-row mocked';
+      const span = document.createElement('span');
+      span.className = 'file nouveau';
+      span.dataset.filename = 'test.mp3';
+      span.dataset.fullpath = '/dir/test.mp3';
+      span.dataset.epardir = '/dir';
+      span.onclick = vi.fn();
+      el.appendChild(span);
+      return el;
+    }),
+    startSourceRatingEdit: vi.fn(),
+  }));
 
 vi.mock('../focus.js', () => ({ focusItemByElement, setActivePanel }));
 vi.mock('../utils.js', () => ({ computeStatus, countAllEparsFiles }));
@@ -40,7 +41,9 @@ describe('render/eparsUI', () => {
     state.lastSelectedEparsIndex = null;
   });
 
-  afterAll(() => { document.body.innerHTML = ''; });
+  afterAll(() => {
+    document.body.innerHTML = '';
+  });
 
   describe('renderEpars', () => {
     it('renders directory and files from state.eparsFiles', () => {

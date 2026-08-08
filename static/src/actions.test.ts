@@ -2,8 +2,19 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from './state.js';
 
-const { api, revalidateFocus, setActivePanel, getBatchCopy, patchEparsFileAfterCopy,
-  patchSourceFileAfterCopy, renderSource, loadRatings, closeAllModals, openModal, showError } = vi.hoisted(() => {
+const {
+  api,
+  revalidateFocus,
+  setActivePanel,
+  getBatchCopy,
+  patchEparsFileAfterCopy,
+  patchSourceFileAfterCopy,
+  renderSource,
+  loadRatings,
+  closeAllModals,
+  openModal,
+  showError,
+} = vi.hoisted(() => {
   // Create config DOM elements BEFORE module import so cfgSelect/cfgStatus are initialized
   document.body.innerHTML = `
     <select id="cfg-select"></select>
@@ -33,7 +44,7 @@ vi.mock('./render.js', () => ({ getBatchCopy, patchEparsFileAfterCopy, patchSour
 vi.mock('./ratings.js', () => ({ loadRatings }));
 vi.mock('./ui.js', () => ({ closeAllModals, openModal, showError }));
 
-import { configData, renderConfigSelect, initConfigUI, runScan, executeCopy, initApp } from './actions.js';
+import { configData, executeCopy, initApp, initConfigUI, renderConfigSelect, runScan } from './actions.js';
 
 // ── Config tests (separate describe — needs cfgSelect elements in DOM) ────
 describe('config', () => {
@@ -120,14 +131,16 @@ describe('config', () => {
     expect(status.textContent).toContain('Impossible');
   });
 
-  afterAll(() => { document.body.innerHTML = ''; });
+  afterAll(() => {
+    document.body.innerHTML = '';
+  });
 });
 
 // ── Scan / Copy / Init tests (isolated DOM, body cleared each test) ──────
 describe('actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    api.mockReset();  // ← clear leftover implementations (mockResolvedValue, etc.)
+    api.mockReset(); // ← clear leftover implementations (mockResolvedValue, etc.)
     document.body.innerHTML = '';
     state.sourceFiles = {};
     state.eparsFiles = {};

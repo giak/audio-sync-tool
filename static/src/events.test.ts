@@ -53,7 +53,7 @@ vi.mock('./render/sourceTree.js', () => ({
 
 // Partially mock playlistUI — spy on renderPlaylistPanel, keep other exports real
 // The spy calls through to the real function so we can test DOM effects too.
-vi.mock('./render/playlistUI.js', async (importOriginal) => {
+vi.mock('./render/playlistUI.js', async importOriginal => {
   const mod = await importOriginal();
   const spy = vi.fn();
   spy.mockImplementation((...args: unknown[]) => (mod as any).renderPlaylistPanel(...args));
@@ -76,9 +76,9 @@ vi.mock('./render/dragDrop.js', () => ({
 
 // ── Imports (real state.js — no mock) ─────────────────────────────────────
 
-import { state, emit } from './state.js';
-import { setupRenderSubscriptions } from './render.js';
 import { renderPlaylistPanel } from './render/playlistUI.js';
+import { setupRenderSubscriptions } from './render.js';
+import { emit, state } from './state.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 

@@ -13,7 +13,10 @@ export function getBatchCopy(): {
   return result;
 }
 
-export function setBatchCopy(target: string, files: Array<{ filename: string; eparDir: string; fullpath: string }>): void {
+export function setBatchCopy(
+  target: string,
+  files: Array<{ filename: string; eparDir: string; fullpath: string }>,
+): void {
   _batchCopyTarget = target;
   _batchCopyFiles = files;
 }

@@ -54,11 +54,7 @@ export function getFocusedItem(container: HTMLElement): Element | null {
   return container.querySelector('.focused');
 }
 
-export function focusItemByElement(
-  container: HTMLElement,
-  el: Element,
-  opts?: { noHistory?: boolean },
-): void {
+export function focusItemByElement(container: HTMLElement, el: Element, opts?: { noHistory?: boolean }): void {
   const focusPath = (el as HTMLElement).dataset.focuspath || null;
   for (const el of container.querySelectorAll('.focused')) el.classList.remove('focused');
   el.classList.add('focused');

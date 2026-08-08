@@ -1,7 +1,7 @@
 // ─── Rating command: N (notation inline) ──────────────────────────────────
-import { registry } from './registry.js';
+
 import { startRatingEdit, startSourceRatingEdit } from '../render/index.js';
-import { state } from '../state.js';
+import { registry } from './registry.js';
 
 // N — sidebar (playlist mode)
 registry.bind({

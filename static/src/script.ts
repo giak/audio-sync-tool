@@ -1,6 +1,6 @@
 // ─── Orchestrator: keyboard router via CommandRegistry + toolbar + init ────
 
-import { registry, buildContext } from './commands/registry.js';
+import { buildContext, registry } from './commands/registry.js';
 import './commands/navigation.js';
 import './commands/audio.js';
 import './commands/copy.js';
@@ -8,14 +8,20 @@ import './commands/filter.js';
 import './commands/rating.js';
 import './commands/playlist.js';
 import './commands/modals.js';
-import { executeCopy, initApp, initConfigUI, runScan } from './actions.js';
+import { initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
 import { setActivePanel } from './focus.js';
-import { renderJournal, renderPlaylistManager, renderPlaylistSource, renderPlaylistPanel, setupRenderSubscriptions } from './render.js';
+import { createNewPlaylist, loadPlaylists, savePlaylist, setPendingTracks } from './playlist.js';
+import {
+  renderJournal,
+  renderPlaylistManager,
+  renderPlaylistPanel,
+  renderPlaylistSource,
+  renderSource,
+  setupRenderSubscriptions,
+} from './render.js';
 import { state } from './state.js';
-import { closeAllModals, initFilterPalette, openModal, closeFilterPalette } from './ui.js';
-import { renderSource } from './render.js';
-import { getActivePlaylistName, getPendingTracks, loadPlaylists, savePlaylist, setPendingTracks, createNewPlaylist } from './playlist.js';
+import { closeAllModals, initFilterPalette, openModal } from './ui.js';
 
 // ── Playlist mode helpers ─────────────────────────────────────────────────
 
@@ -106,6 +112,7 @@ document.addEventListener('click', (e: MouseEvent) => {
 
 // ── Filter palette → renderSource when filter changes ─────────────────────
 import { revalidateFocus } from './focus.js';
+
 initFilterPalette(() => {
   renderSource();
   revalidateFocus();

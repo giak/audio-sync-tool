@@ -2,8 +2,8 @@
 // Each command module calls registry.bind({...}) with conditions.
 // The first matching binding wins. No more monolithic if/else in script.ts.
 
-import { state } from '../state.js';
 import { isAudioPlaying } from '../audio.js';
+import { state } from '../state.js';
 
 export interface CommandContext {
   key: string;

@@ -2,10 +2,10 @@
 import WaveSurfer from 'wavesurfer.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
 import { api } from '../api.js';
-import { state, on } from '../state.js';
-import { showToast } from '../ui.js';
-import { cuesToRegions, regionToCue, hotToLabel } from '../cueModel.js';
 import type { CueDTO } from '../cueModel.js';
+import { cuesToRegions, hotToLabel, regionToCue } from '../cueModel.js';
+import { on, state } from '../state.js';
+import { showToast } from '../ui.js';
 import { formatTime } from '../utils.js';
 
 export interface PlaylistTrackLite {

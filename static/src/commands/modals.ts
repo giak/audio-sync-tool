@@ -1,6 +1,7 @@
 // ─── Modal commands: Échap ──────────────────────────────────────────────────
-import { registry } from './registry.js';
+
 import { closeAllModals, closeContextMenu } from '../ui.js';
+import { registry } from './registry.js';
 
 // Échap — modales ouvertes
 registry.bind({ key: 'Escape', activeModal: 'dialog', handler: () => closeAllModals() });
@@ -11,4 +12,10 @@ registry.bind({ key: 'Escape', activeModal: 'playlists', handler: () => closeAll
 registry.bind({ key: 'Escape', activeModal: 'cueEditor', handler: () => closeAllModals() });
 
 // Échap — close context menu (global fallback, only when no modal and audio not playing)
-registry.bind({ key: 'Escape', activeModal: null, filterActive: false, isAudioPlaying: false, handler: () => closeContextMenu() });
+registry.bind({
+  key: 'Escape',
+  activeModal: null,
+  filterActive: false,
+  isAudioPlaying: false,
+  handler: () => closeContextMenu(),
+});

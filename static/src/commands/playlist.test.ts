@@ -1,12 +1,26 @@
 // ─── Unit tests: commands/playlist.ts — 17 playlist-mode keyboard bindings ───
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { state } from '../state.js';
 
 // ── Hoist spies ───────────────────────────────────────────────────────────
-const { bind, state, navigateFocus, navigateColumn, getFocusedItem, renderPlaylistSource,
-  patchPlaylistSourceFile, addTrack, getActivePlaylistName, getPendingTracks,
-  removeTrack, reorderTrack, savePlaylist, exportPlaylist,
-  openModal, showToast, showError, openFilterPalette, closeAllModals
+const {
+  bind,
+  state,
+  navigateFocus,
+  navigateColumn,
+  renderPlaylistSource,
+  patchPlaylistSourceFile,
+  addTrack,
+  getActivePlaylistName,
+  getPendingTracks,
+  removeTrack,
+  reorderTrack,
+  savePlaylist,
+  exportPlaylist,
+  openModal,
+  showToast,
+  showError,
+  openFilterPalette,
+  closeAllModals,
 } = vi.hoisted(() => ({
   bind: vi.fn(),
   state: {
@@ -19,12 +33,13 @@ const { bind, state, navigateFocus, navigateColumn, getFocusedItem, renderPlayli
   },
   navigateFocus: vi.fn(),
   navigateColumn: vi.fn(),
-  getFocusedItem: vi.fn(),
   renderPlaylistSource: vi.fn(),
   patchPlaylistSourceFile: vi.fn(),
   addTrack: vi.fn(() => true),
   getActivePlaylistName: vi.fn(() => 'test-playlist'),
-  getPendingTracks: vi.fn(() => [{ filename: 'a.mp3', fullPath: '/a.mp3', relPath: 'a.mp3', year: null, duration: null, codec: null }]),
+  getPendingTracks: vi.fn(() => [
+    { filename: 'a.mp3', fullPath: '/a.mp3', relPath: 'a.mp3', year: null, duration: null, codec: null },
+  ]),
   removeTrack: vi.fn(),
   reorderTrack: vi.fn(),
   savePlaylist: vi.fn(),
@@ -41,13 +56,21 @@ Element.prototype.scrollIntoView = vi.fn();
 
 // ── Module mocks ──────────────────────────────────────────────────────────
 vi.mock('./registry.js', () => ({ registry: { bind } }));
-vi.mock('../focus.js', async (importOriginal) => {
+vi.mock('../focus.js', async importOriginal => {
   const mod = await importOriginal<typeof import('../focus.js')>();
   return { ...mod, navigateFocus, navigateColumn };
   // getFocusedItem kept REAL — Enter handler needs real DOM query
 });
 vi.mock('../render/index.js', () => ({ renderPlaylistSource, patchPlaylistSourceFile }));
-vi.mock('../playlist.js', () => ({ addTrack, getActivePlaylistName, getPendingTracks, removeTrack, reorderTrack, savePlaylist, exportPlaylist }));
+vi.mock('../playlist.js', () => ({
+  addTrack,
+  getActivePlaylistName,
+  getPendingTracks,
+  removeTrack,
+  reorderTrack,
+  savePlaylist,
+  exportPlaylist,
+}));
 vi.mock('../ui.js', () => ({ openModal, showToast, showError, openFilterPalette, closeAllModals }));
 vi.mock('../state.js', () => ({ state, emit: vi.fn(), on: vi.fn() }));
 
@@ -63,11 +86,21 @@ function find(matcher: Partial<Binding>): Binding {
   return call![0] as Binding;
 }
 
-let B_tab: Binding, B_space: Binding, B_F7: Binding, B_slash: Binding,
-  B_del: Binding, B_bs: Binding, B_ctrlS: Binding, B_ctrlE: Binding,
-  B_ctrlUp: Binding, B_ctrlDown: Binding,
-  B_down: Binding, B_up: Binding, B_enter: Binding,
-  B_left: Binding, B_right: Binding;
+let B_tab: Binding,
+  B_space: Binding,
+  B_F7: Binding,
+  B_slash: Binding,
+  B_del: Binding,
+  B_bs: Binding,
+  B_ctrlS: Binding,
+  B_ctrlE: Binding,
+  B_ctrlUp: Binding,
+  B_ctrlDown: Binding,
+  B_down: Binding,
+  B_up: Binding,
+  B_enter: Binding,
+  B_left: Binding,
+  B_right: Binding;
 
 beforeAll(() => {
   B_tab = find({ key: 'Tab', playlistMode: true });
@@ -96,11 +129,15 @@ describe('commands/playlist', () => {
     state.activePlaylistIndex = 0;
     state.playlistMode = true;
     // Reset mock implementations that tests may have changed
-    getPendingTracks.mockImplementation(() => [{ filename: 'a.mp3', fullPath: '/a.mp3', relPath: 'a.mp3', year: null, duration: null, codec: null }]);
+    getPendingTracks.mockImplementation(() => [
+      { filename: 'a.mp3', fullPath: '/a.mp3', relPath: 'a.mp3', year: null, duration: null, codec: null },
+    ]);
     addTrack.mockImplementation(() => true);
   });
 
-  afterAll(() => { document.body.innerHTML = ''; });
+  afterAll(() => {
+    document.body.innerHTML = '';
+  });
 
   describe('Tab — focus toggle', () => {
     it('toggles playlistFocus from source to sidebar', () => {
@@ -287,7 +324,7 @@ describe('commands/playlist', () => {
       tracks.id = 'playlist-tracks';
       ['a.mp3', 'b.mp3', 'c.mp3'].forEach((n, i) => {
         const t = document.createElement('div');
-        t.className = 'pl-track' + (i === 1 ? ' focused' : '');
+        t.className = `pl-track${i === 1 ? ' focused' : ''}`;
         t.textContent = n;
         tracks.appendChild(t);
       });
@@ -342,7 +379,7 @@ describe('commands/playlist', () => {
       tracks.id = 'playlist-tracks';
       ['a', 'b', 'c'].forEach((n, i) => {
         const t = document.createElement('div');
-        t.className = 'pl-track' + (i === 1 ? ' focused' : '');
+        t.className = `pl-track${i === 1 ? ' focused' : ''}`;
         t.textContent = n;
         tracks.appendChild(t);
       });

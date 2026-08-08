@@ -26,7 +26,7 @@ vi.mock('./registry.js', () => ({
   registry: { bind },
 }));
 
-vi.mock('../focus.js', async (importOriginal) => {
+vi.mock('../focus.js', async importOriginal => {
   const mod = await importOriginal<typeof import('../focus.js')>();
   return {
     ...mod,
@@ -80,8 +80,14 @@ beforeAll(() => {
     ['ArrowUp', { key: 'ArrowUp', playlistMode: false }],
     ['ArrowLeft:source', { key: 'ArrowLeft', activePanel: 'source', playlistMode: false }],
     ['ArrowRight:source', { key: 'ArrowRight', activePanel: 'source', playlistMode: false }],
-    ['ArrowLeft:epars', { key: 'ArrowLeft', activePanel: 'epars', playlistMode: false, isAudioPlaying: false, shiftKey: false }],
-    ['ArrowRight:epars', { key: 'ArrowRight', activePanel: 'epars', playlistMode: false, isAudioPlaying: false, shiftKey: false }],
+    [
+      'ArrowLeft:epars',
+      { key: 'ArrowLeft', activePanel: 'epars', playlistMode: false, isAudioPlaying: false, shiftKey: false },
+    ],
+    [
+      'ArrowRight:epars',
+      { key: 'ArrowRight', activePanel: 'epars', playlistMode: false, isAudioPlaying: false, shiftKey: false },
+    ],
     ['Enter', { key: 'Enter', playlistMode: false }],
     ['Space', { key: ' ', playlistMode: false }],
     ['Backspace', { key: 'Backspace', isInput: false, activeModal: null, playlistMode: false }],

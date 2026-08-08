@@ -1,11 +1,10 @@
 // ─── File row DOM factory ──────────────────────────────────────────────────
 // Returns an HTMLDivElement with play, focus, rate, and context menu handlers.
 
-import { togglePlay } from '../audio.js';
-import { stopPlayer } from '../audio.js';
+import { stopPlayer, togglePlay } from '../audio.js';
 import { focusItemByElement, setActivePanel } from '../focus.js';
-import { showContextMenu } from '../ui.js';
 import { getRating } from '../ratings.js';
+import { showContextMenu } from '../ui.js';
 import { type FileStatus, formatDuration } from '../utils.js';
 
 export function makeFileEl(
@@ -18,6 +17,7 @@ export function makeFileEl(
   codec: string | null,
   selectEparsFileFn?: (el: HTMLElement, filename: string, eparDir: string) => void,
   startSourceRatingEditFn?: () => void,
+  onCueEditFn?: (filename: string, fullPath: string) => void,
 ): HTMLDivElement {
   const row = document.createElement('div');
   row.className = 'file-row';
@@ -70,9 +70,7 @@ export function makeFileEl(
   }
   ratingSpan.onclick = (e: MouseEvent) => {
     e.stopPropagation();
-    const cont = row.closest(
-      '#epars-container, #source-container, #playlist-source-container',
-    ) as HTMLElement | null;
+    const cont = row.closest('#epars-container, #source-container, #playlist-source-container') as HTMLElement | null;
     if (!cont) return;
     for (const el of cont.querySelectorAll('.focused')) el.classList.remove('focused');
     row.classList.add('focused');
@@ -81,6 +79,19 @@ export function makeFileEl(
     }
   };
   row.appendChild(ratingSpan);
+
+  // Cue editor access (source trees only — éparpillé ne passe pas onCueEditFn)
+  if (onCueEditFn) {
+    const cueBtn = document.createElement('button');
+    cueBtn.className = 'cue-btn';
+    cueBtn.textContent = 'Cues';
+    cueBtn.title = 'Éditeur cues / loops (waveform)';
+    cueBtn.onclick = (e: MouseEvent) => {
+      e.stopPropagation();
+      onCueEditFn(filename, fullpath);
+    };
+    row.appendChild(cueBtn);
+  }
 
   // Click-to-focus
   row.onclick = (e: MouseEvent) => {
@@ -130,6 +141,12 @@ export function makeFileEl(
       items.push({
         label: '● Sélectionner pour copie',
         action: () => selectEparsFileFn(fileLabel, fname, eparDir),
+      });
+    }
+    if (onCueEditFn) {
+      items.push({
+        label: 'Cues / loops (waveform)',
+        action: () => onCueEditFn(filename, fullpath),
       });
     }
     showContextMenu(e.clientX, e.clientY, items);

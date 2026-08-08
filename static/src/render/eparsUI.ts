@@ -1,7 +1,7 @@
 // ─── Éparpillé panel rendering ────────────────────────────────────────────
 
 import { focusItemByElement, setActivePanel } from '../focus.js';
-import { state, type EparsSelection } from '../state.js';
+import { type EparsSelection, state } from '../state.js';
 import { computeStatus, countAllEparsFiles, type FileStatus } from '../utils.js';
 import { makeFileEl } from './fileRow.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
@@ -72,9 +72,8 @@ function selectEparsFile(
   const count = state.selectedEparsFiles.size;
   const statusText = document.getElementById('status-text');
   if (statusText) {
-    statusText.textContent = count > 1
-      ? `${count} fichiers sélectionnés. Tab → F5 pour copier.`
-      : 'Appuie sur Tab → F5 pour copier.';
+    statusText.textContent =
+      count > 1 ? `${count} fichiers sélectionnés. Tab → F5 pour copier.` : 'Appuie sur Tab → F5 pour copier.';
   }
   setActivePanel('epars');
   if (row && container) focusItemByElement(container, row);
@@ -118,7 +117,17 @@ export function renderEpars(): void {
       else if (status === 'doublon') countDoublon++;
       else if (status === 'traite') countTraite++;
 
-      const row = makeFileEl(filename, relPath, status as FileStatus, fullpath, data.year, data.duration, data.codec, selectEparsFile, startSourceRatingEdit);
+      const row = makeFileEl(
+        filename,
+        relPath,
+        status as FileStatus,
+        fullpath,
+        data.year,
+        data.duration,
+        data.codec,
+        selectEparsFile,
+        startSourceRatingEdit,
+      );
       const label2 = row.querySelector('.file') as HTMLElement;
       if (label2) {
         label2.dataset.epardir = dirPath;
@@ -139,5 +148,7 @@ export function renderEpars(): void {
     `;
   }
 
-  requestAnimationFrame(() => { container.scrollTop = savedScrollTop; });
+  requestAnimationFrame(() => {
+    container.scrollTop = savedScrollTop;
+  });
 }

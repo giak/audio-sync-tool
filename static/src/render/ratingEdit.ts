@@ -1,6 +1,6 @@
 // ─── Rating inline edit: shared logic, sidebar + source tree entry points ──
 
-import { getRating, saveRating, deleteRating } from '../ratings.js';
+import { deleteRating, getRating, saveRating } from '../ratings.js';
 import { state } from '../state.js';
 import { showToast } from '../ui.js';
 
@@ -21,7 +21,9 @@ export function _ratingClickHandler(e: MouseEvent): void {
   if (!trackEl) return;
   const tracksContainer = document.getElementById('playlist-tracks');
   if (tracksContainer) {
-    tracksContainer.querySelectorAll('.pl-track.focused').forEach(f => f.classList.remove('focused'));
+    tracksContainer.querySelectorAll('.pl-track.focused').forEach(f => {
+      f.classList.remove('focused');
+    });
   }
   trackEl.classList.add('focused');
   const panel = document.getElementById('playlist-panel');
@@ -137,8 +139,13 @@ function _startInlineRatingEdit(
   }
 
   input.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(); }
-    else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    }
   });
 
   input.addEventListener('blur', () => {

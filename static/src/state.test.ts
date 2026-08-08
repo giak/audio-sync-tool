@@ -1,6 +1,6 @@
 // ─── Unit tests for state EventEmitter ────────────────────────────────────
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { state, on } from './state.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { on, state } from './state.js';
 
 describe('state EventEmitter', () => {
   beforeEach(async () => {

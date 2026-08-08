@@ -4,9 +4,11 @@
 > **Standard** : Spec-Driven Development (SDD) · Constitutional AI · Persona-Based Workflow.
 > Chaque section est auto-suffisante — lisible isolément par un pipeline RAG.
 >
-> **⚠️ N'ajoute jamais de test dans `script.test.js`** — ce fichier contient 55 tests
-> 100% mockés qui ne vérifient rien de réel. Migre-les vers `integration.test.js`
-> quand tu les touches. Le vrai testing UX se fait dans `integration.test.js`.
+> **État actuel** : tout le code et les tests sont en **TypeScript** (`static/src/**/*.ts`).
+> Les tests vivent dans des fichiers `*.test.ts` co-localisés avec leur module
+> (ex. `static/src/integration.test.ts`, `static/src/commands/playlist.test.ts`),
+> plus `test_app.py` / `test_nml.py` pour le backend pytest. Il n'existe plus de
+> fichier de test `.js` — ne pas en créer.
 
 ---
 
@@ -33,8 +35,8 @@ Avant d'écrire un test, remplir ce bloc SDD. Il répond aux 6 questions qui emp
 ### SDD : [Nom du comportement]
 
 - **Outcome**   : Ce que l'utilisateur obtient (ex: "le fichier est copié et le badge change")
-- **Scope**     : Quels modules/fichiers sont concernés (ex: "script.js, render.js, actions.js")
-- **Constraints**: Règles à respecter (ex: "seul api.js est mocké ; le DOM est partagé via vi.hoisted()")
+- **Scope**     : Quels modules/fichiers sont concernés (ex: "script.ts, render.ts, actions.ts")
+- **Constraints**: Règles à respecter (ex: "seul api.ts est mocké ; le DOM est partagé via vi.hoisted()")
 - **Decisions** : Choix d'architecture pour ce test (ex: "on mocke getBoundingClientRect pour simuler 2 colonnes")
 - **Task Breakdown** : Étapes concrètes (ex: "1. Setup DOM ; 2. dispatchKey('Tab') ; 3. Vérifier state.activePanel")
 - **Verification Criteria** : Assertions précises (ex: "state.activePanel === 'source' ET .panel-active sur #panel-right")
@@ -46,7 +48,7 @@ Avant d'écrire un test, remplir ce bloc SDD. Il répond aux 6 questions qui emp
 ### SDD : Réorganisation d'une piste vers le haut (Ctrl+↑)
 
 - **Outcome**   : La piste focusée remonte d'une position dans la sidebar
-- **Scope**     : script.js (routeur clavier), playlist.js (reorderTrack), render.js (renderPlaylistPanel)
+- **Scope**     : script.ts (routeur clavier), playlist.ts (reorderTrack), render.ts (renderPlaylistPanel)
 - **Constraints**: Mode Playlist actif, 2+ pistes dans la playlist, focus = 'sidebar'
 - **Decisions** : On ajoute les pistes via dispatchKey(' ') dans playlist-source avant de naviguer
 - **Task Breakdown** : 1. enterPlaylist() ; 2. Ajouter 2 pistes via Space ; 3. Focus sidebar + 2e piste ; 4. dispatchKey('ArrowUp', {ctrlKey:true}) ; 5. Vérifier l'ordre
@@ -89,11 +91,10 @@ vi.hoisted(() => {
 
 ### C3 — Mock minimal
 
-**Un seul module est mocké** : `api.js`. Tous les autres (`focus.js`, `audio.js`, `ui.js`, `render.js`, `playlist.js`) tournent avec leur code de production.
+**Un seul module est mocké** : `api.ts`. Tous les autres (`focus.ts`, `audio.ts`, `ui.ts`, `render.ts`, `playlist.ts`) tournent avec leur code de production.
 
-```js
-vi.mock('./api.js', () => ({ api: vi.fn() }));
-```
+> Note : en TypeScript NodeNext, les imports ESM s'écrivent avec l'extension `.js`
+> (ex. `vi.mock('./api.js', ...)`) même si le fichier réel est `api.ts`.
 
 ### C4 — Assertions visibles
 
@@ -265,8 +266,8 @@ Quand la matrice révèle un 🔴, suivre cette boucle :
 
 | Question | Réponse |
 |----------|---------|
-| Fichier de test UX | `static/integration.test.js` |
-| Module mocké | **Uniquement** `api.js` |
+| Fichier de test UX | `static/src/integration.test.ts` |
+| Module mocké | **Uniquement** `api.ts` |
 | Simuler une touche | `dispatchKey('Enter')` ou `dispatchKey('s', { ctrlKey: true })` |
 | Simuler un clic | `element.click()` |
 | Attendre l'async | `await flush()` — 1 si await, 2 si appel nu |
@@ -274,4 +275,4 @@ Quand la matrice révèle un 🔴, suivre cette boucle :
 | Vérifier une modale | `state.activeModal === 'config'` ET `!modal.classList.contains('hidden')` |
 | Infra DOM | `vi.hoisted()` crée le HTML avant les imports |
 | Gotcha spatial | Mocker `getBoundingClientRect` pour les tests de colonnes |
-| Fichier interdit | Ne **jamais** ajouter de test dans `script.test.js` (55 tests mockés, danger) |
+| Langue des tests | TypeScript uniquement — pas de fichier de test `.js` |

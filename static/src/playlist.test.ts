@@ -8,13 +8,12 @@ vi.mock('./api.js', () => ({
 }));
 
 // Partially mock state.js to spy on emit() while keeping real state/on
-vi.mock('./state.js', async (importOriginal) => {
+vi.mock('./state.js', async importOriginal => {
   const mod = await importOriginal();
   return { ...mod, emit: vi.fn() };
 });
 
 import { api } from './api.js';
-import { emit } from './state.js';
 import {
   addTrack,
   createNewPlaylist,
@@ -30,6 +29,7 @@ import {
   savePlaylist,
   setPendingTracks,
 } from './playlist.js';
+import { emit } from './state.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -282,7 +282,14 @@ describe('event emissions', () => {
   it('addTrack emits eparsPlaylist:changed (once — via setPendingTracks)', () => {
     createNewPlaylist('pl');
     vi.clearAllMocks(); // clear the emit from createNewPlaylist
-    const track = { filename: 'a.mp3', fullPath: '/a.mp3', relPath: 'a.mp3', year: '2024', duration: 180, codec: 'MP3' } as any;
+    const track = {
+      filename: 'a.mp3',
+      fullPath: '/a.mp3',
+      relPath: 'a.mp3',
+      year: '2024',
+      duration: 180,
+      codec: 'MP3',
+    } as any;
     addTrack('pl', track);
     // only setPendingTracks emits — addTrack no longer emits directly
     expect(emit).toHaveBeenCalledWith('eparsPlaylist:changed');

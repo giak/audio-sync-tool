@@ -1,6 +1,7 @@
 // ─── Audio player + player bar UI ──────────────────────────────────────────
-import { formatTime } from './utils.js';
+
 import { emit } from './state.js';
+import { formatTime } from './utils.js';
 
 let currentAudio: HTMLAudioElement | null = null;
 let _playerFilename = '';
@@ -118,9 +119,10 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
       if (playerBar) playerBar.classList.add('hidden');
       const statusText = document.getElementById('status-text');
       if (statusText) {
-        const msg = err instanceof DOMException && err.name === 'NotAllowedError'
-          ? '🔇 Son bloqué — clique d\'abord sur la page pour débloquer l\'audio.'
-          : `🔇 Erreur lecture : ${err instanceof Error ? err.message : String(err)}`;
+        const msg =
+          err instanceof DOMException && err.name === 'NotAllowedError'
+            ? "🔇 Son bloqué — clique d'abord sur la page pour débloquer l'audio."
+            : `🔇 Erreur lecture : ${err instanceof Error ? err.message : String(err)}`;
         statusText.textContent = msg;
       }
     });

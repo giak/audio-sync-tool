@@ -1,6 +1,7 @@
 // ─── Copy command: F5 ──────────────────────────────────────────────────────
-import { registry } from './registry.js';
+
 import { executeCopy } from '../actions.js';
+import { registry } from './registry.js';
 
 registry.bind({
   key: 'F5',

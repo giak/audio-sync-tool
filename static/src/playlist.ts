@@ -1,7 +1,7 @@
 // ─── Playlist business logic: CRUD, export, drag-drop state ─────────────
 
 import { api } from './api.js';
-import { state, emit } from './state.js';
+import { emit, state } from './state.js';
 
 interface PlaylistTrack {
   filename: string;

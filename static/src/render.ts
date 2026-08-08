@@ -2,35 +2,39 @@
 // Phase 2: Component Factories. render.ts is now a thin shell.
 // All exports use local bindings (import + export) to avoid pass-through conflicts.
 
-import { state, on } from './state.js';
-
-import { renderJournal } from './render/journalUI.js';
-import { renderEpars } from './render/eparsUI.js';
-import { renderSource, toggleSourceDir, renderDirTree, togglePlaylistSourceDir } from './render/sourceTree.js';
-import { renderPlaylistPanel, renderPlaylistSource, renderPlaylistManager, patchPlaylistSourceFile } from './render/playlistUI.js';
-import { startRatingEdit, startSourceRatingEdit, _ratingClickHandler } from './render/ratingEdit.js';
+import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
 import { getBatchCopy } from './render/batchCopy.js';
 import { doDragCopy } from './render/dragDrop.js';
-import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
-
-export {
-  renderJournal,
-  renderEpars,
-  renderSource,
-  toggleSourceDir,
-  renderDirTree,
-  togglePlaylistSourceDir,
+import { renderEpars } from './render/eparsUI.js';
+import { renderJournal } from './render/journalUI.js';
+import {
+  patchPlaylistSourceFile,
+  renderPlaylistManager,
   renderPlaylistPanel,
   renderPlaylistSource,
-  renderPlaylistManager,
+} from './render/playlistUI.js';
+import { _ratingClickHandler, startRatingEdit, startSourceRatingEdit } from './render/ratingEdit.js';
+import { renderDirTree, renderSource, togglePlaylistSourceDir, toggleSourceDir } from './render/sourceTree.js';
+import { on, state } from './state.js';
+
+export {
+  _ratingClickHandler,
+  doDragCopy,
+  getBatchCopy,
+  patchEparsFileAfterCopy,
   patchPlaylistSourceFile,
+  patchSourceFileAfterCopy,
+  renderDirTree,
+  renderEpars,
+  renderJournal,
+  renderPlaylistManager,
+  renderPlaylistPanel,
+  renderPlaylistSource,
+  renderSource,
   startRatingEdit,
   startSourceRatingEdit,
-  _ratingClickHandler,
-  getBatchCopy,
-  doDragCopy,
-  patchEparsFileAfterCopy,
-  patchSourceFileAfterCopy,
+  togglePlaylistSourceDir,
+  toggleSourceDir,
 };
 
 // ── Event subscriptions (Phase 3: auto-render on state change) ───────────
@@ -55,10 +59,11 @@ export function setupRenderSubscriptions(): void {
 
   // ── Panel active class toggling ──────────────────────────────────────
   on('activePanel:changed', () => {
-    document.querySelectorAll('.panel-active').forEach(el => el.classList.remove('panel-active'));
-    const el = state.activePanel === 'source'
-      ? document.getElementById('panel-right')
-      : document.getElementById('panel-left');
+    document.querySelectorAll('.panel-active').forEach(el => {
+      el.classList.remove('panel-active');
+    });
+    const el =
+      state.activePanel === 'source' ? document.getElementById('panel-right') : document.getElementById('panel-left');
     el?.classList.add('panel-active');
   });
 
@@ -71,7 +76,9 @@ export function setupRenderSubscriptions(): void {
       const container = document.getElementById('playlist-panel');
       if (container) {
         // Remove .led-playing from all playlist tracks
-        container.querySelectorAll('.led-playing').forEach(el => el.classList.remove('led-playing'));
+        container.querySelectorAll('.led-playing').forEach(el => {
+          el.classList.remove('led-playing');
+        });
       }
     }
   });
@@ -87,5 +94,3 @@ export function setupRenderSubscriptions(): void {
   on('eparsPlaylist:changed', autoRenderPlaylistPanel);
   on('activePlaylistIndex:changed', autoRenderPlaylistPanel);
 }
-
-

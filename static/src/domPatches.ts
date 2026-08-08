@@ -5,9 +5,9 @@
 
 import { stopPlayer, togglePlay } from './audio.js';
 import { focusItemByElement, setActivePanel } from './focus.js';
-import { computeStatus, countAllEparsFiles, formatDuration } from './utils.js';
-import { state, type TreeNode } from './state.js';
 import { getRating } from './ratings.js';
+import { state, type TreeNode } from './state.js';
+import { computeStatus, countAllEparsFiles, formatDuration } from './utils.js';
 
 export function patchEparsFileAfterCopy(filename: string, eparDir: string): void {
   const fileSpan = document.querySelector(
@@ -28,7 +28,9 @@ export function patchEparsFileAfterCopy(filename: string, eparDir: string): void
   }
 
   const allFileSpans = document.querySelectorAll('#epars-container .file');
-  let countNouveau = 0, countDoublon = 0, countTraite = 0;
+  let countNouveau = 0,
+    countDoublon = 0,
+    countTraite = 0;
   for (const fs of allFileSpans) {
     if (fs.classList.contains('nouveau')) countNouveau++;
     else if (fs.classList.contains('doublon')) countDoublon++;
@@ -78,9 +80,24 @@ export function patchSourceFileAfterCopy(
     state.sourceNodeMap = new Map([...state.sourceNodeMap, [currentPath, { node, baseDir: ancestorInfo.baseDir }]]);
   }
 
-  const entries = (node.__files__ as Array<{ filename: string; relPath: string; year: string | null; duration: number | null; codec: string | null; baseDir: string }>) || [];
+  const entries =
+    (node.__files__ as Array<{
+      filename: string;
+      relPath: string;
+      year: string | null;
+      duration: number | null;
+      codec: string | null;
+      baseDir: string;
+    }>) || [];
   if (!node.__files__) node.__files__ = entries;
-  entries.push({ filename, relPath: fileData.path, year: fileData.year, duration: fileData.duration, codec: fileData.codec, baseDir: ancestorInfo.baseDir });
+  entries.push({
+    filename,
+    relPath: fileData.path,
+    year: fileData.year,
+    duration: fileData.duration,
+    codec: fileData.codec,
+    baseDir: ancestorInfo.baseDir,
+  });
 
   let totalSource = 0;
   for (const files of Object.values(state.sourceFiles)) totalSource += Object.keys(files).length;
@@ -118,7 +135,10 @@ export function patchSourceFileAfterCopy(
       playBtn.className = 'play-btn';
       playBtn.textContent = '▶';
       playBtn.title = 'Écouter';
-      playBtn.onclick = (e: MouseEvent) => { e.stopPropagation(); togglePlay(filename, `${destDir}/${filename}`, playBtn); };
+      playBtn.onclick = (e: MouseEvent) => {
+        e.stopPropagation();
+        togglePlay(filename, `${destDir}/${filename}`, playBtn);
+      };
       newRow.appendChild(playBtn);
 
       const label = document.createElement('span');
@@ -128,10 +148,25 @@ export function patchSourceFileAfterCopy(
       label.dataset.fullpath = `${destDir}/${filename}`;
       newRow.appendChild(label);
 
-      if (fileData.year) { const s = document.createElement('span'); s.className = 'year'; s.textContent = fileData.year; newRow.appendChild(s); }
-      if (fileData.codec) { const s = document.createElement('span'); s.className = 'codec'; s.textContent = fileData.codec; newRow.appendChild(s); }
+      if (fileData.year) {
+        const s = document.createElement('span');
+        s.className = 'year';
+        s.textContent = fileData.year;
+        newRow.appendChild(s);
+      }
+      if (fileData.codec) {
+        const s = document.createElement('span');
+        s.className = 'codec';
+        s.textContent = fileData.codec;
+        newRow.appendChild(s);
+      }
       newRow.dataset.durationSeconds = fileData.duration ? String(fileData.duration) : '';
-      if (fileData.duration) { const s = document.createElement('span'); s.className = 'duration'; s.textContent = formatDuration(fileData.duration); newRow.appendChild(s); }
+      if (fileData.duration) {
+        const s = document.createElement('span');
+        s.className = 'duration';
+        s.textContent = formatDuration(fileData.duration);
+        newRow.appendChild(s);
+      }
 
       const ratingVal = getRating(`${destDir}/${filename}`);
       const ratingSpan = document.createElement('span');
@@ -143,7 +178,9 @@ export function patchSourceFileAfterCopy(
       newRow.onclick = (e: MouseEvent) => {
         e.stopPropagation();
         if ((e.target as HTMLElement).closest('.play-btn')) return;
-        const cont = newRow.closest('#epars-container, #source-container, #playlist-source-container') as HTMLElement | null;
+        const cont = newRow.closest(
+          '#epars-container, #source-container, #playlist-source-container',
+        ) as HTMLElement | null;
         if (!cont) return;
         focusItemByElement(cont, newRow);
         if (cont.id !== 'playlist-source-container') setActivePanel(cont.id === 'epars-container' ? 'epars' : 'source');
@@ -153,7 +190,10 @@ export function patchSourceFileAfterCopy(
       newRow.draggable = true;
       newRow.ondragstart = (e: DragEvent) => {
         const fl = newRow.querySelector('.file') as HTMLElement | null;
-        e.dataTransfer?.setData('application/x-epars-copy', JSON.stringify({ filename: fl?.dataset?.filename || '', eparDir: fl?.dataset?.epardir || '' }));
+        e.dataTransfer?.setData(
+          'application/x-epars-copy',
+          JSON.stringify({ filename: fl?.dataset?.filename || '', eparDir: fl?.dataset?.epardir || '' }),
+        );
         newRow.classList.add('dragging-source');
       };
       newRow.ondragend = () => newRow.classList.remove('dragging-source');

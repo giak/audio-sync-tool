@@ -40,10 +40,10 @@ vi.mock('../utils.js', () => ({
   }),
 }));
 
-import { togglePlay, stopPlayer } from '../audio.js';
+import { stopPlayer, togglePlay } from '../audio.js';
 import { focusItemByElement, setActivePanel } from '../focus.js';
-import { showContextMenu } from '../ui.js';
 import { getRating } from '../ratings.js';
+import { showContextMenu } from '../ui.js';
 import { makeFileEl } from './fileRow.js';
 
 function makeRow(
@@ -56,6 +56,7 @@ function makeRow(
     rating?: number | undefined;
     selectEparsFileFn?: (el: HTMLElement, filename: string, eparDir: string) => void;
     startSourceRatingEditFn?: () => void;
+    onCueEditFn?: (filename: string, fullPath: string) => void;
   } = {},
 ): HTMLDivElement {
   const {
@@ -67,6 +68,7 @@ function makeRow(
     rating = undefined,
     selectEparsFileFn = undefined,
     startSourceRatingEditFn = undefined,
+    onCueEditFn = undefined,
   } = opts;
 
   vi.mocked(getRating).mockReturnValue(rating);
@@ -81,6 +83,7 @@ function makeRow(
     codec ?? null,
     selectEparsFileFn,
     startSourceRatingEditFn,
+    onCueEditFn,
   );
 }
 
@@ -160,6 +163,65 @@ describe('DOM structure', () => {
   it('sets empty duration-seconds when duration is null', () => {
     const row = makeRow({ duration: null });
     expect(row.dataset.durationSeconds).toBe('');
+  });
+});
+
+// ── Cue editor access ─────────────────────────────────────────────────────
+
+describe('cue editor access', () => {
+  it('omits the Cues button when no onCueEditFn is provided', () => {
+    const row = makeRow({ onCueEditFn: undefined });
+    expect(row.querySelector('.cue-btn')).toBeNull();
+  });
+
+  it('includes a Cues button when onCueEditFn is provided', () => {
+    const row = makeRow({ onCueEditFn: vi.fn() });
+    const btn = row.querySelector('.cue-btn') as HTMLButtonElement | null;
+    expect(btn).not.toBeNull();
+    expect(btn!.textContent).toBe('Cues');
+    expect(btn!.title).toContain('waveform');
+  });
+
+  it('Cues button click calls onCueEditFn with filename and fullpath', () => {
+    const cueFn = vi.fn();
+    const row = makeRow({ onCueEditFn: cueFn, fullpath: '/media/usb/song.mp3' });
+    const btn = row.querySelector('.cue-btn') as HTMLButtonElement;
+    btn.click();
+    expect(cueFn).toHaveBeenCalledWith('song.mp3', '/media/usb/song.mp3');
+  });
+
+  it('Cues button click stops propagation', () => {
+    const cueFn = vi.fn();
+    const row = makeRow({ onCueEditFn: cueFn });
+    const parentClick = vi.fn();
+    row.onclick = parentClick;
+    const btn = row.querySelector('.cue-btn') as HTMLButtonElement;
+    btn.click();
+    expect(parentClick).not.toHaveBeenCalled();
+  });
+
+  it('context menu proposes Cues / loops when onCueEditFn is provided', () => {
+    const cueFn = vi.fn();
+    const row = makeRow({ onCueEditFn: cueFn });
+    row.dispatchEvent(new MouseEvent('contextmenu', { clientX: 10, clientY: 20, bubbles: true }));
+    const items = vi.mocked(showContextMenu).mock.lastCall![2] as Array<{ label: string }>;
+    expect(items.map(i => i.label)).toContain('Cues / loops (waveform)');
+  });
+
+  it('omits Cues / loops from context menu without onCueEditFn', () => {
+    const row = makeRow({ onCueEditFn: undefined });
+    row.dispatchEvent(new MouseEvent('contextmenu', { clientX: 10, clientY: 20, bubbles: true }));
+    const items = vi.mocked(showContextMenu).mock.lastCall![2] as Array<{ label: string }>;
+    expect(items.map(i => i.label)).not.toContain('Cues / loops (waveform)');
+  });
+
+  it('context menu action calls onCueEditFn with filename and fullpath', () => {
+    const cueFn = vi.fn();
+    const row = makeRow({ onCueEditFn: cueFn, fullpath: '/media/usb/song.mp3' });
+    row.dispatchEvent(new MouseEvent('contextmenu', { clientX: 10, clientY: 20, bubbles: true }));
+    const items = vi.mocked(showContextMenu).mock.lastCall![2] as Array<{ label: string; action: () => void }>;
+    items.find(i => i.label === 'Cues / loops (waveform)')!.action();
+    expect(cueFn).toHaveBeenCalledWith('song.mp3', '/media/usb/song.mp3');
   });
 });
 
@@ -376,10 +438,7 @@ describe('drag & drop', () => {
     const event = new DragEvent('dragstart', { dataTransfer: dt });
     row.dispatchEvent(event);
 
-    expect(dt.setData).toHaveBeenCalledWith(
-      'application/x-epars-copy',
-      JSON.stringify({ filename: '', eparDir: '' }),
-    );
+    expect(dt.setData).toHaveBeenCalledWith('application/x-epars-copy', JSON.stringify({ filename: '', eparDir: '' }));
   });
 
   it('dragend removes dragging class', () => {
@@ -403,9 +462,7 @@ describe('context menu (right-click)', () => {
     expect(showContextMenu).toHaveBeenCalledWith(
       50,
       80,
-      expect.arrayContaining([
-        expect.objectContaining({ label: '▶ Jouer' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ label: '▶ Jouer' })]),
     );
   });
 
@@ -420,9 +477,7 @@ describe('context menu (right-click)', () => {
     expect(showContextMenu).toHaveBeenCalledWith(
       10,
       20,
-      expect.arrayContaining([
-        expect.objectContaining({ label: '● Sélectionner pour copie' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ label: '● Sélectionner pour copie' })]),
     );
   });
 

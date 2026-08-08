@@ -1,10 +1,19 @@
 // ─── Playlist commands: Tab, Espace, Ctrl+S, Ctrl+E, Delete, Ctrl+↑↓, Enter, ←→ ──
-import { registry } from './registry.js';
-import { navigateFocus, navigateColumn, getFocusedItem } from '../focus.js';
-import { renderPlaylistSource, patchPlaylistSourceFile } from '../render/index.js';
-import { addTrack, getActivePlaylistName, getPendingTracks, removeTrack, reorderTrack, savePlaylist, exportPlaylist } from '../playlist.js';
-import { openModal, showToast, showError, openFilterPalette, closeAllModals } from '../ui.js';
+
+import { getFocusedItem, navigateColumn, navigateFocus } from '../focus.js';
+import {
+  addTrack,
+  exportPlaylist,
+  getActivePlaylistName,
+  getPendingTracks,
+  removeTrack,
+  reorderTrack,
+  savePlaylist,
+} from '../playlist.js';
+import { patchPlaylistSourceFile, renderPlaylistSource } from '../render/index.js';
 import { state } from '../state.js';
+import { closeAllModals, openFilterPalette, openModal, showError, showToast } from '../ui.js';
+import { registry } from './registry.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -58,7 +67,10 @@ function toggleTrackInPlaylist(): void {
 async function saveCurrentPlaylist(): Promise<void> {
   const name = getActivePlaylistName();
   const tracks = getPendingTracks(name);
-  if (tracks.length === 0) { showToast('⚠️ Playlist vide, rien à sauvegarder'); return; }
+  if (tracks.length === 0) {
+    showToast('⚠️ Playlist vide, rien à sauvegarder');
+    return;
+  }
   try {
     await savePlaylist(name, tracks);
     showToast(`💾 Playlist "${name}" sauvegardée (${tracks.length} morceaux)`);
@@ -70,7 +82,10 @@ async function saveCurrentPlaylist(): Promise<void> {
 async function showExportModal(): Promise<void> {
   const name = getActivePlaylistName();
   const tracks = getPendingTracks(name);
-  if (tracks.length === 0) { showToast('⚠️ Playlist vide, rien à exporter'); return; }
+  if (tracks.length === 0) {
+    showToast('⚠️ Playlist vide, rien à exporter');
+    return;
+  }
   const savedPl = state.playlists.find(p => p.name === name);
   let existingWarning = '';
   if (savedPl?.exported && savedPl.exportedDir) {
@@ -79,7 +94,8 @@ async function showExportModal(): Promise<void> {
   const dialogMsg = document.getElementById('dialog-msg') as HTMLElement | null;
   const confirmBtn = document.getElementById('dialog-confirm') as HTMLElement | null;
   const cancelBtn = document.getElementById('dialog-cancel') as HTMLElement | null;
-  if (dialogMsg) dialogMsg.innerHTML = `Exporter la playlist <strong>"${name}"</strong> ?<br>${tracks.length} morceau${tracks.length > 1 ? 'x' : ''}${existingWarning}`;
+  if (dialogMsg)
+    dialogMsg.innerHTML = `Exporter la playlist <strong>"${name}"</strong> ?<br>${tracks.length} morceau${tracks.length > 1 ? 'x' : ''}${existingWarning}`;
   if (confirmBtn) {
     confirmBtn.textContent = '📦 Exporter';
     confirmBtn.onclick = async () => {
@@ -89,6 +105,8 @@ async function showExportModal(): Promise<void> {
       if (res.ok) {
         showToast(`📦 Playlist "${name}" exportée — ${String(res.count)} morceaux dans ${String(res.dir)}`);
         if (res.fallback === 'copy') showToast(`⚠️ ${String(res.warning || 'Copie physique utilisée')}`);
+        if (res.nml) showToast(`✅ collection.nml généré : ${String(res.nml)}`);
+        else if (res.nml_error) showToast(`⚠️ ${String(res.nml_error)}`);
       } else if (res.missing) {
         showToast(`❌ Fichiers manquants : ${String((res.missing as string[]).join(', '))}`);
       } else {
@@ -232,7 +250,10 @@ registry.bind({
       if (tracks.length === 0) return;
       const current = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
       let idx = 0;
-      if (current) { idx = Array.from(tracks).indexOf(current); if (idx === -1) idx = 0; }
+      if (current) {
+        idx = Array.from(tracks).indexOf(current);
+        if (idx === -1) idx = 0;
+      }
       for (const el of tracks) el.classList.remove('focused');
       const newIdx = Math.max(0, Math.min(tracks.length - 1, idx + 1));
       tracks[newIdx].classList.add('focused');
@@ -255,7 +276,10 @@ registry.bind({
       if (tracks.length === 0) return;
       const current = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
       let idx = 0;
-      if (current) { idx = Array.from(tracks).indexOf(current); if (idx === -1) idx = 0; }
+      if (current) {
+        idx = Array.from(tracks).indexOf(current);
+        if (idx === -1) idx = 0;
+      }
       for (const el of tracks) el.classList.remove('focused');
       const newIdx = Math.max(0, Math.min(tracks.length - 1, idx - 1));
       tracks[newIdx].classList.add('focused');

@@ -132,19 +132,20 @@ avec deux points d'entrée `startRatingEdit()` (sidebar tracks) et
 
 ```
 audio-sync-tool/
-├── app.py                 # Serveur Flask (port 8765, 12 routes)
+├── app.py                 # Serveur Flask (port 8765, 17 routes)
 ├── templates/index.html   # Interface utilisateur
 ├── static/
 │   ├── style.css          # Thème SCADA (JetBrains Mono, LED glow)
-│   ├── src/               # Sources TypeScript (28 modules)
+│   ├── src/               # Sources TypeScript (31 modules)
 │   │   ├── commands/      # Command Pattern (8 modules)
-│   │   ├── render/        # Component factories (3 modules extraits)
+│   │   ├── render/        # Component factories (10 modules)
 │   │   ├── script.ts      # Orchestrateur (~120 lignes)
 │   │   ├── state.ts       # Proxy + EventEmitter + RAF batcher
-│   │   └── *.test.ts      # 14 fichiers de test (vitest)
+│   │   └── *.test.ts      # 25 fichiers de test (vitest)
 │   └── dist/              # Compilés par esbuild (gitignored)
 ├── data/                  # Config, journal, cache, playlists, ratings
 ├── docs/superpowers/      # Specs + plans d'implémentation
+├── .github/workflows/     # CI : typecheck + lint + vitest + pytest
 ├── biome.json             # Linter + formateur Biome
 ├── vitest.config.js       # Tests frontend + coverage
 ├── tsconfig.json          # TypeScript config
@@ -162,10 +163,13 @@ artefacts de build (gitignorés) générés par esbuild.
 npm run build              # Compilation unique .ts → .js
 npm run dev                # Watch mode (compilation automatique)
 npm run typecheck          # Vérification des types (tsc)
-npm run lint               # Vérification Biome (0 erreurs)
+npm run lint               # Vérification Biome (0 erreurs — vérifié)
 npm run lint:write         # Correction auto des problèmes
 npm run format             # Formatage Biome
 ```
+
+> **CI** : un workflow GitHub Actions (`.github/workflows/ci.yml`) vérifie
+> typecheck, lint, vitest, pytest et le build sur chaque push/PR.
 
 ### Tests
 
@@ -178,8 +182,8 @@ npm run format             # Formatage Biome
 #### Frontend (vitest)
 
 ```bash
-npm test                   # 313 tests, 14 fichiers
-npm run coverage           # Clean → test → rapport (90% lignes)
+npm test                   # 614 tests, 26 fichiers
+npm run coverage           # Clean → test → rapport (~89% lignes)
 ```
 
 ### Couverture
@@ -188,6 +192,9 @@ npm run coverage           # Clean → test → rapport (90% lignes)
 |-------|-------|------------|
 | Pytest | 59 | — |
 | Vitest | 313 | 90% lignes, 79% branches |
+| Pytest | 127 | — |
+| Vitest | 614 | 88.8% lignes, 82.6% branches |
+
 
 ## Architecture (v0.2)
 
@@ -205,5 +212,5 @@ actions.ts (mutations state pures)
 ```
 
 **Tags git :**
-- `v0.1-functional` — appli fonctionnelle (291 tests)
-- `v0.2-clean-architecture` — Command Pattern + EventEmitter (313 tests)
+- `v0.1-functional` — appli fonctionnelle (291 tests à l'époque)
+- `v0.2-clean-architecture` — Command Pattern + EventEmitter (313 tests à l'époque)

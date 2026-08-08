@@ -1,7 +1,6 @@
 // ─── Playlist mode rendering: tabs, tracks, source tree, manager ──────────
 
 import { togglePlay } from '../audio.js';
-import { showContextMenu } from '../ui.js';
 import {
   createNewPlaylist,
   deletePlaylist,
@@ -16,12 +15,10 @@ import {
 } from '../playlist.js';
 import { getRating } from '../ratings.js';
 import { state } from '../state.js';
-import { closeAllModals } from '../ui.js';
-import { type FileStatus } from '../utils.js';
-import { makeFileEl } from './fileRow.js';
+import { closeAllModals, showContextMenu } from '../ui.js';
 import { openCueEditor } from './cueEditor.js';
-import { _ratingClickHandler, startRatingEdit, startSourceRatingEdit } from './ratingEdit.js';
-import { renderDirTree, togglePlaylistSourceDir, toggleSourceDir } from './sourceTree.js';
+import { _ratingClickHandler } from './ratingEdit.js';
+import { renderDirTree, togglePlaylistSourceDir } from './sourceTree.js';
 
 // ── Internal types ──────────────────────────────────────────────────────
 
@@ -188,7 +185,9 @@ function renderPlaylistTracks(): void {
       if ((e.target as HTMLElement).closest('.pl-track-remove, .pl-track-rating, .pl-drag-handle')) return;
       const tracksContainer = document.getElementById('playlist-tracks');
       if (tracksContainer) {
-        tracksContainer.querySelectorAll('.pl-track.focused').forEach(f => f.classList.remove('focused'));
+        tracksContainer.querySelectorAll('.pl-track.focused').forEach(f => {
+          f.classList.remove('focused');
+        });
       }
       trackEl.classList.add('focused');
     };
@@ -210,6 +209,18 @@ function renderPlaylistTracks(): void {
       const items: Array<{ label: string; action: () => void; danger?: boolean }> = [
         { label: '▶ Jouer', action: () => togglePlay(filename, fullPath, trackEl.querySelector('.play-btn') || trackEl) },
         { label: '✕ Retirer', action: () => { removeTrack(getActivePlaylistName(), fullPath); /* auto-rendered via eparsPlaylist:changed */ patchPlaylistSourceFile(fullPath, true); }, danger: true },
+        {
+          label: '▶ Jouer',
+          action: () => togglePlay(filename, fullPath, trackEl.querySelector('.play-btn') || trackEl),
+        },
+        {
+          label: '✕ Retirer',
+          action: () => {
+            removeTrack(getActivePlaylistName(), fullPath); /* auto-rendered via eparsPlaylist:changed */
+            patchPlaylistSourceFile(fullPath, true);
+          },
+          danger: true,
+        },
       ];
       showContextMenu(e.clientX, e.clientY, items);
     };
@@ -245,7 +256,9 @@ function renderPlaylistTracks(): void {
     };
   });
 
-  requestAnimationFrame(() => { container.scrollTop = savedScrollTop; });
+  requestAnimationFrame(() => {
+    container.scrollTop = savedScrollTop;
+  });
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -302,7 +315,14 @@ export function renderPlaylistSource(): void {
       }
       current.__files__ = current.__files__ || [];
       const entries = current.__files__;
-      entries.push({ filename, relPath: data.path, year: data.year, duration: data.duration, codec: data.codec, baseDir: dirPath } as FileEntry);
+      entries.push({
+        filename,
+        relPath: data.path,
+        year: data.year,
+        duration: data.duration,
+        codec: data.codec,
+        baseDir: dirPath,
+      } as FileEntry);
     }
     allTrees.push({ tree, dirPath });
   }
@@ -328,7 +348,8 @@ export function renderPlaylistManager(): void {
 
   const allNames = Array.from(new Set([...state.playlists.map(p => p.name), ...Object.keys(state.pendingPlaylists)]));
 
-  let html = '<table id="pl-manager-table"><thead><tr><th>Playlist</th><th>Morceaux</th><th>Durée</th><th>Export</th><th>Actions</th></tr></thead><tbody>';
+  let html =
+    '<table id="pl-manager-table"><thead><tr><th>Playlist</th><th>Morceaux</th><th>Durée</th><th>Export</th><th>Actions</th></tr></thead><tbody>';
   for (const name of allNames) {
     const saved = state.playlists.find(p => p.name === name);
     const pendingTracks = getPendingTracks(name);
@@ -365,14 +386,17 @@ export function renderPlaylistManager(): void {
         document.getElementById('main-panels')?.classList.add('hidden');
         document.getElementById('playlist-layout')?.classList.remove('hidden');
       }
-      const allKeys = Array.from(new Set([...state.playlists.map(p => p.name), ...Object.keys(state.pendingPlaylists)]));
+      const allKeys = Array.from(
+        new Set([...state.playlists.map(p => p.name), ...Object.keys(state.pendingPlaylists)]),
+      );
       state.activePlaylistIndex = allKeys.indexOf(name);
       renderPlaylistSource();
       renderPlaylistPanel();
       if (justEntered) {
         document.getElementById('playlist-source')?.classList.add('panel-active');
         const statusText = document.getElementById('status-text');
-        if (statusText) statusText.textContent = '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.';
+        if (statusText)
+          statusText.textContent = '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.';
       }
     };
   });
@@ -385,7 +409,10 @@ export function renderPlaylistManager(): void {
         const saved = state.playlists.find(p => p.name === oldName);
         const pending = getPendingTracks(oldName);
         if (saved) await renamePlaylist(oldName, newName.trim());
-        if (pending.length > 0) { setPendingTracks(newName.trim(), pending); removePendingPlaylist(oldName); }
+        if (pending.length > 0) {
+          setPendingTracks(newName.trim(), pending);
+          removePendingPlaylist(oldName);
+        }
         renderPlaylistManager();
         renderPlaylistPanel();
       }

@@ -9,6 +9,8 @@ vi.hoisted(() => {
     <input id="cfg-name" value="">
     <input id="cfg-source" value="">
     <input id="cfg-traktor-nml-path" value="">
+    <input id="cfg-traktor-export-root" value="">
+    <input id="cfg-traktor-export-volume" value="">
     <textarea id="cfg-epars"></textarea>
     <span id="config-status"></span>
     <button id="btn-add-config"></button>
@@ -146,6 +148,72 @@ describe('initConfigUI', () => {
     select.value = '0';
     renderConfigSelect();
     expect((document.getElementById('cfg-traktor-nml-path') as HTMLInputElement).value).toBe('/x/collection.nml');
+  });
+
+  it('saveConfig stores traktor_export_root and traktor_export_volume', async () => {
+    vi.mocked(api).mockResolvedValueOnce({ ok: true });
+    (document.getElementById('cfg-name') as HTMLInputElement).value = 'usb';
+    (document.getElementById('cfg-source') as HTMLInputElement).value = '/src';
+    (document.getElementById('cfg-epars') as HTMLTextAreaElement).value = '';
+    (document.getElementById('cfg-traktor-nml-path') as HTMLInputElement).value = '/x/collection.nml';
+    (document.getElementById('cfg-traktor-export-root') as HTMLInputElement).value = '/media/giak/TRAKTOR_USB';
+    (document.getElementById('cfg-traktor-export-volume') as HTMLInputElement).value = 'TRAKTOR_USB';
+    const select = document.getElementById('cfg-select') as HTMLSelectElement;
+    select.innerHTML = '<option value="0">usb</option>';
+    select.value = '0';
+    configData.active = 0;
+    configData.configs = [{ name: 'old', source_data: '/old', epars_dirs: [] }];
+    initConfigUI();
+    document.getElementById('btn-save-config')!.click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(configData.configs[0].traktor_export_root).toBe('/media/giak/TRAKTOR_USB');
+    expect(configData.configs[0].traktor_export_volume).toBe('TRAKTOR_USB');
+  });
+
+  it('loadActiveConfig fills traktor_export_root/volume and defaults volume', () => {
+    configData.configs = [
+      {
+        name: 'usb',
+        source_data: '/src',
+        epars_dirs: [],
+        traktor_export_root: '/media/giak/TRAKTOR_USB',
+        traktor_export_volume: 'MA_VOLUME',
+      },
+    ];
+    const select = document.getElementById('cfg-select') as HTMLSelectElement;
+    select.innerHTML = '<option value="0">usb</option>';
+    select.value = '0';
+    renderConfigSelect();
+    expect((document.getElementById('cfg-traktor-export-root') as HTMLInputElement).value).toBe(
+      '/media/giak/TRAKTOR_USB',
+    );
+    expect((document.getElementById('cfg-traktor-export-volume') as HTMLInputElement).value).toBe('MA_VOLUME');
+  });
+
+  it('loadActiveConfig defaults the volume input to TRAKTOR_USB when unset', () => {
+    configData.configs = [{ name: 'usb', source_data: '/src', epars_dirs: [] }];
+    const select = document.getElementById('cfg-select') as HTMLSelectElement;
+    select.innerHTML = '<option value="0">usb</option>';
+    select.value = '0';
+    renderConfigSelect();
+    expect((document.getElementById('cfg-traktor-export-volume') as HTMLInputElement).value).toBe('TRAKTOR_USB');
+  });
+
+  it('saveConfig defaults traktor_export_volume to TRAKTOR_USB when empty', async () => {
+    vi.mocked(api).mockResolvedValueOnce({ ok: true });
+    (document.getElementById('cfg-name') as HTMLInputElement).value = 'usb';
+    (document.getElementById('cfg-source') as HTMLInputElement).value = '/src';
+    (document.getElementById('cfg-epars') as HTMLTextAreaElement).value = '';
+    (document.getElementById('cfg-traktor-export-volume') as HTMLInputElement).value = '';
+    const select = document.getElementById('cfg-select') as HTMLSelectElement;
+    select.innerHTML = '<option value="0">usb</option>';
+    select.value = '0';
+    configData.active = 0;
+    configData.configs = [{ name: 'old', source_data: '/old', epars_dirs: [] }];
+    initConfigUI();
+    document.getElementById('btn-save-config')!.click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(configData.configs[0].traktor_export_volume).toBe('TRAKTOR_USB');
   });
 
   it('renderConfigSelect handles empty configs gracefully', () => {

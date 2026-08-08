@@ -27,10 +27,19 @@ vi.mock('../ratings.js', () => ({ getRating: vi.fn(() => undefined) }));
 vi.mock('../state.js', () => ({ state: mockState }));
 vi.mock('../utils.js', () => ({}));
 vi.mock('./fileRow.js', () => ({ makeFileEl: vi.fn() }));
-vi.mock('./sourceTree.js', () => ({ renderDirTree: vi.fn(), togglePlaylistSourceDir: vi.fn(), toggleSourceDir: vi.fn() }));
-vi.mock('./ratingEdit.js', () => ({ _ratingClickHandler: vi.fn(), startRatingEdit: vi.fn(), startSourceRatingEdit: vi.fn() }));
+vi.mock('./sourceTree.js', () => ({
+  renderDirTree: vi.fn(),
+  togglePlaylistSourceDir: vi.fn(),
+  toggleSourceDir: vi.fn(),
+}));
+vi.mock('./ratingEdit.js', () => ({
+  _ratingClickHandler: vi.fn(),
+  startRatingEdit: vi.fn(),
+  startSourceRatingEdit: vi.fn(),
+}));
 vi.mock('./cueEditor.js', () => ({ openCueEditor: mockOpenCueEditor }));
 
+import { showContextMenu } from '../ui.js';
 import { renderPlaylistPanel } from './playlistUI.js';
 
 const pendingTracks: { tracks: Array<{ filename: string; fullPath: string; duration?: number }> } = { tracks: [] };

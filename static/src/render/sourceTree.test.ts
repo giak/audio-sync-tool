@@ -4,15 +4,21 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from '../state.js';
 
 // JSDOM doesn't implement CSS.escape — polyfill it
-(globalThis as any).CSS = { escape: (s: string) => s.replace(/[\s"':\[\](){}|+~^$*\\#.]/g, '\\$&') };
+(globalThis as any).CSS = { escape: (s: string) => s.replace(/[\s"':[\](){}|+~^$*\\#.]/g, '\\$&') };
 
 // ── Hoist spies so vi.mock factories can reference them ───────────────────
 
 const {
-  focusItemByElement, setActivePanel, showContextMenu,
-  getActivePlaylistName, getPendingTracks,
+  focusItemByElement,
+  setActivePanel,
+  showContextMenu,
+  getActivePlaylistName,
+  getPendingTracks,
   dirHasMatchingDescendant,
-  makeFileEl, startSourceRatingEdit, doDragCopy, setBatchCopy,
+  makeFileEl,
+  startSourceRatingEdit,
+  doDragCopy,
+  setBatchCopy,
 } = vi.hoisted(() => ({
   focusItemByElement: vi.fn(),
   setActivePanel: vi.fn(),
@@ -41,10 +47,11 @@ vi.mock('./fileRow.js', () => ({ makeFileEl }));
 vi.mock('./ratingEdit.js', () => ({ startSourceRatingEdit }));
 vi.mock('./dragDrop.js', () => ({ doDragCopy }));
 vi.mock('./batchCopy.js', () => ({ setBatchCopy }));
+vi.mock('./cueEditor.js', () => ({ openCueEditor: vi.fn() }));
 
 // ── Import the module under test ──────────────────────────────────────────
 
-import { toggleSourceDir, renderDirTree, renderSource, togglePlaylistSourceDir } from './sourceTree.js';
+import { renderDirTree, renderSource, togglePlaylistSourceDir, toggleSourceDir } from './sourceTree.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -165,6 +172,24 @@ describe('render/sourceTree', () => {
     it('does nothing when directory element does not exist', () => {
       toggleSourceDir('/nonexistent');
       expect(makeFileEl).not.toHaveBeenCalled();
+    });
+
+    it('wires the cue editor access on source file rows', () => {
+      const c = setupContainer();
+      const rawNode = dirNode([{ filename: 'a.mp3' }]);
+      state.sourceNodeMap.set('/base/sub', { node: rawNode as any, baseDir: '/base' });
+
+      const dirEl = document.createElement('div');
+      dirEl.className = 'directory';
+      dirEl.dataset.dirpath = '/base/sub';
+      c.appendChild(dirEl);
+
+      toggleSourceDir('/base/sub');
+
+      const args = vi.mocked(makeFileEl).mock.calls[0];
+      expect(args[0]).toBe('a.mp3');
+      expect(typeof args[9]).toBe('function'); // onCueEditFn
+      c.remove();
     });
 
     it('uses a custom container selector when provided', () => {

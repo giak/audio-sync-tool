@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hotToLabel, labelToHot, cuesToRegions, regionToCue } from './cueModel.js';
+import { cuesToRegions, hotToLabel, labelToHot, regionToCue } from './cueModel.js';
 
 describe('cueModel', () => {
   it('mappe hotcue ≤7 → A..H', () => {
