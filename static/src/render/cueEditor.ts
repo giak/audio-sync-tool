@@ -58,6 +58,8 @@ let _analyzing = false;
 /** Bande d'énergie basse 40-150 Hz (EPIC-012) — barres 0..1 pour valider le calage à l'œil.
  *  Calculée côté client depuis le buffer décodé de wavesurfer (zéro réseau, best-effort). */
 let _bassBand: number[] = [];
+/** Zoom waveform (EPIC-017) : pixels par seconde, 0 = fit (piste entière). */
+let _zoomPx = 0;
 
 const _wired = new WeakSet<Element>();
 
@@ -147,6 +149,8 @@ function updateBpmBadge(): void {
   el.classList.toggle('src-detected', src === 'detected');
   el.classList.toggle('src-manual', src === 'manual');
   updateWriteGridBtn();
+  // État du bouton « 1 beat » (dépend du BPM) — point central des changements BPM/source.
+  updateZoomButtons();
 }
 
 /** Applique une grille native NML (TEMPO + TYPE=4/GRID) : BPM + phase réels.
@@ -260,7 +264,13 @@ function rebuildGrid(): void {
   renderGrid();
 }
 
-/** Dessine les lignes de beats au-dessus de la waveform (sous les régions). */
+/**
+ * Dessine les lignes de beats au-dessus de la waveform (sous les régions).
+ * EPIC-017 : positionne les lignes dans la FENÊTRE VISIBLE (zoom/scroll) — la
+ * grille reste alignée sur la waveform à n'importe quel niveau de zoom.
+ * Downbeat différencié : beat 1 de la grille (phase) → classe `beat1`, les
+ * débuts de barre (tous les 4 beats) → classe `strong`.
+ */
 function renderGrid(): void {
   const wave = document.getElementById('cue-editor-waveform') as HTMLElement | null;
   if (!wave) return;
@@ -273,15 +283,34 @@ function renderGrid(): void {
   gridEl.innerHTML = '';
   const duration = ws?.getDuration() || 0;
   if (_grid.length === 0 || duration <= 0) return;
-  // Espacement entre barres en % du conteneur : en dessous, les numéros se
-  // chevaucheraient → on ne les affiche que si lisible (EPIC-012).
+  // Fenêtre visible : piste entière par défaut ; fenêtre scrollée quand zoomé.
+  let start = 0;
+  let end = duration;
+  if (_zoomPx > 0 && ws) {
+    try {
+      // scrollLeft en pixels (getScroll(): number) → début de la fenêtre visible.
+      const sl = ws.getScroll();
+      // Fallback 800 : clientWidth 0 avant layout (ou jsdom) → largeur nominale.
+      const w = wave.clientWidth || 800;
+      start = Math.max(0, sl / _zoomPx);
+      end = Math.min(duration, start + w / _zoomPx);
+    } catch {
+      /* scroll indisponible (mock/très ancienne API) → piste entière */
+    }
+  }
+  const span = end - start;
+  if (span <= 0) return;
+  // Espacement entre barres en % de la fenêtre visible : en dessous, les
+  // numéros se chevaucheraient → on ne les affiche que si lisible (EPIC-012).
   // _bpm est non nul ici : _grid n'est peuplé que depuis un BPM valide.
-  const barWidthPct = ((4 * beatInterval(_bpm!)) / duration) * 100;
+  const barWidthPct = ((4 * beatInterval(_bpm!)) / span) * 100;
   const showBarNums = barWidthPct >= 1.5;
   for (let i = 0; i < _grid.length; i++) {
+    const t = _grid[i];
+    if (t < start || t > end) continue;
     const line = document.createElement('div');
-    line.className = `cue-grid-line${i % 4 === 0 ? ' strong' : ''}`;
-    line.style.left = `${(_grid[i] / duration) * 100}%`;
+    line.className = `cue-grid-line${i % 4 === 0 ? ' strong' : ''}${i === 0 ? ' beat1' : ''}`;
+    line.style.left = `${((t - start) / span) * 100}%`;
     if (i % 4 === 0 && showBarNums) {
       const num = document.createElement('span');
       num.className = 'cue-bar-num';
@@ -290,6 +319,66 @@ function renderGrid(): void {
     }
     gridEl.appendChild(line);
   }
+}
+
+// ── Zoom waveform (EPIC-017) ──────────────────────────────────────────────
+
+/** Valeur max du zoom (px/s) : ~10 mn de piste affichée au minimum, très profond au max. */
+const MAX_ZOOM_PX = 20000;
+
+function waveformEl(): HTMLElement | null {
+  return document.getElementById('cue-editor-waveform') as HTMLElement | null;
+}
+
+/** Pixels par seconde au niveau « fit » (toute la piste visible) — base des paliers. */
+function fitPx(): number {
+  if (!ws) return 0;
+  const dur = ws.getDuration() || 0;
+  const w = waveformEl()?.clientWidth || 800;
+  return dur > 0 ? w / dur : 0;
+}
+
+/** Applique un niveau de zoom (0 = fit) et resynchronise la grille + l'état des boutons. */
+function applyZoom(px: number): void {
+  if (!ws) return;
+  _zoomPx = Math.max(0, Math.min(MAX_ZOOM_PX, Math.round(px)));
+  ws.zoom(_zoomPx);
+  updateZoomButtons();
+  waveformEl()?.classList.toggle('zoomed', _zoomPx > 0);
+  // La grille est positionnée dans la fenêtre visible : on la redessine après
+  // le reflow (getScroll() n'est à jour qu'après le rendu du zoom).
+  requestAnimationFrame(() => renderGrid());
+}
+
+/** Zoom relatif (facteur > 1 = zoom avant). Au fit, le zoom arrière est sans effet. */
+export function zoomBy(factor: number): void {
+  if (_zoomPx === 0 && factor < 1) return;
+  const base = _zoomPx > 0 ? _zoomPx : fitPx();
+  applyZoom(base * factor);
+}
+
+/** Affiche toute la piste (zoom 0). */
+export function zoomToFit(): void {
+  applyZoom(0);
+}
+
+/** Échelle « 1 beat » : une mesure ≈ la largeur du conteneur — calage downbeat/BPM. */
+export function zoomToOneBeat(): void {
+  if (_bpm === null) {
+    setStatus("⚠️ Saisis un BPM d'abord pour l'échelle 1 beat.");
+    return;
+  }
+  const w = waveformEl()?.clientWidth || 800;
+  applyZoom(w / beatInterval(_bpm));
+}
+
+function updateZoomButtons(): void {
+  const out = document.getElementById('cue-btn-zoomout') as HTMLButtonElement | null;
+  if (out) out.disabled = _zoomPx <= 0;
+  const fit = document.getElementById('cue-btn-zoomfit') as HTMLButtonElement | null;
+  if (fit) fit.disabled = _zoomPx <= 0;
+  const one = document.getElementById('cue-btn-zoom1beat') as HTMLButtonElement | null;
+  if (one) one.disabled = _bpm === null;
 }
 
 /** Bande d'énergie basse (EPIC-012) : calcule et affiche les barres 0..1 sous la
@@ -683,6 +772,40 @@ export function wireControls(root: HTMLElement = document.body): void {
     _wired.add(fs);
     fs.addEventListener('click', toggleFullscreen);
   }
+  // Zoom waveform (EPIC-017) : molette sur la waveform + boutons − / + / Fit / 1 beat.
+  const wave = root.querySelector<HTMLElement>('#cue-editor-waveform');
+  if (wave && !_wired.has(wave)) {
+    _wired.add(wave);
+    wave.addEventListener(
+      'wheel',
+      (e: WheelEvent) => {
+        if (state.activeModal !== 'cueEditor' || !ws) return;
+        e.preventDefault();
+        zoomBy(e.deltaY < 0 ? 1.25 : 1 / 1.25);
+      },
+      { passive: false },
+    );
+  }
+  const zoomIn = root.querySelector<HTMLButtonElement>('#cue-btn-zoomin');
+  if (zoomIn && !_wired.has(zoomIn)) {
+    _wired.add(zoomIn);
+    zoomIn.addEventListener('click', () => zoomBy(1.5));
+  }
+  const zoomOut = root.querySelector<HTMLButtonElement>('#cue-btn-zoomout');
+  if (zoomOut && !_wired.has(zoomOut)) {
+    _wired.add(zoomOut);
+    zoomOut.addEventListener('click', () => zoomBy(1 / 1.5));
+  }
+  const zoomFit = root.querySelector<HTMLButtonElement>('#cue-btn-zoomfit');
+  if (zoomFit && !_wired.has(zoomFit)) {
+    _wired.add(zoomFit);
+    zoomFit.addEventListener('click', zoomToFit);
+  }
+  const zoom1 = root.querySelector<HTMLButtonElement>('#cue-btn-zoom1beat');
+  if (zoom1 && !_wired.has(zoom1)) {
+    _wired.add(zoom1);
+    zoom1.addEventListener('click', zoomToOneBeat);
+  }
 }
 
 /** Bascule le mode dessin de loop : drag sur la waveform → nouvelle région boucle. */
@@ -726,6 +849,20 @@ function onModalKeydown(e: KeyboardEvent): void {
   } else if (e.key === 'ArrowRight' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
     if (ws) ws.setTime(Math.min(ws.getDuration(), ws.getCurrentTime() + 5));
+  } else if (!e.ctrlKey && !e.altKey && !e.metaKey && e.key >= '1' && e.key <= '8') {
+    // Slots hotcue A–H (EPIC-017) : pose/déplace le cue du slot au curseur.
+    e.preventDefault();
+    onSlotClicked(Number.parseInt(e.key, 10) - 1);
+  } else if (!e.ctrlKey && !e.altKey && !e.metaKey && (e.key === 'c' || e.key === 'C')) {
+    // Pose un cue au curseur (EPIC-017) : déplace l'existant, sinon slot libre.
+    e.preventDefault();
+    setCueAtPlayhead();
+  } else if (!e.ctrlKey && !e.altKey && !e.metaKey && (e.key === '+' || e.key === '=')) {
+    e.preventDefault();
+    zoomBy(1.5);
+  } else if (!e.ctrlKey && !e.altKey && !e.metaKey && (e.key === '-' || e.key === '_')) {
+    e.preventDefault();
+    zoomBy(1 / 1.5);
   } else if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
     deleteRegionAtCursor();
@@ -930,6 +1067,10 @@ export async function renderWaveform(
   if (bandEl) bandEl.innerHTML = '';
   const bpmInput = bpmInputEl();
   if (bpmInput) bpmInput.value = '';
+  // Reset du zoom (EPIC-017) : chaque ouverture/re-render repart du fit.
+  _zoomPx = 0;
+  waveformEl()?.classList.remove('zoomed');
+  updateZoomButtons();
   // DISPL_ORDER d'origine : {hotcue → displ_order} — jamais reconstruit depuis le slot (B9).
   _displOrders = new Map(cues.filter(c => c.hotcue >= 0 && c.hotcue <= 7).map(c => [c.hotcue, c.displ_order]));
   setPlayingUI(false);
@@ -938,6 +1079,12 @@ export async function renderWaveform(
   // height: 'auto' → la waveform remplit le conteneur (200px, ou tout l'écran en plein
   // écran) ; le ResizeObserver de v7 re-rend à chaque changement de taille.
   ws = WaveSurfer.create({ container: el, url: `/audio?path=${encodeURIComponent(path)}`, height: 'auto' });
+  // Pan/zoom : la grille overlay suit la fenêtre visible (EPIC-017). Au fit il
+  // n'y a pas de scroll — garde paranoïaque pour ne rien redessiner inutilement.
+  ws.on('scroll', () => {
+    if (_zoomPx <= 0) return;
+    renderGrid();
+  });
   ws.on('ready', () => {
     _regions = ws!.registerPlugin(Regions.create());
     for (const r of cuesToRegions(cues)) _regions.addRegion(r);
@@ -1060,6 +1207,10 @@ export function destroyCueEditor(): void {
   if (bandEl) bandEl.innerHTML = '';
   const bpmInput = bpmInputEl();
   if (bpmInput) bpmInput.value = '';
+  // Reset du zoom (EPIC-017).
+  _zoomPx = 0;
+  waveformEl()?.classList.remove('zoomed');
+  updateZoomButtons();
   // Sort du plein écran si la modal se ferme dans cet état.
   _fullscreen = false;
   const modal = document.getElementById('modal-cue-editor');
@@ -1081,6 +1232,30 @@ export function onSlotClicked(slot: number): void {
   }
   _regions.addRegion({ start: time, end: time + 0.08, id: slot, label: hotToLabel(slot), color: '#55aaff' });
   refreshLiveSlot();
+}
+
+/** Raccourci C : déplace le cue sous le curseur, sinon pose un cue au premier slot libre. */
+export function setCueAtPlayhead(): boolean {
+  if (!ws || !_regions) return false;
+  const t = ws.getCurrentTime();
+  // Un cue couvre déjà le curseur → le déplacer ici (même slot).
+  for (const r of _regions.getRegions()) {
+    if (typeof r.id === 'number' && r.id >= 0 && r.id <= 7) {
+      const end = r.end === r.start ? r.start + 0.05 : r.end;
+      if (t >= r.start && t <= end) {
+        r.setOptions({ start: t, end: t + 0.08 });
+        refreshLiveSlot();
+        return true;
+      }
+    }
+  }
+  const slot = nextFreeSlot();
+  if (slot === -1) {
+    showToast("⚠️ 8 slots A–H pleins — retire un cue/loop d'abord.");
+    return false;
+  }
+  onSlotClicked(slot);
+  return true;
 }
 
 /** Supprime la région (cue/loop) couvrant la position courante — touche Suppr. */

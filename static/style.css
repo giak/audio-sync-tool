@@ -935,7 +935,20 @@ header h1 {
   position: absolute; top: 0; bottom: 0; width: 1px;
   background: rgba(0, 212, 255, 0.15);
 }
-.cue-grid-line.strong { width: 2px; background: rgba(0, 212, 255, 0.35); }
+.cue-grid-line.strong { width: 2px; background: rgba(0, 212, 255, 0.5); }
+/* Downbeat différencié (EPIC-017) : le beat 1 de la grille (phase) est le repère
+   de calage — trait épais ambre + encoche haute. */
+.cue-grid-line.beat1 {
+  width: 3px;
+  background: rgba(255, 200, 60, 0.85);
+  box-shadow: 0 0 4px rgba(255, 200, 60, 0.4);
+}
+.cue-grid-line.beat1::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 6px;
+  background: rgba(255, 200, 60, 0.9);
+}
 /* Numéros de barre (EPIC-012) : en tête des lignes fortes (tous les 4 beats). */
 .cue-bar-num {
   position: absolute; top: 2px; left: 3px;
@@ -943,6 +956,9 @@ header h1 {
   color: var(--text-dim);
   pointer-events: none;
 }
+/* Zoom (EPIC-017) : la bande basse couvre toute la piste — masquée quand on
+   zoome (elle ne suivrait pas la fenêtre visible et induirait en erreur). */
+#cue-editor-waveform.zoomed #cue-editor-bassband { display: none; }
 /* Bande d'énergie basse (EPIC-012) : strip 24px sous la waveform, sous la grille. */
 #cue-editor-bassband {
   position: absolute; left: 0; right: 0; bottom: 0; height: 24px;

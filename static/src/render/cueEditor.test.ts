@@ -36,8 +36,12 @@ import {
   deleteRegionAtCursor,
   onSaveClicked,
   openCueEditor,
+  setCueAtPlayhead,
   toggleFullscreen,
   writeGridToCollection,
+  zoomBy,
+  zoomToFit,
+  zoomToOneBeat,
 } from './cueEditor.js';
 
 interface MockWS {
@@ -52,6 +56,8 @@ interface MockWS {
   pause: ReturnType<typeof vi.fn>;
   playPause: ReturnType<typeof vi.fn>;
   getDecodedData: ReturnType<typeof vi.fn>;
+  zoom: ReturnType<typeof vi.fn>;
+  getScroll: ReturnType<typeof vi.fn>;
   regions: {
     addRegion: ReturnType<typeof vi.fn>;
     getRegions: ReturnType<typeof vi.fn>;
@@ -97,6 +103,9 @@ function makeWS(overrides: Record<string, unknown> = {}): MockWS {
     // EPIC-012 : bande basse calculée depuis le buffer décodé. Par défaut null
     // (aucun décodage) → la bande reste vide sans erreur (best-effort).
     getDecodedData: vi.fn(() => null),
+    // EPIC-017 : zoom + scrollLeft en pixels (getScroll(): number, v7).
+    zoom: vi.fn(),
+    getScroll: vi.fn(() => 0),
     regions,
     ...overrides,
   };
@@ -131,6 +140,10 @@ const MODAL_HTML = `
       </div>
       <div id="cue-editor-transport">
         <button id="cue-btn-play">▶</button>
+        <button id="cue-btn-zoomout">−</button>
+        <button id="cue-btn-zoomin">+</button>
+        <button id="cue-btn-zoomfit">Fit</button>
+        <button id="cue-btn-zoom1beat">1 beat</button>
         <button id="cue-btn-loop">⟳ Loop</button>
         <button id="cue-btn-loopplay">🔁 Play</button>
         <button id="cue-btn-nudge-bwd">← 1/4</button>
@@ -1772,5 +1785,209 @@ describe('render/cueEditor bande basse + numéros de barre (EPIC-012)', () => {
     expect(band!.querySelectorAll('.bass-bar').length).toBe(160);
     mockState.setModal(null); // fermeture → destroyCueEditor
     expect(band!.querySelectorAll('.bass-bar').length).toBe(0);
+  });
+});
+
+describe('render/cueEditor zoom waveform (EPIC-017)', () => {
+  beforeEach(resetMocks);
+
+  function openSingle(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  it('zoomBy multiplie le zoom et appelle ws.zoom', async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    zoomBy(1.5);
+    // fitPx = 800 (fallback largeur jsdom) / 100 s = 8 px/s → 1,5×8 = 12.
+    expect(ws.zoom).toHaveBeenCalledWith(12);
+    zoomBy(1.5);
+    expect(ws.zoom).toHaveBeenLastCalledWith(18);
+  });
+
+  it('zoomToFit remet à 0 et le zoom arrière est sans effet au fit', async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    zoomToFit();
+    expect(ws.zoom).toHaveBeenCalledWith(0);
+    ws.zoom.mockClear();
+    zoomBy(1 / 1.5); // déjà au fit → rien
+    expect(ws.zoom).not.toHaveBeenCalled();
+  });
+
+  it("zoomToOneBeat calcule l'échelle depuis le BPM (largeur / intervalle)", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input'));
+    zoomToOneBeat();
+    // beatInterval(120) = 0,5 s → 800 / 0,5 = 1600 px/s.
+    expect(ws.zoom).toHaveBeenCalledWith(1600);
+  });
+
+  it("zoomToOneBeat sans BPM → message explicite, pas de zoom", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    zoomToOneBeat();
+    expect(ws.zoom).not.toHaveBeenCalled();
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('BPM');
+  });
+
+  it("les boutons + / Fit pilotent le zoom", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    (document.getElementById('cue-btn-zoomin') as HTMLButtonElement).click();
+    expect(ws.zoom).toHaveBeenCalledWith(12);
+    ws.zoom.mockClear();
+    (document.getElementById('cue-btn-zoomfit') as HTMLButtonElement).click();
+    expect(ws.zoom).toHaveBeenCalledWith(0);
+  });
+
+  it("la molette sur la waveform zoome (haut = avant, bas = arrière)", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const wave = document.getElementById('cue-editor-waveform') as HTMLElement;
+    wave.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }));
+    expect(ws.zoom).toHaveBeenCalledWith(10); // 8 × 1,25
+    wave.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true }));
+    expect(ws.zoom).toHaveBeenLastCalledWith(8); // 10 / 1,25
+  });
+
+  it("la grille ne dessine que la fenêtre visible quand on zoome", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input')); // grille 0..100 s par pas de 0,5 s → 201 lignes
+    const grid = document.getElementById('cue-editor-grid');
+    expect(grid!.querySelectorAll('.cue-grid-line').length).toBe(201);
+    // Zoom ×2 → fenêtre visible 0..50 s (fitPx 8 → 16 px/s, largeur 800).
+    zoomBy(2);
+    await new Promise(r => requestAnimationFrame(() => r(null)));
+    expect(grid!.querySelectorAll('.cue-grid-line').length).toBe(101); // beats ≤ 50 s
+  });
+
+  it("le beat 1 de la grille porte la classe différenciée beat1", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input'));
+    const lines = Array.from(document.querySelectorAll('.cue-grid-line')) as HTMLElement[];
+    expect(lines[0].classList.contains('beat1')).toBe(true);
+    expect(lines[0].classList.contains('strong')).toBe(true);
+    expect(lines[1].classList.contains('beat1')).toBe(false);
+  });
+});
+
+describe('render/cueEditor raccourcis clavier cue/zoom (EPIC-017)', () => {
+  beforeEach(resetMocks);
+
+  function openSingle(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  it("les touches 1–8 posent un cue dans le slot correspondant", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '5' }));
+    expect(ws.regions.addRegion).toHaveBeenCalledWith(expect.objectContaining({ id: 4, start: 25 }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
+    expect(ws.regions.addRegion).toHaveBeenLastCalledWith(expect.objectContaining({ id: 0 }));
+  });
+
+  it("le bouton « 1 beat » s'active dès qu'un BPM est saisi (fix review)", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const one = document.getElementById('cue-btn-zoom1beat') as HTMLButtonElement;
+    expect(one.disabled).toBe(true); // pas de BPM → échelle 1 beat indisponible
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input'));
+    expect(one.disabled).toBe(false); // BPM saisi → bouton activé immédiatement
+  });
+
+  it("la touche C pose un cue au curseur dans le premier slot libre", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }));
+    expect(ws.regions.addRegion).toHaveBeenCalledWith(expect.objectContaining({ id: 0, start: 25 }));
+  });
+
+  it("la touche C déplace le cue sous le curseur (même slot)", async () => {
+    const ws = openSingle();
+    ws.getCurrentTime.mockReturnValue(12);
+    const region = { id: 2, start: 10, end: 14, setOptions: vi.fn() };
+    ws.regions.getRegions = vi.fn(() => [region]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    expect(setCueAtPlayhead()).toBe(true);
+    expect(region.setOptions).toHaveBeenCalledWith({ start: 12, end: 12.08 });
+    expect(ws.regions.addRegion).not.toHaveBeenCalled();
+  });
+
+  it("C avec les 8 slots pleins → toast, aucun cue posé", async () => {
+    const ws = openSingle();
+    const regions = Array.from({ length: 8 }, (_, i) => ({
+      id: i,
+      start: i * 10,
+      end: i * 10 + 0.08,
+      setOptions: vi.fn(),
+    }));
+    ws.regions.getRegions = vi.fn(() => regions);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    expect(setCueAtPlayhead()).toBe(false);
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('pleins'));
+  });
+
+  it("les touches + / − zooment la waveform", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
+    expect(ws.zoom).toHaveBeenCalledWith(12);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '-' }));
+    expect(ws.zoom).toHaveBeenLastCalledWith(8);
+  });
+
+  it("raccourcis ignorés quand une autre modale est ouverte", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    mockState.setModal('dialog');
+    ws.zoom.mockClear();
+    ws.regions.addRegion.mockClear();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '5' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
+    expect(ws.regions.addRegion).not.toHaveBeenCalled();
+    expect(ws.zoom).not.toHaveBeenCalled();
   });
 });

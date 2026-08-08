@@ -36,6 +36,7 @@
 | [EPIC-014](EPIC-014-ux-generale.md) | UX générale : focus trap, aria, police locale, prompt→modales, responsive | 🟢 Livré | Moyenne | rapport audit §4 |
 | [EPIC-015](EPIC-015-filesize-ko-octets.md) | FILESIZE en Ko (convention Traktor) : match/add/export réparés sur la collection réelle | 🟢 Livré | Haute | rapport `2026-08-08-smoke-test-navigateur.md` |
 | [EPIC-016](EPIC-016-badge-match-nml-playlist.md) | Badge « matché NML » / « homonymes » / « non importé » dans la playlist | 🟢 Livré | Moyenne | EPIC-015 (contexte match) |
+| [EPIC-017](EPIC-017-zoom-raccourcis-downbeat.md) | Zoom waveform (paliers, molette, 1 beat) + raccourcis cue 1-8/C + downbeat différencié | 🟢 Livré | Haute | rapport `2026-08-08-waveform-cue-beatgrid-benchmark.md` §P0 |
 
 ## État actuel du projet (2026-08-08)
 
@@ -74,6 +75,12 @@
   promesses par fullPath (dédup concurrente, `matchStatus.ts`), lots bornés de 8 requêtes,
   mutation in-place (data-fullpath conservé), invalidation + re-render après ajout de piste à la
   collection.
+- EPIC-017 livrée (P0 du benchmark) : zoom waveform contrôlé — paliers ×1,5 (boutons +/−,
+  touches +/−), molette ×1,25, « Fit » (piste entière) et « 1 beat » (largeur ÷ intervalle,
+  nécessite BPM) via `ws.zoom()` ; la grille de beats est redessinée dans la **fenêtre visible**
+  (scrollLeft ÷ px/s) pour rester alignée à tout zoom ; downbeat différencié (classe `beat1`,
+  trait ambre) ; raccourcis cue `1–8` (slots A–H) et `C` (pose au curseur / déplace l'existant,
+  toast si 8 pleins) ; bande basse masquée en zoom. 14 tests, 97 tests cueEditor.
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
 - EPIC-002 → EPIC-009 livrées et **commitées** (`a21f1ae` → `3f3b669`), EPIC-001 à ses commits
   historiques, ce registre inclus dans `7bb1735`.
