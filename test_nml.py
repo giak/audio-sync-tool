@@ -1,7 +1,8 @@
 import os
 import xml.etree.ElementTree as ET
 import pytest
-from nml import load_nml, build_index, get_cues, get_entry_meta, write_cues, save_nml, build_export_nml, build_entry_element, append_entry
+from nml import (load_nml, build_index, get_cues, get_beatgrid, get_entry_meta, write_cues,
+                 save_nml, build_export_nml, build_entry_element, append_entry)
 
 DATA = os.path.join('tests', 'fixtures', 'nml-sample.xml')
 
@@ -42,6 +43,66 @@ def test_get_entry_meta():
     meta = get_entry_meta(entry)
     assert meta['filename'].endswith('.mp3')
     assert 'artist' in meta and 'title' in meta
+
+
+def test_get_beatgrid_native():
+    """Grille native Traktor : TEMPO BPM/BPM_QUALITY + CUE_V2 TYPE=4 (START=phase)
+    + GRID/BPM → {bpm, phase, quality}. La fixture porte une vraie grille."""
+    tree = load_nml(DATA)
+    entry = tree.getroot().find('.//ENTRY')
+    grid = get_beatgrid(entry)
+    assert grid is not None
+    assert grid['bpm'] == pytest.approx(133.0)
+    assert grid['phase'] == pytest.approx(55.387418)  # START de la TYPE=4
+    assert grid['quality'] == pytest.approx(100.0)
+
+
+def test_get_beatgrid_none_without_data():
+    """ENTRY sans TEMPO ni grille TYPE=4 → None (pas de grille native)."""
+    entry = ET.Element('ENTRY', {'TITLE': 'x'})
+    ET.SubElement(entry, 'LOCATION', {'FILE': 'x.mp3', 'VOLUME': 'C:', 'DIR': '/:'})
+    assert get_beatgrid(entry) is None
+
+
+def test_get_beatgrid_rejects_low_quality():
+    """BPM_QUALITY < 50 → grille rejetée (analyse non fiable)."""
+    entry = ET.Element('ENTRY', {'TITLE': 'x'})
+    ET.SubElement(entry, 'TEMPO', {'BPM': '128.000000', 'BPM_QUALITY': '12.0'})
+    assert get_beatgrid(entry) is None
+
+
+def test_get_beatgrid_grid_overrides_tempo():
+    """Le GRID de la CUE_V2 TYPE=4 prime sur TEMPO (grille analysée = vérité)."""
+    entry = ET.Element('ENTRY', {'TITLE': 'x'})
+    ET.SubElement(entry, 'TEMPO', {'BPM': '100.0', 'BPM_QUALITY': '90.0'})
+    cue = ET.SubElement(entry, 'CUE_V2', {'TYPE': '4', 'START': '12.5', 'HOTCUE': '-1'})
+    ET.SubElement(cue, 'GRID', {'BPM': '140.0'})
+    grid = get_beatgrid(entry)
+    assert grid['bpm'] == pytest.approx(140.0)
+    assert grid['phase'] == pytest.approx(12.5)
+
+
+def test_get_beatgrid_rejects_absurd_bpm():
+    """BPM aberrants de la collection réelle (1.0, 17178) → None : une grille à
+    1 BPM n'a aucun sens (garde de plausibilité 20–400)."""
+    entry = ET.Element('ENTRY', {'TITLE': 'x'})
+    ET.SubElement(entry, 'TEMPO', {'BPM': '1.0', 'BPM_QUALITY': '100.0'})
+    assert get_beatgrid(entry) is None
+    entry2 = ET.Element('ENTRY', {'TITLE': 'y'})
+    ET.SubElement(entry2, 'TEMPO', {'BPM': '17178.0', 'BPM_QUALITY': '100.0'})
+    assert get_beatgrid(entry2) is None
+
+
+def test_get_beatgrid_grid_authoritative_despite_low_quality():
+    """GRID présent → autoritaire : BPM_QUALITY basse de TEMPO ne rejette pas
+    (la grille analysée est la vérité, TEMPO peut être périmé)."""
+    entry = ET.Element('ENTRY', {'TITLE': 'x'})
+    ET.SubElement(entry, 'TEMPO', {'BPM': '120.0', 'BPM_QUALITY': '10.0'})
+    cue = ET.SubElement(entry, 'CUE_V2', {'TYPE': '4', 'START': '3.0', 'HOTCUE': '-1'})
+    ET.SubElement(cue, 'GRID', {'BPM': '124.0'})
+    grid = get_beatgrid(entry)
+    assert grid is not None
+    assert grid['bpm'] == pytest.approx(124.0)
 
 def test_write_cues_replace_only_editable(tmp_path):
     tree = load_nml(DATA)

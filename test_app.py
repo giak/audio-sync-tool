@@ -1385,6 +1385,43 @@ def test_track_match_single(client, tmp_path, monkeypatch):
     assert data['entries'][0]['filename'] == filename
 
 
+def test_track_match_exposes_native_grid(client, tmp_path, monkeypatch):
+    """P1 : /api/track/match expose la grille native (TEMPO + TYPE=4/GRID) —
+    {bpm, phase, quality} — pour que l'éditeur cale la grille sans détection."""
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    filename = 'Carbon Decay - In The Warehouse.mp3'
+    local = tmp_path / filename
+    local.write_bytes(b'x' * 5243)
+    rv = client.get('/api/track/match', query_string={'path': str(local)})
+    assert rv.status_code == 200
+    grid = rv.get_json()['entries'][0]['grid']
+    assert grid is not None
+    assert grid['bpm'] == pytest.approx(133.0)
+    assert grid['phase'] == pytest.approx(55.387418)
+    assert grid['quality'] == pytest.approx(100.0)
+
+
+def test_track_match_grid_none_without_data(client, tmp_path, monkeypatch):
+    """Piste sans TEMPO ni grille TYPE=4 → grid: None (le frontend détectera)."""
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    import nml
+    tree = nml.load_nml(str(nml_path))
+    coll = tree.getroot().find('./COLLECTION')
+    e = ET.SubElement(coll, 'ENTRY', {'ARTIST': 'A', 'TITLE': 'NoGrid', 'TYPE': 'TRACK'})
+    ET.SubElement(e, 'LOCATION', {'DIR': '/:', 'FILE': 'NOGRID.mp3', 'VOLUME': 'X'})
+    ET.SubElement(e, 'INFO', {'FILESIZE': '42'})
+    nml.save_nml(str(nml_path), tree)
+    local = tmp_path / 'NOGRID.mp3'
+    local.write_bytes(b'x' * 42)
+    rv = client.get('/api/track/match', query_string={'path': str(local)})
+    assert rv.status_code == 200
+    assert rv.get_json()['entries'][0]['grid'] is None
+
+
 def test_cues_write_ok(client, tmp_path, monkeypatch):
     nml_path = tmp_path / 'c.nml'
     nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())

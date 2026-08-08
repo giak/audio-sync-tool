@@ -288,7 +288,7 @@ def track_match():
     entries = []
     for e in hits:
         meta = nml_module.get_entry_meta(e)
-        entries.append({**meta, 'cues': nml_module.get_cues(e)})
+        entries.append({**meta, 'cues': nml_module.get_cues(e), 'grid': nml_module.get_beatgrid(e)})
     return jsonify({'ok': True, 'entries': entries, 'multiple': len(entries) > 1})
 
 

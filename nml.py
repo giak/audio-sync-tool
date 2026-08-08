@@ -50,6 +50,98 @@ def get_cues(entry, allow_types=('0', '5')):
         })
     return cues
 
+
+def get_beatgrid(entry):
+    """Grille de beats native de l'ENTRY : {bpm, phase, quality} ou None.
+
+    Traktor 4 n'utilise plus <BEATGRID> : le tempo vit dans <TEMPO BPM=… BPM_QUALITY=…>
+    et la grille dans <CUE_V2 TYPE="4" START=…><GRID BPM=…>. START de la CUE_V2
+    TYPE=4 = position du premier beat (la PHASE) ; GRID/BPM = le tempo. Ces deux
+    valeurs reconstruisent la grille exacte de Traktor : t_k = phase + k·60/BPM.
+    BPM_QUALITY < 50 → grille rejetée (valeur d'analyse non fiable).
+    """
+    bpm = None
+    phase = None
+    quality = None
+    has_grid = False
+    tempo = entry.find('TEMPO')
+    if tempo is not None:
+        try:
+            bpm = float(tempo.get('BPM', ''))
+        except ValueError:
+            bpm = None
+        try:
+            quality = float(tempo.get('BPM_QUALITY', ''))
+        except ValueError:
+            quality = None
+    # La CUE_V2 TYPE=4 (HOTCUE=-1) porte la grille : GRID/BPM et START=phase.
+    # Le GRID analysé fait autorité (présent → pas de seuil de qualité).
+    for c in entry.findall('CUE_V2'):
+        if c.get('TYPE') != '4':
+            continue
+        has_grid = True
+        grid = c.find('GRID')
+        if grid is not None:
+            try:
+                bpm = float(grid.get('BPM', ''))
+            except ValueError:
+                pass
+        try:
+            phase = float(c.get('START', ''))
+        except ValueError:
+            phase = None
+        break
+    # BPM_QUALITY < 50 → analyse non fiable (sauf GRID autoritaire présent).
+    if not has_grid and quality is not None and quality < 50:
+        return None
+    # Borne de plausibilité : la collection réelle contient des valeurs aberrantes
+    # (BPM=1.0, 17178) — une grille à 1 BPM n'a aucun sens, on la rejette.
+    if bpm is None or not (20 <= bpm <= 400):
+        return None
+    return {'bpm': bpm, 'phase': phase if phase is not None else 0.0, 'quality': quality}
+
+def build_entry_element(meta, filesize, playtime, volume, dir_attr):
+    """Construit un ENTRY valide pour une piste ABSENTE de la collection.
+
+    Traktor régénère l'analyse (AUDIO_ID, BPM, beatgrid…) au prochain scan : les
+    champs critiques sont LOCATION (FILE/DIR/VOLUME — où trouver le fichier) et
+    INFO/FILESIZE (clé de match de l'app). Le reste est un minimum viable.
+    """
+    now = datetime.now()
+    entry = ET.Element('ENTRY', attrib={
+        'MODIFIED_DATE': f'{now.year}/{now.month}/{now.day}',
+        'MODIFIED_TIME': now.strftime('%H%M%S'),
+        'LOCK': '1',
+        'TITLE': meta.get('title') or os.path.splitext(meta.get('filename', ''))[0],
+        'ARTIST': meta.get('artist', '') or '',
+    })
+    ET.SubElement(entry, 'LOCATION', attrib={
+        'DIR': dir_attr,
+        'FILE': meta.get('filename', ''),
+        'VOLUME': volume,
+    })
+    if meta.get('album'):
+        ET.SubElement(entry, 'ALBUM', attrib={'TITLE': meta['album']})
+    ET.SubElement(entry, 'MODIFICATION_INFO', attrib={'AUTHOR_TYPE': 'user'})
+    info_attrs = {'PLAYCOUNT': '0', 'FLAGS': '0', 'FILESIZE': str(filesize)}
+    if playtime:
+        info_attrs['PLAYTIME'] = str(int(round(float(playtime))))
+        info_attrs['PLAYTIME_FLOAT'] = f'{float(playtime):.6f}'
+    ET.SubElement(entry, 'INFO', attrib=info_attrs)
+    return entry
+
+
+def append_entry(tree, entry_el):
+    """Ajoute l'ENTRY au COLLECTION et met à jour le compteur ENTRIES."""
+    root = tree.getroot()
+    coll = root.find('./COLLECTION')
+    if coll is None:
+        coll = ET.SubElement(root, 'COLLECTION')
+    coll.append(entry_el)
+    coll.set('ENTRIES', str(len(coll.findall('ENTRY'))))
+    return entry_el
+
+
 def get_entry_meta(entry):
     loc = entry.find('LOCATION')
     meta = {

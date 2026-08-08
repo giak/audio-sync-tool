@@ -40,6 +40,10 @@ let _fullscreen = false;
  *  Priorité : grille native NML (TEMPO + CUE_V2 TYPE=4/GRID), sinon BPM détecté ou saisi. */
 let _grid: number[] = [];
 let _bpm: number | null = null;
+/** Phase de la grille (position du premier beat en secondes) — calage réel, pas t=0. */
+let _phase = 0;
+/** Source de la grille : nml (native) | detected (client) | manual (saisie). */
+let _gridSource: 'nml' | 'detected' | 'manual' | null = null;
 let _snapOn = true;
 /** Boucle en cours de lecture (🔁 Play) : {start, end} ou null. */
 let _loopPlay: { start: number; end: number } | null = null;
@@ -111,6 +115,38 @@ function bpmInputEl(): HTMLInputElement | null {
   return document.getElementById('cue-bpm') as HTMLInputElement | null;
 }
 
+function bpmBadgeEl(): HTMLElement | null {
+  return document.getElementById('cue-bpm-badge');
+}
+
+/** Badge de source de la grille : NML (native) / auto (détecté) / manuel. */
+function updateBpmBadge(): void {
+  const el = bpmBadgeEl();
+  if (!el) return;
+  const labels: Record<string, string> = { nml: 'NML', detected: 'auto', manual: 'manuel' };
+  const src = _gridSource && _bpm !== null ? _gridSource : null;
+  el.textContent = src ? labels[src] : '';
+  el.classList.toggle('hidden', !src);
+  el.classList.toggle('src-nml', src === 'nml');
+  el.classList.toggle('src-detected', src === 'detected');
+  el.classList.toggle('src-manual', src === 'manual');
+}
+
+/** Applique une grille native NML (TEMPO + TYPE=4/GRID) : BPM + phase réels.
+ *  Garde de plausibilité : les collections réelles contiennent des BPM aberrants
+ *  (1.0, 17178) — on les ignore plutôt que de produire une grille absurde. */
+function applyNativeGrid(grid?: { bpm?: number | null; phase?: number | null } | null): void {
+  if (!grid || typeof grid.bpm !== 'number' || !Number.isFinite(grid.bpm)) return;
+  if (grid.bpm <= 20 || grid.bpm >= 400) return;
+  _bpm = grid.bpm;
+  _phase = typeof grid.phase === 'number' && Number.isFinite(grid.phase) ? grid.phase : 0;
+  _gridSource = 'nml';
+  const input = bpmInputEl();
+  if (input) input.value = String(grid.bpm);
+  rebuildGrid();
+  updateBpmBadge();
+}
+
 function snapBtnEl(): HTMLButtonElement | null {
   return document.getElementById('cue-btn-snap') as HTMLButtonElement | null;
 }
@@ -174,6 +210,10 @@ function stopLoopPlay(): void {
 
 /** Reconstruit la grille depuis le BPM courant (phase comprise) et la durée de la piste. */
 function rebuildGrid(): void {
+  _grid = _bpm && ws ? buildBeats(_bpm, ws.getDuration() || 0, _phase) : [];
+  renderGrid();
+}
+
 /** Dessine les lignes de beats au-dessus de la waveform (sous les régions). */
 function renderGrid(): void {
   const wave = document.getElementById('cue-editor-waveform') as HTMLElement | null;
@@ -216,6 +256,19 @@ function findLoopAtCursor(): { start: number; end: number } | null {
   const at = loops.find((r: any) => t >= r.start && t <= r.end);
   const r = at || loops[0];
   return { start: r.start, end: r.end };
+}
+
+/** Détection BPM best-effort sur l'audio. Ignorée si une grille (native ou saisie) existe. */
+async function detectAndApplyBPM(): Promise<void> {
+  if (_bpm !== null || _gridSource === 'manual') return;
+  const bpm = await detectBPMFromUrl(`/audio?path=${encodeURIComponent(_trackPath)}`);
+  if (!bpm || _bpm !== null || !ws) return;
+  _bpm = bpm;
+  _gridSource = 'detected';
+  const input = bpmInputEl();
+  if (input) input.value = String(bpm);
+  rebuildGrid();
+  updateBpmBadge();
 }
 
 /** Bascule la modal en plein écran : la waveform remplit tout l'espace
@@ -311,6 +364,12 @@ export function wireControls(root: HTMLElement = document.body): void {
     bpm.addEventListener('input', () => {
       const v = parseFloat(bpm.value);
       _bpm = Number.isFinite(v) && v > 20 && v < 300 ? v : null;
+      _gridSource = _bpm !== null ? 'manual' : null;
+      _phase = 0;
+      rebuildGrid();
+      updateBpmBadge();
+    });
+  }
   const fs = root.querySelector<HTMLButtonElement>('#cue-btn-fullscreen');
   if (fs && !_wired.has(fs)) {
     _wired.add(fs);
@@ -474,7 +533,9 @@ async function renderMatchedEntry(
   const modal = document.getElementById('modal-cue-editor');
   if (modal) modal.classList.remove('hidden');
   wireControls(document.body);
-  await renderWaveform(track.fullPath, entry.cues || []);
+  await renderWaveform(track.fullPath, entry.cues || [], entry.grid);
+}
+
 /** Ajoute la piste courante à la collection (mode visualisation seule) puis
  *  re-matche pour basculer en mode édition. */
 export async function onAddToCollectionClicked(): Promise<void> {
@@ -517,14 +578,17 @@ async function renderEntry(idx: number, entries: any[]): Promise<void> {
   _entryRef = { filename: entry.filename, filesize: entry.filesize, entry: valid ? idx : 0 };
   const title = document.getElementById('cue-editor-title') as HTMLElement | null;
   if (title) title.textContent = `${entry.artist || ''} — ${entry.title || entry.filename}`;
-  await renderWaveform(_trackPath, entry.cues || []);
+  await renderWaveform(_trackPath, entry.cues || [], entry.grid);
 }
 
-export async function renderWaveform(path: string, cues: CueDTO[]): Promise<void> {
+export async function renderWaveform(
+  path: string,
+  cues: CueDTO[],
+  grid?: { bpm?: number | null; phase?: number | null } | null,
+): Promise<void> {
   const el = document.getElementById('cue-editor-waveform') as HTMLElement | null;
   if (!el) return;
   el.innerHTML = '';
-  ws = WaveSurfer.create({ container: el, url: `/audio?path=${encodeURIComponent(path)}` });
   // Détruit l'instance précédente (changement d'entrée homonyme) — évite fuite + chevauchement audio.
   ws?.destroy();
   ws = null;
@@ -536,7 +600,12 @@ export async function renderWaveform(path: string, cues: CueDTO[]): Promise<void
   stopLoopPlay();
   _grid = [];
   _bpm = null;
+  _phase = 0;
+  _gridSource = null;
   updateSnapBtn();
+  updateBpmBadge();
+  const bpmInput = bpmInputEl();
+  if (bpmInput) bpmInput.value = '';
   // DISPL_ORDER d'origine : {hotcue → displ_order} — jamais reconstruit depuis le slot (B9).
   _displOrders = new Map(cues.filter(c => c.hotcue >= 0 && c.hotcue <= 7).map(c => [c.hotcue, c.displ_order]));
   setPlayingUI(false);
@@ -582,6 +651,13 @@ export async function renderWaveform(path: string, cues: CueDTO[]): Promise<void
       refreshLiveSlot();
     });
     updateTimeUI();
+    if (grid && typeof grid.bpm === 'number') {
+      // Grille native NML : BPM + phase réels de Traktor — pas de détection client.
+      applyNativeGrid(grid);
+      setStatus(
+        `🎛 Grille native Traktor — ${grid.bpm} BPM${_phase > 0 ? `, beat 1 à ${_phase.toFixed(2)}s` : ''}. Snap calé sur le rythme.`,
+      );
+    } else {
       rebuildGrid();
       void detectAndApplyBPM();
     }
@@ -617,7 +693,12 @@ export function destroyCueEditor(): void {
   hideAddRow();
   _grid = [];
   _bpm = null;
+  _phase = 0;
+  _gridSource = null;
   updateSnapBtn();
+  updateBpmBadge();
+  const bpmInput = bpmInputEl();
+  if (bpmInput) bpmInput.value = '';
   // Sort du plein écran si la modal se ferme dans cet état.
   _fullscreen = false;
   const modal = document.getElementById('modal-cue-editor');

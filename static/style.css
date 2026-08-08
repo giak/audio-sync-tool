@@ -795,6 +795,27 @@ header h1 {
 }
 #cue-bpm:focus { border-color: var(--border-active); outline: none; }
 
+/* Badge source de la grille : NML (native) / auto (détecté) / manuel */
+.cue-bpm-badge {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+  padding: 2px 8px; border-radius: 10px;
+  border: 1px solid var(--border-panel);
+  color: var(--text-muted); background: var(--bg-hover);
+  white-space: nowrap; user-select: none;
+}
+.cue-bpm-badge.src-nml {
+  color: var(--accent-green); border-color: rgba(0, 255, 136, 0.4);
+  background: rgba(0, 255, 136, 0.08);
+}
+.cue-bpm-badge.src-detected {
+  color: var(--accent); border-color: rgba(0, 212, 255, 0.4);
+  background: rgba(0, 212, 255, 0.08);
+}
+.cue-bpm-badge.src-manual {
+  color: var(--led-amber); border-color: rgba(255, 204, 0, 0.4);
+  background: rgba(255, 204, 0, 0.08);
+}
+
 /* Grille de beats (overlay sur la waveform, sous les régions z-index 5) */
 #cue-editor-grid {
   position: absolute; inset: 0;
