@@ -17,6 +17,7 @@ import { getRating } from '../ratings.js';
 import { state } from '../state.js';
 import { closeAllModals, confirmDialog, promptDialog, showContextMenu } from '../ui.js';
 import { openCueEditor } from './cueEditor.js';
+import { getMatchStatus, matchBadgeParts } from '../matchStatus.js';
 import { _ratingClickHandler } from './ratingEdit.js';
 import { renderDirTree, togglePlaylistSourceDir } from './sourceTree.js';
 
@@ -147,6 +148,8 @@ function renderPlaylistTracks(): void {
         html += `<span class="pl-track-duration">${m}:${s.toString().padStart(2, '0')}</span>`;
       }
       const rating = getRating(track.fullPath);
+      const badgeLoading = matchBadgeParts(undefined);
+      html += `<span class="pl-track-match ${badgeLoading.cls}" data-fullpath="${escapeHtml(track.fullPath)}" title="${badgeLoading.title}">${badgeLoading.text}</span>`;
       html += `<span class="pl-track-rating" data-fullpath="${escapeHtml(track.fullPath)}">`;
       if (rating !== undefined) {
         html += `${rating}`;
@@ -162,6 +165,9 @@ function renderPlaylistTracks(): void {
   }
 
   container.innerHTML = html;
+
+  // Badge de match NML (EPIC-016) : rempli en lazy, ne bloque pas le rendu.
+  void fillMatchBadges(container);
 
   container.querySelectorAll('.pl-track-remove').forEach(btn => {
     (btn as HTMLElement).onclick = () => {
@@ -277,6 +283,38 @@ function renderPlaylistTracks(): void {
     container.scrollTop = savedScrollTop;
   });
 }
+
+// ── Badges de match NML (EPIC-016) ──────────────────────────────────────
+
+/**
+ * Remplit les badges .pl-track-match de la playlist : état lazy (… d'abord,
+ * puis le statut réel). Ne bloque jamais le rendu initial et n'alerte pas en
+ * cas d'échec réseau (badge neutre « ? »).
+ */
+/** Nombre max de requêtes /api/track/match en vol (évite la rafale sur grosses playlists). */
+const MATCH_BADGE_CONCURRENCY = 8;
+
+async function fillMatchBadges(container: HTMLElement): Promise<void> {
+  const badges = Array.from(container.querySelectorAll<HTMLElement>('.pl-track-match'));
+  let next = 0;
+  // Traitement par lots bornés (8 en vol) : remplit sans marteler le serveur.
+  const workers = Array.from({ length: Math.min(MATCH_BADGE_CONCURRENCY, badges.length) }, async () => {
+    while (next < badges.length) {
+      const badge = badges[next++];
+      const fullPath = badge.dataset.fullpath || '';
+      if (!fullPath) continue;
+      const status = await getMatchStatus(fullPath);
+      // Re-render entre-temps → badge détaché (container remplacé) : ne rien faire.
+      if (!badge.isConnected) continue;
+      const p = matchBadgeParts(status);
+      badge.className = `pl-track-match ${p.cls}`;
+      badge.textContent = p.text;
+      badge.title = p.title;
+    }
+  });
+  await Promise.all(workers);
+}
+
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 

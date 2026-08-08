@@ -35,6 +35,7 @@
 | [EPIC-013](EPIC-013-robustesse-backend.md) | Robustesse backend : JSON atomique, verrou scan, cache parse, debug off | 🟢 Livré | Moyenne | rapport audit §6/B11/B12 |
 | [EPIC-014](EPIC-014-ux-generale.md) | UX générale : focus trap, aria, police locale, prompt→modales, responsive | 🟢 Livré | Moyenne | rapport audit §4 |
 | [EPIC-015](EPIC-015-filesize-ko-octets.md) | FILESIZE en Ko (convention Traktor) : match/add/export réparés sur la collection réelle | 🟢 Livré | Haute | rapport `2026-08-08-smoke-test-navigateur.md` |
+| [EPIC-016](EPIC-016-badge-match-nml-playlist.md) | Badge « matché NML » / « homonymes » / « non importé » dans la playlist | 🟢 Livré | Moyenne | EPIC-015 (contexte match) |
 
 ## État actuel du projet (2026-08-08)
 
@@ -67,6 +68,12 @@
   (cue editor « visualisation seule » partout). Helper `filesize_kb()` (half-up `(size+512)//1024`),
   `track_match`/`track_add`/`build_export_nml` en Ko, `build_entry_element` écrit le Ko. Résultat :
   **97,5 % de match (78/80) sur la collection réelle via HTTP** (les non-matchés sont absents du NML).
+- EPIC-016 livrée (badge match NML dans la playlist) : badge « ✓ NML » (matché, sauvegardable) /
+  « ≈ homonymes » (sélecteur au clic Cues) / « ✕ non importé » (visualisation seule) / « ? »
+  (erreur réseau neutre), rempli en lazy (placeholder « … », ne bloque jamais le rendu), cache de
+  promesses par fullPath (dédup concurrente, `matchStatus.ts`), lots bornés de 8 requêtes,
+  mutation in-place (data-fullpath conservé), invalidation + re-render après ajout de piste à la
+  collection.
 - Typecheck 0 · Lint 0 · Build OK (bundle servi avec cache-buster).
 - EPIC-002 → EPIC-009 livrées et **commitées** (`a21f1ae` → `3f3b669`), EPIC-001 à ses commits
   historiques, ce registre inclus dans `7bb1735`.

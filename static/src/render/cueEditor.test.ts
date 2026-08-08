@@ -25,7 +25,7 @@ const mockWSCreate = vi.hoisted(() => vi.fn());
 const mockRegionsCreate = vi.hoisted(() => vi.fn());
 
 vi.mock('../api.js', () => ({ api: mockApi }));
-vi.mock('../state.js', () => ({ state: mockState, on: mockState.on.bind(mockState) }));
+vi.mock('../state.js', () => ({ state: mockState, on: mockState.on.bind(mockState), emit: vi.fn() }));
 vi.mock('../ui.js', () => ({ showToast: vi.fn() }));
 vi.mock('wavesurfer.js', () => ({ default: { create: mockWSCreate } }));
 vi.mock('wavesurfer.js/dist/plugins/regions.js', () => ({ default: { create: mockRegionsCreate } }));

@@ -3,10 +3,11 @@ import WaveSurfer from 'wavesurfer.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
 import { api } from '../api.js';
 import { computeBassBand } from '../bassband.js';
+import { _clearMatchCache } from '../matchStatus.js';
 import { beatInterval, buildBeats, detectBPMFromUrl, snapToBeat } from '../beatgrid.js';
 import type { CueDTO } from '../cueModel.js';
 import { cuesToRegions, hotToLabel, regionToCue } from '../cueModel.js';
-import { on, state } from '../state.js';
+import { emit, on, state } from '../state.js';
 import { showToast } from '../ui.js';
 import { formatTime } from '../utils.js';
 
@@ -865,6 +866,10 @@ export async function onAddToCollectionClicked(): Promise<void> {
       setStatus('⚠️ Entrée créée mais introuvable au re-match — recharge la page.');
       return;
     }
+    // La piste est maintenant dans la collection → badges playlist rafraîchis
+    // (cache vidé + re-render conditionnel si le layout playlist est visible).
+    _clearMatchCache();
+    emit('eparsPlaylist:changed');
     // Modal fermée pendant la requête (~1,5 s) → ne pas la ré-ouvrir.
     if (!_trackLite || state.activeModal !== 'cueEditor') return;
     await renderMatchedEntry(track, data);

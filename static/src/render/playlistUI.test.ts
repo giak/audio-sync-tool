@@ -39,6 +39,7 @@ vi.mock('./ratingEdit.js', () => ({
 }));
 vi.mock('./cueEditor.js', () => ({ openCueEditor: mockOpenCueEditor }));
 
+import { _clearMatchCache } from '../matchStatus.js';
 import { showContextMenu } from '../ui.js';
 import { renderPlaylistPanel } from './playlistUI.js';
 
@@ -56,6 +57,8 @@ describe('playlistUI bouton Cues', () => {
 
   afterEach(() => {
     pendingTracks.tracks = [];
+    vi.unstubAllGlobals();
+    _clearMatchCache();
   });
 
   it('affiche un bouton « Cues » sur chaque piste', () => {
@@ -92,5 +95,52 @@ describe('playlistUI bouton Cues', () => {
     const items = vi.mocked(showContextMenu).mock.lastCall?.[2] as Array<{ label: string; action: () => void }>;
     items.find(i => i.label === 'Cues / loops (waveform)')!.action();
     expect(mockOpenCueEditor).toHaveBeenCalledWith({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+  });
+
+  it('affiche un badge de match NML (placeholder lazy) sur chaque piste', () => {
+    pendingTracks.tracks = [{ filename: 'a.mp3', fullPath: '/x/a.mp3', duration: 60 }];
+    renderPlaylistPanel();
+    const badge = document.querySelector('.pl-track-match') as HTMLElement | null;
+    expect(badge).not.toBeNull();
+    expect(badge!.dataset.fullpath).toBe('/x/a.mp3');
+    expect(badge!.textContent).toBe('…');
+  });
+
+  it('remplit le badge en lazy avec le statut réel (matché → ✓ NML)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, entries: [{ filename: 'a.mp3' }], multiple: false }),
+    }));
+    pendingTracks.tracks = [{ filename: 'a.mp3', fullPath: '/x/a.mp3', duration: 60 }];
+    renderPlaylistPanel();
+    await new Promise(r => setTimeout(r, 10));
+    const badge = document.querySelector('.pl-track-match') as HTMLElement | null;
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain('NML');
+    expect(badge!.className).toContain('pl-match-ok');
+    // La mutation in-place conserve data-fullpath (fix review point 4).
+    expect(badge!.dataset.fullpath).toBe('/x/a.mp3');
+  });
+
+  it('badge « non importé » quand aucune entrée NML', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, entries: [], multiple: false }),
+    }));
+    pendingTracks.tracks = [{ filename: 'b.mp3', fullPath: '/x/b.mp3', duration: 60 }];
+    renderPlaylistPanel();
+    await new Promise(r => setTimeout(r, 10));
+    const badge = document.querySelector('.pl-track-match') as HTMLElement;
+    expect(badge.textContent).toContain('non importé');
+    expect(badge.className).toContain('pl-match-missing');
+  });
+
+  it('badge neutre « ? » si l\'appel API échoue (pas d\'alerte)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'x' }) }));
+    pendingTracks.tracks = [{ filename: 'c.mp3', fullPath: '/x/c.mp3', duration: 60 }];
+    renderPlaylistPanel();
+    await new Promise(r => setTimeout(r, 10));
+    const badge = document.querySelector('.pl-track-match') as HTMLElement;
+    expect(badge.className).toContain('pl-match-error');
   });
 });

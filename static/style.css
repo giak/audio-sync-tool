@@ -629,6 +629,20 @@ header h1 {
 .pl-drag-handle:hover { color: var(--text-secondary); }
 .pl-drag-handle:active { cursor: grabbing; }
 .pl-track-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Badge de match NML (EPIC-016) : statut de sauvegarde dans la collection Traktor */
+.pl-track-match {
+  font-size: 11px;
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 3px;
+  line-height: 1.6;
+  user-select: none;
+}
+.pl-track-match.pl-match-loading { color: var(--text-dim); }
+.pl-track-match.pl-match-ok { color: #7ddc8f; background: rgba(52, 199, 89, 0.12); border: 1px solid rgba(52, 199, 89, 0.35); }
+.pl-track-match.pl-match-multi { color: #f0c36a; background: rgba(255, 179, 71, 0.10); border: 1px solid rgba(255, 179, 71, 0.35); }
+.pl-track-match.pl-match-missing { color: #e08a8a; background: rgba(255, 69, 58, 0.08); border: 1px solid rgba(255, 69, 58, 0.30); }
+.pl-track-match.pl-match-error { color: var(--text-dim); }
 .pl-track-year { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
 .pl-track-codec { font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
 .pl-track-duration { font-size: 12px; color: var(--text-secondary); min-width: 36px; text-align: right; flex-shrink: 0; }
