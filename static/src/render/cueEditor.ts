@@ -21,6 +21,13 @@ let _saving = false;
 let ws: WaveSurfer | null = null;
 let _regions: any = null;
 let _entryRef: CueEntryRef | null = null;
+let _trackPath = '';
+
+function storedIndex(filename: string): number {
+  const raw = localStorage.getItem(`cue/sel:${filename}`);
+  const i = raw === null ? -1 : Number.parseInt(raw, 10);
+  return Number.isNaN(i) ? -1 : i;
+}
 
 export async function openCueEditor(track: PlaylistTrackLite): Promise<void> {
   const status = await api<{ configured: boolean }>('/api/nml/status');
@@ -34,17 +41,49 @@ export async function openCueEditor(track: PlaylistTrackLite): Promise<void> {
     showToast('⚠️ Aucune piste matchée dans la collection');
     return;
   }
-  const entry = data.entries[0];
+  _trackPath = track.fullPath;
+  const stored = storedIndex(track.filename);
+  const idx = stored >= 0 && stored < data.entries.length ? stored : 0;
+  const entry = data.entries[idx];
   _entryRef = { filename: entry.filename, filesize: entry.filesize };
   const title = document.getElementById('cue-editor-title') as HTMLElement | null;
   if (title) title.textContent = `${entry.artist || ''} — ${entry.title || entry.filename}`;
+  const controls = document.getElementById('cue-editor-controls') as HTMLElement | null;
+  const existing = document.getElementById('cue-editor-select');
+  if (existing) existing.remove();
+  if (data.multiple && controls) {
+    const select = document.createElement('select');
+    select.id = 'cue-editor-select';
+    data.entries.forEach((e, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = `${e.artist || e.filename} — ${e.title || e.filename}`;
+      if (i === idx) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.onchange = () => {
+      const i = Number.parseInt(select.value, 10);
+      localStorage.setItem(`cue/sel:${track.filename}`, String(i));
+      renderEntry(i, data.entries);
+    };
+    controls.prepend(select);
+  }
   state.activeModal = 'cueEditor';
   const modal = document.getElementById('modal-cue-editor');
   if (modal) modal.classList.remove('hidden');
   await renderWaveform(track.fullPath, entry.cues || []);
 }
 
-async function renderWaveform(path: string, cues: CueDTO[]): Promise<void> {
+async function renderEntry(idx: number, entries: any[]): Promise<void> {
+  const entry = entries[idx] ?? entries[0];
+  if (!entry) return;
+  _entryRef = { filename: entry.filename, filesize: entry.filesize };
+  const title = document.getElementById('cue-editor-title') as HTMLElement | null;
+  if (title) title.textContent = `${entry.artist || ''} — ${entry.title || entry.filename}`;
+  await renderWaveform(_trackPath, entry.cues || []);
+}
+
+export async function renderWaveform(path: string, cues: CueDTO[]): Promise<void> {
   const el = document.getElementById('cue-editor-waveform') as HTMLElement | null;
   if (!el) return;
   el.innerHTML = '';

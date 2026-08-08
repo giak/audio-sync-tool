@@ -112,3 +112,35 @@ describe('render/cueEditor wavesurfer', () => {
     expect(ws.registerPlugin).toHaveBeenCalled();
   });
 });
+describe('render/cueEditor sélecteur homonymes', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div id="modal-cue-editor" class="modal hidden">
+        <div id="cue-editor-title"></div>
+        <div id="cue-editor-status"></div>
+        <div id="cue-editor-waveform"></div>
+        <div id="cue-editor-controls"></div>
+      </div>
+    `;
+    mockApi.mockReset();
+    mockWSCreate.mockReset();
+    mockWSCreate.mockReturnValue(makeWS());
+  });
+
+  it("affiche un sélecteur quand multiple matchs", async () => {
+    mockApi
+      .mockResolvedValueOnce({ configured: true })
+      .mockResolvedValueOnce({
+        ok: true, multiple: true,
+        entries: [
+          { filename: 'track.mp3', filesize: '1', artist: 'Native Instruments', title: 'Native', cues: [] },
+          { filename: 'track.mp3', filesize: '2', artist: 'Autre', title: 'Autre', cues: [] },
+        ],
+      });
+    await openCueEditor({ filename: 'track.mp3', fullPath: '/x/track.mp3' });
+    const select = document.getElementById('cue-editor-select') as HTMLSelectElement | null;
+    expect(select).not.toBeNull();
+    expect(select!.options.length).toBe(2);
+    expect(select!.options[0].textContent).toContain('Native');
+  });
+});

@@ -19,6 +19,7 @@ import { state } from '../state.js';
 import { closeAllModals } from '../ui.js';
 import { type FileStatus } from '../utils.js';
 import { makeFileEl } from './fileRow.js';
+import { openCueEditor } from './cueEditor.js';
 import { _ratingClickHandler, startRatingEdit, startSourceRatingEdit } from './ratingEdit.js';
 import { renderDirTree, togglePlaylistSourceDir, toggleSourceDir } from './sourceTree.js';
 
@@ -152,6 +153,7 @@ function renderPlaylistTracks(): void {
       }
       html += `</span>`;
       html += `<span class="pl-track-remove" data-fullpath="${escapeHtml(track.fullPath)}">✕</span>`;
+      html += `<button class="cue-btn" data-fullpath="${escapeHtml(track.fullPath)}" data-filename="${escapeHtml(track.filename)}">⌖</button>`;
       html += '</div>';
     });
     html += '</div>';
@@ -170,6 +172,14 @@ function renderPlaylistTracks(): void {
 
   container.querySelectorAll('.pl-track-rating').forEach(el => {
     (el as HTMLElement).onclick = _ratingClickHandler;
+  });
+
+  container.querySelectorAll('.cue-btn').forEach(btn => {
+    (btn as HTMLElement).onclick = (e: MouseEvent) => {
+      e.stopPropagation();
+      const el = btn as HTMLElement;
+      openCueEditor({ filename: el.dataset.filename || '', fullPath: el.dataset.fullpath || '' });
+    };
   });
 
   container.querySelectorAll('.pl-track').forEach(el => {
