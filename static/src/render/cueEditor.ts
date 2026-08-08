@@ -2,6 +2,7 @@
 import WaveSurfer from 'wavesurfer.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
 import { api } from '../api.js';
+import { buildBeats, detectBPMFromUrl, snapToBeat } from '../beatgrid.js';
 import type { CueDTO } from '../cueModel.js';
 import { cuesToRegions, hotToLabel, regionToCue } from '../cueModel.js';
 import { on, state } from '../state.js';
@@ -28,8 +29,18 @@ let _trackPath = '';
 /** hotcue → DISPL_ORDER d'origine (round-trip). wavesurfer perd les metadata custom
  *  des régions, donc on garde un Map séparé peuplé au chargement des cues. */
 let _displOrders = new Map<number, string>();
+/** Mode dessin de loop (bouton ⟳ Loop) : activé → drag sur la waveform crée une région. */
+let _loopMode = false;
+let _dragCleanup: (() => void) | null = null;
 /** Mode plein écran (bouton 🗖) : le contenu de la modal remplit tout l'écran. */
 let _fullscreen = false;
+/** Grille de beats (positions en secondes) calculée depuis le BPM — snap des cues/loops.
+ *  Priorité : grille native NML (TEMPO + CUE_V2 TYPE=4/GRID), sinon BPM détecté ou saisi. */
+let _grid: number[] = [];
+let _bpm: number | null = null;
+let _snapOn = true;
+/** Boucle en cours de lecture (🔁 Play) : {start, end} ou null. */
+let _loopPlay: { start: number; end: number } | null = null;
 
 const _wired = new WeakSet<Element>();
 
@@ -67,8 +78,104 @@ function setStatus(msg: string): void {
   if (el) el.textContent = msg;
 }
 
+/** Active le slot (A–H) dont la région couvre la position courante, sinon aucun. */
+function refreshLiveSlot(): void {
+  if (!ws || !_regions) return;
+  const t = ws.getCurrentTime();
+  let liveId: number | null = null;
+  for (const r of _regions.getRegions()) {
+    const isCue = typeof r.id === 'number' && r.id >= 0 && r.id <= 7;
+    if (isCue && t >= r.start && t <= (r.end === r.start ? r.start + 0.05 : r.end)) {
+      liveId = r.id;
+      break;
+    }
+  }
+  for (const el of document.querySelectorAll<HTMLElement>('.cue-slot')) {
+    const slot = Number.parseInt(el.getAttribute('data-slot') || '', 10);
+    el.classList.toggle('live', slot === liveId);
+  }
+}
+
+function updateLoopBtn(): void {
+  const btn = document.getElementById('cue-btn-loop') as HTMLButtonElement | null;
+  if (btn) btn.classList.toggle('looping', _loopMode);
+}
+
 function fullscreenBtnEl(): HTMLButtonElement | null {
   return document.getElementById('cue-btn-fullscreen') as HTMLButtonElement | null;
+}
+
+function bpmInputEl(): HTMLInputElement | null {
+  return document.getElementById('cue-bpm') as HTMLInputElement | null;
+}
+
+function snapBtnEl(): HTMLButtonElement | null {
+  return document.getElementById('cue-btn-snap') as HTMLButtonElement | null;
+}
+
+function loopPlayBtnEl(): HTMLButtonElement | null {
+  return document.getElementById('cue-btn-loopplay') as HTMLButtonElement | null;
+}
+
+function updateSnapBtn(): void {
+  const btn = snapBtnEl();
+  if (btn) btn.classList.toggle('snap-on', _snapOn);
+}
+
+function updateLoopPlayBtn(): void {
+  const btn = loopPlayBtnEl();
+  if (btn) btn.classList.toggle('loop-playing', _loopPlay !== null);
+}
+
+function stopLoopPlay(): void {
+  _loopPlay = null;
+  updateLoopPlayBtn();
+}
+
+/** Reconstruit la grille depuis le BPM courant (phase comprise) et la durée de la piste. */
+function rebuildGrid(): void {
+/** Dessine les lignes de beats au-dessus de la waveform (sous les régions). */
+function renderGrid(): void {
+  const wave = document.getElementById('cue-editor-waveform') as HTMLElement | null;
+  if (!wave) return;
+  let gridEl = document.getElementById('cue-editor-grid') as HTMLElement | null;
+  if (!gridEl) {
+    gridEl = document.createElement('div');
+    gridEl.id = 'cue-editor-grid';
+    wave.appendChild(gridEl);
+  }
+  gridEl.innerHTML = '';
+  const duration = ws?.getDuration() || 0;
+  if (_grid.length === 0 || duration <= 0) return;
+  for (let i = 0; i < _grid.length; i++) {
+    const line = document.createElement('div');
+    line.className = `cue-grid-line${i % 4 === 0 ? ' strong' : ''}`;
+    line.style.left = `${(_grid[i] / duration) * 100}%`;
+    gridEl.appendChild(line);
+  }
+}
+
+/** Premier slot A–H libre pour un loop dessiné — les cues/loops sauvegardés
+ *  doivent avoir HOTCUE 0..7 (le backend refuse le reste). */
+function nextFreeSlot(): number {
+  if (!_regions) return -1;
+  const used = new Set<number>();
+  for (const r of _regions.getRegions()) {
+    if (typeof r.id === 'number' && r.id >= 0 && r.id <= 7) used.add(r.id);
+  }
+  for (let s = 0; s <= 7; s++) if (!used.has(s)) return s;
+  return -1;
+}
+
+/** Boucle (région étendue) sous le curseur, sinon la première boucle. */
+function findLoopAtCursor(): { start: number; end: number } | null {
+  if (!ws || !_regions) return null;
+  const t = ws.getCurrentTime();
+  const loops = _regions.getRegions().filter((r: any) => r.end - r.start > 0.1);
+  if (loops.length === 0) return null;
+  const at = loops.find((r: any) => t >= r.start && t <= r.end);
+  const r = at || loops[0];
+  return { start: r.start, end: r.end };
 }
 
 /** Bascule la modal en plein écran : la waveform remplit tout l'espace
@@ -82,6 +189,39 @@ export function toggleFullscreen(): void {
     btn.textContent = _fullscreen ? '🗗' : '🗖';
     btn.title = _fullscreen ? 'Réduire (plein écran)' : 'Plein écran';
   }
+}
+
+/** Bascule le snap sur la grille de beats (cues + loops). */
+export function toggleSnap(): void {
+  _snapOn = !_snapOn;
+  updateSnapBtn();
+  setStatus(
+    _snapOn && _grid.length > 0 ? '🧲 Snap actif — les cues/loops se calent sur la grille.' : 'Snap désactivé.',
+  );
+}
+
+/** Bascule la lecture en boucle (🔁 Play) : joue la boucle sous le curseur en continu. */
+export function toggleLoopPlay(): void {
+  if (!ws || !_regions) return;
+  if (_loopPlay) {
+    stopLoopPlay();
+    ws.pause();
+    return;
+  }
+  const loop = findLoopAtCursor();
+  if (!loop) {
+    setStatus('⚠️ Aucune boucle — ⟳ Loop puis glisser sur la waveform pour en dessiner une.');
+    return;
+  }
+  // Curseur hors de la boucle (fallback sur la première) : le dire plutôt que de
+  // jouer une boucle qu'on ne voit pas à l'écran.
+  const t = ws.getCurrentTime();
+  if (t < loop.start || t > loop.end) {
+    setStatus(`⟲ Curseur hors boucle — lecture de ${formatTime(loop.start)}–${formatTime(loop.end)}.`);
+  }
+  _loopPlay = loop;
+  updateLoopPlayBtn();
+  void ws.play(loop.start, loop.end);
 }
 
 export function wireControls(root: HTMLElement = document.body): void {
@@ -105,6 +245,27 @@ export function wireControls(root: HTMLElement = document.body): void {
       ws?.playPause();
     });
   }
+  const loop = root.querySelector<HTMLButtonElement>('#cue-btn-loop');
+  if (loop && !_wired.has(loop)) {
+    _wired.add(loop);
+    loop.addEventListener('click', () => toggleLoopMode());
+  }
+  const loopPlay = root.querySelector<HTMLButtonElement>('#cue-btn-loopplay');
+  if (loopPlay && !_wired.has(loopPlay)) {
+    _wired.add(loopPlay);
+    loopPlay.addEventListener('click', () => toggleLoopPlay());
+  }
+  const snap = root.querySelector<HTMLButtonElement>('#cue-btn-snap');
+  if (snap && !_wired.has(snap)) {
+    _wired.add(snap);
+    snap.addEventListener('click', () => toggleSnap());
+  }
+  const bpm = root.querySelector<HTMLInputElement>('#cue-bpm');
+  if (bpm && !_wired.has(bpm)) {
+    _wired.add(bpm);
+    bpm.addEventListener('input', () => {
+      const v = parseFloat(bpm.value);
+      _bpm = Number.isFinite(v) && v > 20 && v < 300 ? v : null;
   const fs = root.querySelector<HTMLButtonElement>('#cue-btn-fullscreen');
   if (fs && !_wired.has(fs)) {
     _wired.add(fs);
@@ -112,6 +273,24 @@ export function wireControls(root: HTMLElement = document.body): void {
   }
 }
 
+/** Bascule le mode dessin de loop : drag sur la waveform → nouvelle région boucle. */
+export function toggleLoopMode(): void {
+  if (!_regions || !ws) return;
+  _loopMode = !_loopMode;
+  updateLoopBtn();
+  if (_loopMode) {
+    if (_dragCleanup) _dragCleanup();
+    _dragCleanup = _regions.enableDragSelection({
+      color: 'rgba(255, 170, 0, 0.35)',
+      drag: false,
+      resize: false,
+    });
+    setStatus('⟳ Mode loop : glisse sur la waveform pour dessiner une boucle.');
+  } else {
+    _dragCleanup?.();
+    _dragCleanup = null;
+    setStatus('');
+  }
 }
 
 on('activeModal:changed', () => {
@@ -227,6 +406,14 @@ export async function renderWaveform(path: string, cues: CueDTO[]): Promise<void
   ws?.destroy();
   ws = null;
   _regions = null;
+  _dragCleanup?.();
+  _dragCleanup = null;
+  _loopMode = false;
+  updateLoopBtn();
+  stopLoopPlay();
+  _grid = [];
+  _bpm = null;
+  updateSnapBtn();
   // DISPL_ORDER d'origine : {hotcue → displ_order} — jamais reconstruit depuis le slot (B9).
   _displOrders = new Map(cues.filter(c => c.hotcue >= 0 && c.hotcue <= 7).map(c => [c.hotcue, c.displ_order]));
   setPlayingUI(false);
@@ -238,11 +425,55 @@ export async function renderWaveform(path: string, cues: CueDTO[]): Promise<void
   ws.on('ready', () => {
     _regions = ws!.registerPlugin(Regions.create());
     for (const r of cuesToRegions(cues)) _regions.addRegion(r);
+    // Clic-droit sur une région = suppression (audit UX).
+    _regions.on('region-clicked', (region: any, ev: MouseEvent) => {
+      if (ev.button === 2) {
+        region.remove();
+        // La boucle supprimée était en cours de lecture → couper l'audio.
+        if (_loopPlay) {
+          stopLoopPlay();
+          ws?.pause();
+        }
+        refreshLiveSlot();
+      }
+    });
+    // Loop dessiné (id string, créé par le drag) → slot A–H libre ; sinon la
+    // sauvegarde écrirait HOTCUE invalide (400 backend). Snap sur la grille si active.
+    _regions.on('region-created', (region: any) => {
+      if (typeof region.id !== 'number') {
+        const slot = nextFreeSlot();
+        if (slot === -1) {
+          region.remove();
+          showToast("⚠️ 8 slots A–H pleins — retire un cue/loop d'abord.");
+          return;
+        }
+        region.id = slot;
+      }
+      // Snap seulement si la région est APRÈS le premier beat (phase) : un cue
+      // dessiné dans l'intro (avant la grille) ne doit pas sauter au beat 1.
+      if (_snapOn && _grid.length > 0 && region.start >= _grid[0]) {
+        const start = snapToBeat(region.start, _grid);
+        const end = Math.max(start + 0.2, snapToBeat(region.end, _grid));
+        region.setOptions({ start, end });
+      }
+      refreshLiveSlot();
+    });
     updateTimeUI();
+      rebuildGrid();
+      void detectAndApplyBPM();
+    }
+  });
   ws.on('play', () => setPlayingUI(true));
   ws.on('pause', () => setPlayingUI(false));
+  ws.on('finish', () => {
+    setPlayingUI(false);
+    // Lecture de boucle (🔁 Play) : on relance immédiatement le cycle.
+    if (_loopPlay) void ws?.play(_loopPlay.start, _loopPlay.end);
+  });
   ws.on('timeupdate', () => {
     updateTimeUI();
+    refreshLiveSlot();
+  });
   ws.on('error', (err: unknown) => {
     setPlayingUI(false);
     setStatus(`⚠️ Lecture impossible : ${err instanceof Error ? err.message : String(err)}`);
@@ -253,8 +484,15 @@ export function destroyCueEditor(): void {
   ws?.destroy();
   ws = null;
   _regions = null;
+  _dragCleanup?.();
+  _dragCleanup = null;
+  _loopMode = false;
   _entryRef = null;
   _displOrders = new Map();
+  stopLoopPlay();
+  _grid = [];
+  _bpm = null;
+  updateSnapBtn();
   // Sort du plein écran si la modal se ferme dans cet état.
   _fullscreen = false;
   const modal = document.getElementById('modal-cue-editor');
@@ -275,6 +513,31 @@ export function onSlotClicked(slot: number): void {
     if (r.id === slot) r.remove();
   }
   _regions.addRegion({ start: time, end: time + 0.08, id: slot, label: hotToLabel(slot), color: '#55aaff' });
+  refreshLiveSlot();
+}
+
+/** Supprime la région (cue/loop) couvrant la position courante — touche Suppr. */
+export function deleteRegionAtCursor(): boolean {
+  if (!ws || !_regions) return false;
+  const t = ws.getCurrentTime();
+  let target: any = null;
+  for (const r of _regions.getRegions()) {
+    const end = r.end === r.start ? r.start + 0.05 : r.end;
+    if (t >= r.start && t <= end) {
+      target = r;
+      break;
+    }
+  }
+  if (!target) return false;
+  target.remove();
+  // Si c'était la boucle en cours de lecture, on coupe le son immédiatement
+  // (stopLoopPlay seul laisserait l'audio jouer la fin de la boucle supprimée).
+  if (_loopPlay && Math.abs(_loopPlay.start - target.start) < 1e-6 && Math.abs(_loopPlay.end - target.end) < 1e-6) {
+    stopLoopPlay();
+    ws.pause();
+  }
+  refreshLiveSlot();
+  return true;
 }
 
 export async function saveCues(cues: CueDTO[]): Promise<void> {

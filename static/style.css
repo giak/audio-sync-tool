@@ -738,6 +738,44 @@ header h1 {
 }
 .cue-play:hover { border-color: var(--border-active); color: var(--accent); }
 .cue-play.playing { color: var(--accent-green); border-color: var(--accent-green); }
+.cue-play.looping {
+  color: var(--led-amber); border-color: var(--led-amber);
+  box-shadow: 0 0 8px rgba(255, 204, 0, 0.35);
+}
+.cue-play.snap-on { color: var(--accent); border-color: var(--accent); }
+.cue-play.loop-playing {
+  color: var(--led-amber); border-color: var(--led-amber);
+  box-shadow: 0 0 8px rgba(255, 204, 0, 0.35);
+  animation: cue-loop-pulse 1.2s ease-in-out infinite;
+}
+@keyframes cue-loop-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
 #cue-editor-time { font-variant-numeric: tabular-nums; min-width: 120px; }
 .cue-hint { color: var(--text-dim); font-size: 12px; }
 
+/* Champ BPM manuel (grille recalculée) */
+.cue-bpm {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--text-muted);
+}
+#cue-bpm {
+  width: 54px; padding: 3px 4px;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border-panel); border-radius: 2px;
+  font-size: 12px; text-align: center;
+}
+#cue-bpm:focus { border-color: var(--border-active); outline: none; }
+
+/* Grille de beats (overlay sur la waveform, sous les régions z-index 5) */
+#cue-editor-grid {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.cue-grid-line {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: rgba(0, 212, 255, 0.15);
+}
+.cue-grid-line.strong { width: 2px; background: rgba(0, 212, 255, 0.35); }

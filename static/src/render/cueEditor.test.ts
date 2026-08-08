@@ -113,6 +113,10 @@ const MODAL_HTML = `
       </div>
       <div id="cue-editor-transport">
         <button id="cue-btn-play">▶</button>
+        <button id="cue-btn-loop">⟳ Loop</button>
+        <button id="cue-btn-loopplay">🔁 Play</button>
+        <label class="cue-bpm">BPM <input id="cue-bpm" type="number" placeholder="auto"></label>
+        <button id="cue-btn-snap">🧲 Snap</button>
         <span id="cue-editor-time">0:00 / 0:00</span>
       </div>
     </div>
@@ -239,7 +243,6 @@ describe('render/cueEditor sélecteur homonymes', () => {
     release({ ok: true });
     await p;
     expect(btn.disabled).toBe(false);
-    expect(mockApi).toHaveBeenCalledWith('/api/track/cues', expect.objectContaining({ method: 'POST' }));
     const call = mockApi.mock.calls.find(([u]: [string]) => u === '/api/track/cues');
     expect(call).toBeDefined();
     const body = JSON.parse((call[1] as { body: string }).body);
@@ -405,6 +408,81 @@ describe('render/cueEditor transport (play/pause + temps, B4)', () => {
   });
 });
 
+describe('render/cueEditor UX (loop, suppression, live slot)', () => {
+  beforeEach(resetMocks);
+
+  function openSingle(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  it("le bouton ⟳ Loop active/désactive la drag-sélection et l'état visuel", async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const btn = document.getElementById('cue-btn-loop') as HTMLButtonElement;
+    btn.click();
+    expect(ws.regions.enableDragSelection).toHaveBeenCalled();
+    expect(btn.classList.contains('looping')).toBe(true);
+    btn.click();
+    expect(btn.classList.contains('looping')).toBe(false);
+  });
+
+  it('la touche Suppr retire le cue sous le curseur', async () => {
+    const ws = openSingle();
+    ws.getCurrentTime.mockReturnValue(12);
+    const region = { id: 2, start: 10, end: 14, remove: vi.fn() };
+    ws.regions.getRegions = vi.fn(() => [region]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }));
+    expect(region.remove).toHaveBeenCalled();
+    expect(deleteRegionAtCursor()).toBe(true);
+  });
+
+  it('Suppr ne fait rien quand aucune région ne couvre le curseur', async () => {
+    const ws = openSingle();
+    ws.getCurrentTime.mockReturnValue(50);
+    const region = { id: 2, start: 10, end: 14, remove: vi.fn() };
+    ws.regions.getRegions = vi.fn(() => [region]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    expect(deleteRegionAtCursor()).toBe(false);
+    expect(region.remove).not.toHaveBeenCalled();
+  });
+
+  it('le clic-droit sur une région la supprime', async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const region = { id: 3, start: 5, end: 5.08, remove: vi.fn() };
+    const clicked = (ws.regions.on.mock.calls as Array<[string, (...a: unknown[]) => void]>).find(
+      ([evt]) => evt === 'region-clicked',
+    )?.[1];
+    expect(clicked).toBeDefined();
+    clicked!(region, { button: 2 } as MouseEvent);
+    expect(region.remove).toHaveBeenCalled();
+  });
+
+  it(".cue-slot.live s'active quand la lecture traverse la région (timeupdate)", async () => {
+    const ws = openSingle();
+    ws.getCurrentTime.mockReturnValue(11);
+    ws.regions.getRegions = vi.fn(() => [{ id: 2, start: 10, end: 14 }]);
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const slots = Array.from(document.querySelectorAll('.cue-slot')) as HTMLElement[];
+    expect(slots.find(s => s.getAttribute('data-slot') === '2')!.classList.contains('live')).toBe(false);
+    ws.emit('timeupdate');
+    expect(slots.find(s => s.getAttribute('data-slot') === '2')!.classList.contains('live')).toBe(true);
+    expect(slots.find(s => s.getAttribute('data-slot') === '0')!.classList.contains('live')).toBe(false);
+  });
+
   it("affiche le volume/DIR dans le sélecteur d'homonymes", async () => {
     mockWSCreate.mockReturnValue(makeWS());
     mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
@@ -523,6 +601,181 @@ describe('render/cueEditor plein écran', () => {
     expect(content.classList.contains('cue-fullscreen')).toBe(false);
     expect(btn.textContent).toBe('🗖');
     expect(btn.title).toBe('Plein écran');
+  });
+});
+
+describe('render/cueEditor beatgrid (snap + BPM)', () => {
+  beforeEach(resetMocks);
+
+  function openSingle(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  function regionCreatedCb(ws: MockWS): (...a: unknown[]) => void {
+    const cb = (ws.regions.on.mock.calls as Array<[string, (...a: unknown[]) => void]>).find(
+      ([evt]) => evt === 'region-created',
+    )?.[1];
+    expect(cb).toBeDefined();
+    return cb!;
+  }
+
+  it('un loop dessiné reçoit un slot A–H libre (fix sauvegarde 400)', async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const region = { id: 'region-abc', start: 10, end: 14, setOptions: vi.fn(), remove: vi.fn() };
+    regionCreatedCb(ws)(region);
+    expect(region.id).toBe(0); // premier slot libre
+    expect(region.remove).not.toHaveBeenCalled();
+  });
+
+  it('le snap cale les bords du loop sur la grille (BPM saisi)', async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input')); // grille 0..100s par pas de 0.5s
+    const region = { id: 'region-abc', start: 10.26, end: 14.3, setOptions: vi.fn(), remove: vi.fn() };
+    regionCreatedCb(ws)(region);
+    expect(region.id).toBe(0);
+    expect(region.setOptions).toHaveBeenCalledWith({ start: 10.5, end: 14.5 });
+  });
+
+  it('le champ BPM redessine la grille de beats', async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input'));
+    const grid = document.getElementById('cue-editor-grid');
+    expect(grid).not.toBeNull();
+    // 0..100s à 120 BPM → 201 lignes.
+    expect(grid!.querySelectorAll('.cue-grid-line').length).toBe(201);
+  });
+
+  it("🧲 Snap bascule l'état actif du bouton", async () => {
+    openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    const btn = document.getElementById('cue-btn-snap') as HTMLButtonElement;
+    const wasOn = btn.classList.contains('snap-on');
+    btn.click();
+    expect(btn.classList.contains('snap-on')).toBe(!wasOn);
+    btn.click();
+    expect(btn.classList.contains('snap-on')).toBe(wasOn);
+  });
+});
+
+describe('render/cueEditor lecture de boucle (🔁 Play)', () => {
+  beforeEach(resetMocks);
+
+  function openWithLoop(): MockWS {
+    const ws = makeWS();
+    ws.getCurrentTime.mockReturnValue(12);
+    ws.regions.getRegions = vi.fn(() => [{ id: 0, start: 10, end: 14, remove: vi.fn() }]);
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  it('🔁 Play joue la boucle sous le curseur et la relance à la fin du cycle', async () => {
+    const ws = openWithLoop();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const btn = document.getElementById('cue-btn-loopplay') as HTMLButtonElement;
+    btn.click();
+    expect(ws.play).toHaveBeenCalledWith(10, 14);
+    expect(btn.classList.contains('loop-playing')).toBe(true);
+    ws.emit('finish'); // fin de cycle → relance immédiate
+    expect(ws.play).toHaveBeenCalledTimes(2);
+    btn.click(); // arrêt
+    expect(ws.pause).toHaveBeenCalled();
+    expect(btn.classList.contains('loop-playing')).toBe(false);
+  });
+
+  it('🔁 Play sans boucle → message et aucune lecture', async () => {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const btn = document.getElementById('cue-btn-loopplay') as HTMLButtonElement;
+    btn.click();
+    expect(ws.play).not.toHaveBeenCalled();
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('Aucune boucle');
+  });
+
+  it('le bouton ▶ coupe la lecture de boucle', async () => {
+    const ws = openWithLoop();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const lpBtn = document.getElementById('cue-btn-loopplay') as HTMLButtonElement;
+    lpBtn.click();
+    expect(lpBtn.classList.contains('loop-playing')).toBe(true);
+    (document.getElementById('cue-btn-play') as HTMLButtonElement).click();
+    expect(ws.playPause).toHaveBeenCalled();
+    expect(lpBtn.classList.contains('loop-playing')).toBe(false);
+  });
+
+  it('Suppr sur la boucle en lecture coupe le son (pause)', async () => {
+    const ws = openWithLoop();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const lpBtn = document.getElementById('cue-btn-loopplay') as HTMLButtonElement;
+    lpBtn.click();
+    expect(lpBtn.classList.contains('loop-playing')).toBe(true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }));
+    expect(lpBtn.classList.contains('loop-playing')).toBe(false);
+    expect(ws.pause).toHaveBeenCalled(); // l'audio ne doit pas finir la boucle supprimée
+  });
+
+  it('clic-droit sur la boucle en lecture coupe le son (pause)', async () => {
+    const ws = openWithLoop();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    (document.getElementById('cue-btn-loopplay') as HTMLButtonElement).click();
+    const region = { id: 0, start: 10, end: 14, remove: vi.fn() };
+    const clicked = (ws.regions.on.mock.calls as Array<[string, (...a: unknown[]) => void]>).find(
+      ([evt]) => evt === 'region-clicked',
+    )?.[1];
+    clicked!(region, { button: 2 } as MouseEvent);
+    expect(ws.pause).toHaveBeenCalled();
+    expect(region.remove).toHaveBeenCalled();
+  });
+
+  it('curseur hors boucle → message explicite et lecture de la boucle trouvée', async () => {
+    const ws = makeWS();
+    ws.getCurrentTime.mockReturnValue(50); // loin de la boucle 10-14s
+    ws.regions.getRegions = vi.fn(() => [{ id: 0, start: 10, end: 14, remove: vi.fn() }]);
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    (document.getElementById('cue-btn-loopplay') as HTMLButtonElement).click();
+    expect(ws.play).toHaveBeenCalledWith(10, 14);
+    const status = document.getElementById('cue-editor-status');
+    expect(status!.textContent).toContain('hors boucle');
   });
 });
 
