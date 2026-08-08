@@ -126,13 +126,26 @@ def traktor_dir(relpath, volume):
     return '/:' + '/:'.join(seg) + '/:'
 
 
-def build_export_nml(playlist_tracks, nml_path, export_root, volume):
+def build_export_nml(playlist_tracks, nml_path, export_root, volume, pl_dir):
     """Écrit export_root/collection.nml : ENTRIES de la playlist, LOCATION réécrites.
 
     Match : clé (FILE, FILESIZE) — basename de la piste + os.path.getsize du fichier
     local. Multi-match : premier hit (l'UI a déjà tranché la même clé au moment de
     l'édition — même série de hits, ordre stable). Retourne le chemin écrit, ou None
-    si aucune piste ne matche."""
+    si aucune piste ne matche.
+
+    DIR : calculé depuis l'emplacement RÉEL des fichiers exportés (pl_dir, le dossier
+    dans lequel la playlist a été matérialisée) relativement à export_root — plus depuis
+    le chemin source original de chaque piste (correction audit B8)."""
+    if not export_root:
+        raise ValueError('traktor_export_root non configuré — collection.nml non généré')
+    if not pl_dir:
+        raise ValueError('dossier d\'export (pl_dir) manquant')
+    rel = os.path.relpath(pl_dir, export_root)
+    if rel == '..' or rel.startswith('..' + os.sep):
+        raise ValueError(
+            f"le dossier d'export {pl_dir!r} n'est pas sous la racine {export_root!r}")
+    dir_attr = traktor_dir(rel if rel != '.' else '', volume)
     tree = load_nml(nml_path)
     root = tree.getroot()
     coll = root.find('./COLLECTION')
@@ -150,10 +163,9 @@ def build_export_nml(playlist_tracks, nml_path, export_root, volume):
         if not hits:
             continue
         e = hits[0]
-        rel = os.path.relpath(os.path.dirname(local), export_root) if local else ''
         loc = e.find('LOCATION')
         if loc is not None:
-            loc.set('DIR', traktor_dir(rel if rel and rel != '.' else '', volume))
+            loc.set('DIR', dir_attr)
             loc.set('VOLUME', volume)
             if loc.get('VOLUMEID'):
                 loc.set('VOLUMEID', 'ffffffff')

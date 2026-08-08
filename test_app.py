@@ -1459,6 +1459,74 @@ def test_config_preserves_traktor_nml_path(client):
     rv = client.get('/config')
     assert rv.status_code == 200
     assert rv.json['configs'][0]['traktor_nml_path'] == '/data/collection.nml'
+
+
+def test_config_roundtrip_export_fields(client):
+    """B8 : traktor_export_root + traktor_export_volume survivent au round-trip config."""
+    payload = make_cfg(source_data='/src')
+    payload['configs'][0]['traktor_export_root'] = '/media/giak/TRAKTOR_USB'
+    payload['configs'][0]['traktor_export_volume'] = 'TRAKTOR_USB'
+    assert client.post('/config', json=payload).status_code == 200
+    rv = client.get('/config')
+    cfg = rv.json['configs'][0]
+    assert cfg['traktor_export_root'] == '/media/giak/TRAKTOR_USB'
+    assert cfg['traktor_export_volume'] == 'TRAKTOR_USB'
+
+
+def test_export_nml_error_message_without_root(client, tmp_path, monkeypatch):
+    """B8 : nml_path configuré mais pas de traktor_export_root → réponse explicite
+    (nml_error), plus d'échec silencieux. L'export physique, lui, réussit."""
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    src = tmp_path / 'source'
+    os.makedirs(src)
+    track = src / 'Carbon Decay - In The Warehouse.mp3'
+    track.write_bytes(b'x' * 5243)
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src),
+        'traktor_export_root': '', 'traktor_export_volume': 'TRAKTOR_USB'})
+    client.post('/playlists', json={'name': 'pl', 'tracks': [
+        {'filename': track.name, 'fullPath': str(track), 'duration': 132}]})
+    rv = client.post('/playlists/export', json={'name': 'pl'})
+    assert rv.status_code == 200
+    assert rv.json['ok'] is True
+    assert 'nml_error' in rv.json
+    assert 'traktor_export_root' in rv.json['nml_error']
+    assert 'nml' not in rv.json
+    # L'export physique a bien eu lieu (comportement historique)
+    assert os.path.exists(src / '_playlists' / 'pl' / track.name)
+
+
+def test_export_nml_location_rewritten_via_route(client, tmp_path, monkeypatch):
+    """B8 : via la route, le collection.nml écrit porte le DIR relatif à la racine
+    d'export (pl_dir sous export_root) — pas le chemin source Linux."""
+    import nml as nml_mod
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    src = tmp_path / 'source'
+    os.makedirs(src)
+    track = src / 'Carbon Decay - In The Warehouse.mp3'
+    track.write_bytes(b'x' * 5243)
+    export_root = tmp_path / 'export'
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path), 'source_data': str(src),
+        'traktor_export_root': str(export_root), 'traktor_export_volume': 'TRAKTOR_USB'})
+    client.post('/playlists', json={'name': 'pl', 'tracks': [
+        {'filename': track.name, 'fullPath': str(track), 'duration': 132}]})
+    rv = client.post('/playlists/export', json={'name': 'pl'})
+    assert rv.status_code == 200
+    assert rv.json['nml'] == str(export_root / 'collection.nml')
+    # Les fichiers physiques sont copiés SOUS export_root (dans _playlists/pl)
+    assert os.path.exists(export_root / '_playlists' / 'pl' / track.name)
+    tree = nml_mod.load_nml(str(export_root / 'collection.nml'))
+    loc = tree.getroot().find('./COLLECTION/ENTRY/LOCATION')
+    assert loc.get('DIR') == '/:TRAKTOR_USB/:_playlists/:pl/:'
+    assert loc.get('VOLUME') == 'TRAKTOR_USB'
+
+
+# ── Cue editor — régressions de l'audit 2026-08-08 ──────────────────────────
+
+
 def test_main_execution_registers_track_cues_route(monkeypatch):
     """Régression B1 : en exécution `python app.py` (run_name='__main__'), la route
     /api/track/cues DOIT être enregistrée. Elle était déclarée après le bloc

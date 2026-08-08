@@ -15,6 +15,8 @@ interface ConfigEntry {
   source_data: string;
   epars_dirs: string[];
   traktor_nml_path?: string;
+  traktor_export_root?: string;
+  traktor_export_volume?: string;
 }
 
 interface ConfigData {
@@ -29,6 +31,8 @@ const cfgSelect = document.getElementById('cfg-select') as HTMLSelectElement | n
 const cfgName = document.getElementById('cfg-name') as HTMLInputElement | null;
 const cfgSource = document.getElementById('cfg-source') as HTMLInputElement | null;
 const cfgTraktorNmlPath = document.getElementById('cfg-traktor-nml-path') as HTMLInputElement | null;
+const cfgTraktorExportRoot = document.getElementById('cfg-traktor-export-root') as HTMLInputElement | null;
+const cfgTraktorExportVolume = document.getElementById('cfg-traktor-export-volume') as HTMLInputElement | null;
 const cfgEpars = document.getElementById('cfg-epars') as HTMLTextAreaElement | null;
 const cfgStatus = document.getElementById('config-status') as HTMLElement | null;
 
@@ -52,6 +56,8 @@ function loadActiveConfig(): void {
     if (cfgName) cfgName.value = c.name || '';
     if (cfgSource) cfgSource.value = c.source_data || '';
     if (cfgTraktorNmlPath) cfgTraktorNmlPath.value = c.traktor_nml_path || '';
+    if (cfgTraktorExportRoot) cfgTraktorExportRoot.value = c.traktor_export_root || '';
+    if (cfgTraktorExportVolume) cfgTraktorExportVolume.value = c.traktor_export_volume || 'TRAKTOR_USB';
     if (cfgEpars) cfgEpars.value = (c.epars_dirs || []).join('\n');
   }
 }
@@ -94,6 +100,8 @@ export function initConfigUI(): void {
         name: (cfgName?.value || '').trim() || `config-${idx}`,
         source_data: (cfgSource?.value || '').trim(),
         traktor_nml_path: (cfgTraktorNmlPath?.value || '').trim(),
+        traktor_export_root: (cfgTraktorExportRoot?.value || '').trim(),
+        traktor_export_volume: (cfgTraktorExportVolume?.value || 'TRAKTOR_USB').trim() || 'TRAKTOR_USB',
         epars_dirs: (cfgEpars?.value || '')
           .split('\n')
           .map(s => s.trim())

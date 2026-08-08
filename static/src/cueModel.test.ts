@@ -60,3 +60,14 @@ describe('cueModel', () => {
     expect(regs).toHaveLength(1);
     expect(regs[0].id).toBe(1);
   });
+  it('préserve DISPL_ORDER au round-trip quand il est fourni (B9)', () => {
+    const rt = regionToCue({ start: 5, end: 5.08, id: 3 }, '7');
+    expect(rt.displ_order).toBe('7');
+  });
+  it('ne reconstruit plus DISPL_ORDER depuis HOTCUE pour un nouveau cue (B9)', () => {
+    // Avant la correction : displ_order = String(r.id) = '3' (violation de la décision).
+    const rt = regionToCue({ start: 5, end: 5.08, id: 3 });
+    expect(rt.displ_order).toBe('0');
+    expect(rt.displ_order).not.toBe('3');
+  });
+});

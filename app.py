@@ -535,11 +535,14 @@ def export_playlist():
     if not pl:
         return jsonify({'ok': False, 'error': 'Playlist introuvable'}), 404
 
-    # Determine output directory under source data
+    # Determine output directory : racine d'export (volume) si configurée,
+    # sinon comportement historique sous source_data.
     cfg = get_active_config()
     source_base = cfg.get('source_data', '')
     if not source_base:
         return jsonify({'ok': False, 'error': 'Aucun dossier source configuré'}), 400
+    export_root = (cfg.get('traktor_export_root', '') or '').strip()
+    export_volume = (cfg.get('traktor_export_volume', 'TRAKTOR_USB') or 'TRAKTOR_USB').strip() or 'TRAKTOR_USB'
 
     # Check all source files still exist
     missing = []
@@ -550,7 +553,10 @@ def export_playlist():
     if missing:
         return jsonify({'ok': False, 'missing': missing}), 409
 
-    pl_dir = os.path.join(source_base, '_playlists', name)
+    # Les fichiers physiques vont dans export_root/_playlists/<name> quand la
+    # racine d'export est configurée — le collection.nml généré y pointe.
+    pl_dir = os.path.join(export_root, '_playlists', name) if export_root \
+        else os.path.join(source_base, '_playlists', name)
     os.makedirs(pl_dir, exist_ok=True)
 
     # Create hard links (fall back to copy2 on cross-device)
@@ -584,20 +590,35 @@ def export_playlist():
         result['fallback'] = 'copy'
         result['warning'] = 'Certains fichiers ont été copiés (hard link impossible entre disques différents)'
 
+    # NML : généré uniquement si la racine d'export est configurée ; sinon
+    # message EXPLICITE au client (plus d'échec silencieux — audit B8).
     cfg = get_active_config()
     nml_path = cfg.get('traktor_nml_path', '')
     nml_out = None
+    nml_error = None
     if nml_path and os.path.exists(nml_path):
-        try:
-            nml_out = nml_module.build_export_nml(
-                pl['tracks'], nml_path,
-                cfg.get('traktor_export_root', ''), cfg.get('traktor_export_volume', 'TRAKTOR_USB'))
-        except (OSError, ET.ParseError) as exc:
-            log_journal({'timestamp': datetime.now().isoformat(),
-                         'action': 'Export NML échoué',
-                         'details': str(exc), 'status': 'error'})
+        if not export_root:
+            nml_error = ('traktor_export_root non configuré — collection.nml non généré. '
+                         'Configure la racine d\'export dans ⚙️ Config puis réexporte.')
+        else:
+            try:
+                nml_out = nml_module.build_export_nml(
+                    pl['tracks'], nml_path, export_root, export_volume, pl_dir)
+            except (OSError, ET.ParseError, ValueError) as exc:
+                nml_error = str(exc)
+                log_journal({'timestamp': datetime.now().isoformat(),
+                             'action': 'Export NML échoué',
+                             'details': str(exc), 'status': 'error'})
+            if nml_out is None:
+                nml_error = ('Aucune piste de la playlist trouvée dans la collection '
+                             '(clé FILE+FILESIZE) — collection.nml non généré.')
+                log_journal({'timestamp': datetime.now().isoformat(),
+                             'action': 'Export NML incomplet',
+                             'details': nml_error, 'status': 'error'})
     if nml_out:
         result['nml'] = nml_out
+    if nml_error:
+        result['nml_error'] = nml_error
 
     return jsonify(result)
 

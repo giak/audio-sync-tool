@@ -25,6 +25,9 @@ let ws: WaveSurfer | null = null;
 let _regions: any = null;
 let _entryRef: CueEntryRef | null = null;
 let _trackPath = '';
+/** hotcue → DISPL_ORDER d'origine (round-trip). wavesurfer perd les metadata custom
+ *  des régions, donc on garde un Map séparé peuplé au chargement des cues. */
+let _displOrders = new Map<number, string>();
 
 const _wired = new WeakSet<Element>();
 
@@ -180,6 +183,8 @@ export async function renderWaveform(path: string, cues: CueDTO[]): Promise<void
   if (!el) return;
   el.innerHTML = '';
   ws = WaveSurfer.create({ container: el, url: `/audio?path=${encodeURIComponent(path)}` });
+  // DISPL_ORDER d'origine : {hotcue → displ_order} — jamais reconstruit depuis le slot (B9).
+  _displOrders = new Map(cues.filter(c => c.hotcue >= 0 && c.hotcue <= 7).map(c => [c.hotcue, c.displ_order]));
   setPlayingUI(false);
   const time = timeEl();
   if (time) time.textContent = '0:00 / 0:00';
@@ -202,6 +207,7 @@ export function destroyCueEditor(): void {
   ws = null;
   _regions = null;
   _entryRef = null;
+  _displOrders = new Map();
   setPlayingUI(false);
   setStatus('');
 }
@@ -235,9 +241,25 @@ export function onSaveClicked(): Promise<void> | void {
   _saving = true;
   const btn = document.getElementById('cue-btn-save') as HTMLButtonElement | null;
   if (btn) btn.disabled = true;
-  const cues = _regions.getRegions().map((r: any) => regionToCue(r));
+  // DISPL_ORDER : les régions wavesurfer ne portent pas la metadata — on restitue
+  // l'ordre d'origine depuis le Map ; pour les nouveaux cues, ordre chronologique
+  // (position triée par start) et non l'index de slot (B9).
+  const regions: Array<{ r: any; known: string | undefined }> = _regions
+    .getRegions()
+    .map((r: any) => ({ r, known: _displOrders.get(r.id) }));
+  let next =
+    regions.reduce((m: number, x: { known: string | undefined }): number => {
+      const v = x.known === undefined ? m : Math.max(m, Number.parseInt(x.known, 10) || 0);
+      return v;
+    }, -1) + 1;
+  const cues = [...regions]
+    .sort((a, b) => a.r.start - b.r.start)
+    .map(({ r, known }) => regionToCue(r, known ?? String(next++)));
   return saveCues(cues)
     .then(() => showToast('✅ sauvegardé'))
     .catch((err: unknown) => showToast(`❌ ${err instanceof Error ? err.message : String(err)}`))
-    .finally(() => { _saving = false; if (btn) btn.disabled = false; });
+    .finally(() => {
+      _saving = false;
+      if (btn) btn.disabled = false;
+    });
 }

@@ -1,6 +1,7 @@
 import os
 import xml.etree.ElementTree as ET
-from nml import load_nml, build_index, get_cues, get_entry_meta, write_cues, save_nml
+import pytest
+from nml import load_nml, build_index, get_cues, get_entry_meta, write_cues, save_nml, build_export_nml
 
 DATA = os.path.join('tests', 'fixtures', 'nml-sample.xml')
 
@@ -112,3 +113,65 @@ def test_traktor_dir():
     from nml import traktor_dir
     assert traktor_dir('Mix/Folder', 'TRAKTOR_USB') == '/:TRAKTOR_USB/:Mix/:Folder/:'
     assert traktor_dir('', 'TRAKTOR_USB') == '/:TRAKTOR_USB/:'
+def _copy_fixture(tmp_path, name='c.nml'):
+    dst = tmp_path / name
+    dst.write_text(open(DATA).read(), encoding='utf-8')
+    return str(dst)
+
+
+def test_build_export_nml_rewrites_location(tmp_path):
+    """B8 : DIR calculé depuis l'emplacement RÉEL des fichiers exportés (pl_dir),
+    pas depuis le chemin source original. VOLUME + VOLUMEID réécrits."""
+    nml_path = _copy_fixture(tmp_path)
+    export_root = tmp_path / 'export'
+    pl_dir = export_root / '_playlists' / 'mon-set'
+    local = tmp_path / 'Carbon Decay - In The Warehouse.mp3'
+    local.write_bytes(b'x' * 5243)  # FILESIZE réel de la fixture
+
+    out = build_export_nml(
+        [{'filename': 'Carbon Decay - In The Warehouse.mp3', 'fullPath': str(local)}],
+        nml_path, str(export_root), 'TRAKTOR_USB', str(pl_dir))
+
+    assert out == str(export_root / 'collection.nml')
+    tree = load_nml(out)
+    entries = tree.getroot().findall('./COLLECTION/ENTRY')
+    assert len(entries) == 1
+    loc = entries[0].find('LOCATION')
+    assert loc.get('DIR') == '/:TRAKTOR_USB/:_playlists/:mon-set/:'
+    assert loc.get('VOLUME') == 'TRAKTOR_USB'
+    assert loc.get('VOLUMEID') == 'ffffffff'
+    # FILE inchangé
+    assert loc.get('FILE') == 'Carbon Decay - In The Warehouse.mp3'
+
+
+def test_build_export_nml_dir_at_root(tmp_path):
+    """pl_dir == export_root → DIR = '/:VOLUME/:'. (fichiers à la racine du volume)"""
+    nml_path = _copy_fixture(tmp_path)
+    export_root = tmp_path / 'export'
+    local = tmp_path / 'Carbon Decay - In The Warehouse.mp3'
+    local.write_bytes(b'x' * 5243)
+
+    out = build_export_nml(
+        [{'filename': 'Carbon Decay - In The Warehouse.mp3', 'fullPath': str(local)}],
+        nml_path, str(export_root), 'TRAKTOR_USB', str(export_root))
+
+    tree = load_nml(out)
+    loc = tree.getroot().find('./COLLECTION/ENTRY/LOCATION')
+    assert loc.get('DIR') == '/:TRAKTOR_USB/:'
+
+
+def test_build_export_nml_requires_export_root(tmp_path):
+    """B8 : export_root vide → ValueError explicite (plus d'échec silencieux
+    silencieux via os.makedirs(''))."""
+    nml_path = _copy_fixture(tmp_path)
+    with pytest.raises(ValueError, match='traktor_export_root'):
+        build_export_nml([], nml_path, '', 'TRAKTOR_USB', str(tmp_path))
+
+
+def test_build_export_nml_requires_pl_dir_under_root(tmp_path):
+    """pl_dir hors de export_root → ValueError explicite."""
+    nml_path = _copy_fixture(tmp_path)
+    export_root = tmp_path / 'export'
+    outside = tmp_path / 'ailleurs'  # PAS sous export_root
+    with pytest.raises(ValueError, match='n\'est pas sous la racine'):
+        build_export_nml([], nml_path, str(export_root), 'TRAKTOR_USB', str(outside))

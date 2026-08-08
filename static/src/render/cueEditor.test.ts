@@ -267,6 +267,68 @@ describe('render/cueEditor sélecteur homonymes', () => {
     expect(body.filename).toBe('t.mp3');
   });
 
+  it('préserve DISPL_ORDER des cues existants au round-trip (B9)', async () => {
+    const ws = makeWS();
+    // Les régions chargées à partir des cues : hotcue 2 → displ_order 7, hotcue 3 → 2.
+    ws.regions.getRegions = vi.fn(() => [
+      { id: 2, start: 5, end: 5.08 },
+      { id: 3, start: 10, end: 10.08 },
+    ]);
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [
+        {
+          filename: 'a.mp3',
+          filesize: '1',
+          artist: 'X',
+          title: 'Y',
+          cues: [
+            { type: '0', start: 5, len: 0, hotcue: 2, name: 'n.n.', displ_order: '7' },
+            { type: '0', start: 10, len: 0, hotcue: 3, name: 'n.n.', displ_order: '2' },
+          ],
+        },
+      ],
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    mockApi.mockResolvedValueOnce({ ok: true });
+    await onSaveClicked();
+    const call = mockApi.mock.calls.find(([u]: [string]) => u === '/api/track/cues');
+    expect(call).toBeDefined();
+    const body = JSON.parse((call[1] as { body: string }).body);
+    const orders = new Map(body.cues.map((c: { hotcue: number; displ_order: string }) => [c.hotcue, c.displ_order]));
+    expect(orders.get(2)).toBe('7');
+    expect(orders.get(3)).toBe('2');
+  });
+
+  it("attribue un ordre chronologique aux nouveaux cues, pas l'index de slot (B9)", async () => {
+    const ws = makeWS();
+    ws.regions.getRegions = vi.fn(() => [
+      { id: 7, start: 60, end: 60.08 }, // slot H posé à 60s
+      { id: 0, start: 10, end: 10.08 }, // slot A posé à 10s
+    ]);
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    mockApi.mockResolvedValueOnce({ ok: true });
+    await onSaveClicked();
+    const call = mockApi.mock.calls.find(([u]: [string]) => u === '/api/track/cues');
+    const body = JSON.parse((call[1] as { body: string }).body);
+    // Tri par start : slot A (10s) avant slot H (60s) — ordre chronologique, PAS hotcue.
+    expect(body.cues[0].hotcue).toBe(0);
+    expect(body.cues[0].displ_order).toBe('0');
+    expect(body.cues[1].hotcue).toBe(7);
+    expect(body.cues[1].displ_order).toBe('1');
+  });
+});
+
 describe('render/cueEditor transport (play/pause + temps, B4)', () => {
   beforeEach(resetMocks);
 

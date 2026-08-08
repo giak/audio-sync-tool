@@ -39,7 +39,10 @@ export function cuesToRegions(cues: CueDTO[]): Array<{ start: number; end: numbe
   );
 }
 
-export function regionToCue(r: { start: number; end: number; id: number; color?: string }): CueDTO {
+export function regionToCue(
+  r: { start: number; end: number; id: number; color?: string },
+  displOrder?: string,
+): CueDTO {
   const isLoop = r.end - r.start > 0.1;
   return {
     type: isLoop ? '5' : '0',
@@ -47,7 +50,10 @@ export function regionToCue(r: { start: number; end: number; id: number; color?:
     len: isLoop ? Number((r.end - r.start).toFixed(6)) : 0,
     hotcue: r.id,
     name: 'n.n.',
-    displ_order: String(r.id),
+    // Ne jamais reconstruire DISPL_ORDER depuis HOTCUE (décision audit NML).
+    // On restitue la valeur d'origine quand elle est connue (round-trip),
+    // sinon ordre par défaut '0' pour un nouveau cue.
+    displ_order: displOrder ?? '0',
     color: r.color,
   };
 }
