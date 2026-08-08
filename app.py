@@ -630,3 +630,52 @@ def update_or_delete_playlist(name):
 
 if __name__ == '__main__':
     app.run(debug=True, threaded=True, port=8765)
+
+
+@app.route('/api/track/cues', methods=['POST'])
+def track_cues():
+    data = request.json
+    if not data or 'cues' not in data:
+        return jsonify({'ok': False, 'error': 'cues manquant'}), 400
+    filename = data.get('filename', '')
+    filesize = data.get('filesize', '')
+    if not filename:
+        return jsonify({'ok': False, 'error': 'filename manquant'}), 400
+    tree, idx, path = get_nml_index()
+    if not tree:
+        return jsonify({'ok': False, 'error': 'NML non configuré'}), 400
+    hits = idx.get((filename, filesize))
+    if not hits:
+        return jsonify({'ok': False, 'error': 'ENTRY introuvable'}), 404
+    sel = data.get('entry')
+    if sel is None:
+        if len(hits) > 1:
+            infos = [nml_module.get_entry_meta(e) for e in hits]
+            return jsonify({'ok': False, 'error': 'multiple', 'entries': infos}), 409
+        entry = hits[0]
+    else:
+        try:
+            entry = hits[int(sel)]
+        except (ValueError, IndexError):
+            return jsonify({'ok': False, 'error': 'entry invalide'}), 400
+    cues = []
+    for c in data['cues']:
+        if not isinstance(c, dict) or not any(k in c for k in ('type', 'start')):
+            return jsonify({'ok': False, 'error': 'cue invalide'}), 400
+        cues.append({'type': str(c.get('type', '0')),
+                     'start': str(c.get('start', '0.0')),
+                     'len': str(c.get('len', '0.000000')),
+                     'hotcue': int(c.get('hotcue', -1)),
+                     'name': str(c.get('name', 'n.n.')),
+                     'displ_order': str(c.get('displ_order', '0')),
+                     'color': c.get('color', '')})
+    nml_module.write_cues(entry, cues)
+    try:
+        nml_module.save_nml(path, tree)
+    except OSError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    log_journal({'timestamp': datetime.now().isoformat(),
+                 'action': 'Cues/loops enregistrés',
+                 'filename': filename, 'details': f'{len(cues)} cues',
+                 'status': 'cues'})
+    return jsonify({'ok': True})

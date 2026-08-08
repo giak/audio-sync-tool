@@ -3,6 +3,7 @@ import os
 import struct
 import tempfile
 import pytest
+from xml.etree import ElementTree as ET
 from app import app, get_audio_meta, log_journal, save_json, load_json, index_files, get_active_config, is_path_allowed
 
 
@@ -1382,3 +1383,49 @@ def test_track_match_single(client, tmp_path, monkeypatch):
     assert len(data['entries']) == 1
     assert data['multiple'] is False
     assert data['entries'][0]['filename'] == filename
+
+
+def test_cues_write_ok(client, tmp_path, monkeypatch):
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    filename = 'Carbon Decay - In The Warehouse.mp3'
+    filesize = 5243
+    local = tmp_path / filename
+    local.write_bytes(b'x' * filesize)
+    rv = client.post('/api/track/cues', json={
+        'path': str(local),
+        'filename': filename,
+        'filesize': str(filesize),
+        'cues': [{'type': '0', 'start': '10.0', 'len': '0.000000', 'hotcue': 0,
+                  'name': 'n.n.', 'displ_order': '0'}]
+    })
+    assert rv.status_code == 200
+    data = rv.get_json()
+    assert data['ok'] is True
+    assert (tmp_path / 'c.nml.bak.nml').exists()
+
+
+def test_cues_post_409_multiple(client, tmp_path, monkeypatch):
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    monkeypatch.setattr('app.get_active_config', lambda: {'traktor_nml_path': str(nml_path)})
+    # index ambigu : 2 ENTRIES de même (FILE, FILESIZE)
+    import nml
+    tree = nml.load_nml(str(nml_path))
+    coll = tree.getroot().find('./COLLECTION')
+    for i in range(2):
+        e = ET.SubElement(coll, 'ENTRY', {'ARTIST': 'A', 'TITLE': f'T{i}', 'TYPE': 'TRACK'})
+        ET.SubElement(e, 'LOCATION', {'DIR': '/:', 'FILE': 'DUP.mp3', 'VOLUME': 'X'})
+        ET.SubElement(e, 'INFO', {'FILESIZE': '1'})
+    nml.save_nml(str(nml_path), tree)
+
+    rv = client.post('/api/track/cues', json={
+        'path': str(tmp_path/'x.mp3'), 'filename': 'DUP.mp3', 'filesize': '1',
+        'cues': [{'type': '0', 'start': '0', 'len':'0', 'hotcue': 0}]
+    })
+    assert rv.status_code == 409
+    data = rv.get_json()
+    assert data['ok'] is False
+    assert data['error'] == 'multiple'
+    assert len(data['entries']) == 2
