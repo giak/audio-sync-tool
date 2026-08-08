@@ -1429,3 +1429,24 @@ def test_cues_post_409_multiple(client, tmp_path, monkeypatch):
     assert data['ok'] is False
     assert data['error'] == 'multiple'
     assert len(data['entries']) == 2
+
+
+def test_export_nml_written(client, tmp_path, monkeypatch):
+    nml_path = tmp_path / 'c.nml'
+    nml_path.write_text(open('tests/fixtures/nml-sample.xml').read())
+    export_root = tmp_path / 'export'
+    monkeypatch.setattr('app.get_active_config', lambda: {
+        'traktor_nml_path': str(nml_path),
+        'traktor_export_root': str(export_root),
+        'traktor_export_volume': 'TRAKTOR_USB',
+        'source_data': str(tmp_path)})
+    pl_name = 'pl'
+    client.post('/playlists', json={'name': pl_name, 'tracks': [
+        {'filename': 'Carbon Decay - In The Warehouse.mp3',
+         'fullPath': str(tmp_path / 'Carbon Decay - In The Warehouse.mp3'),
+         'duration': 132}]})
+    (tmp_path / 'Carbon Decay - In The Warehouse.mp3').write_bytes(b'x' * 5243)
+    rv = client.post('/playlists/export', json={'name': pl_name})
+    assert rv.status_code == 200
+    assert os.path.exists(export_root / 'collection.nml')
+    assert '<NML' in (export_root / 'collection.nml').read_text()

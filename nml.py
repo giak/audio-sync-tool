@@ -115,3 +115,58 @@ def save_nml(path, tree, backup=True):
     if backup and os.path.exists(path):
         _copy_file(path, path + '.bak.nml')
     _write_xml(path, tree)
+
+
+def traktor_dir(relpath, volume):
+    parts = [p for p in relpath.strip('/').split('/') if p]
+    seg = [volume] + parts
+    return '/:' + '/:'.join(seg) + '/:'
+
+
+def build_export_nml(playlist_tracks, nml_path, export_root, volume):
+    """Écrit export_root/collection.nml : ENTRIES de la playlist, LOCATION réécrites.
+
+    Match : clé (FILE, FILESIZE) — basename de la piste + os.path.getsize du fichier
+    local. Multi-match : premier hit (l'UI a déjà tranché la même clé au moment de
+    l'édition — même série de hits, ordre stable). Retourne le chemin écrit, ou None
+    si aucune piste ne matche."""
+    tree = load_nml(nml_path)
+    root = tree.getroot()
+    coll = root.find('./COLLECTION')
+    if coll is None:
+        return None
+    index = build_index(tree)
+    wanted = {}
+    for t in playlist_tracks:
+        fn = t.get('filename', '')
+        local = t.get('fullPath', '')
+        size = str(os.path.getsize(local)) if local and os.path.exists(local) else ''
+        hits = index.get((fn, size), [])
+        if not hits and size:
+            hits = index.get((fn, ''), [])
+        if not hits:
+            continue
+        e = hits[0]
+        rel = os.path.relpath(os.path.dirname(local), export_root) if local else ''
+        loc = e.find('LOCATION')
+        if loc is not None:
+            loc.set('DIR', traktor_dir(rel if rel and rel != '.' else '', volume))
+            loc.set('VOLUME', volume)
+            if loc.get('VOLUMEID'):
+                loc.set('VOLUMEID', 'ffffffff')
+        wanted[fn] = e
+    entries = [wanted[fn] for fn in [t['filename'] for t in playlist_tracks] if fn in wanted]
+    if not entries:
+        return None
+    new_coll = ET.Element('COLLECTION', attrib={'ENTRIES': str(len(entries))})
+    for e in entries:
+        new_coll.append(e)
+    new_root = ET.Element('NML', attrib={'VERSION': '20'})
+    head = ET.SubElement(new_root, 'HEAD')
+    head.set('COMPANY', 'www.native-instruments.com')
+    head.set('PROGRAM', 'Traktor Pro 4')
+    new_root.append(new_coll)
+    os.makedirs(export_root, exist_ok=True)
+    out = os.path.join(export_root, 'collection.nml')
+    _write_xml(out, ET.ElementTree(new_root))  # export pur : pas de backup
+    return out

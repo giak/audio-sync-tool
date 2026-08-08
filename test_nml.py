@@ -84,3 +84,9 @@ def test_save_nml_header_and_half_not_commit(tmp_path):
     save_nml(str(dst), tree)
     raw = dst.read_text(encoding='utf-8')
     assert '<?xml version="1.0" encoding="UTF-8" standalone="no" ?>' in raw
+
+
+def test_traktor_dir():
+    from nml import traktor_dir
+    assert traktor_dir('Mix/Folder', 'TRAKTOR_USB') == '/:TRAKTOR_USB/:Mix/:Folder/:'
+    assert traktor_dir('', 'TRAKTOR_USB') == '/:TRAKTOR_USB/:'

@@ -583,6 +583,21 @@ def export_playlist():
         result['fallback'] = 'copy'
         result['warning'] = 'Certains fichiers ont été copiés (hard link impossible entre disques différents)'
 
+    cfg = get_active_config()
+    nml_path = cfg.get('traktor_nml_path', '')
+    nml_out = None
+    if nml_path and os.path.exists(nml_path):
+        try:
+            nml_out = nml_module.build_export_nml(
+                pl['tracks'], nml_path,
+                cfg.get('traktor_export_root', ''), cfg.get('traktor_export_volume', 'TRAKTOR_USB'))
+        except (OSError, ET.ParseError) as exc:
+            log_journal({'timestamp': datetime.now().isoformat(),
+                         'action': 'Export NML échoué',
+                         'details': str(exc), 'status': 'error'})
+    if nml_out:
+        result['nml'] = nml_out
+
     return jsonify(result)
 
 
