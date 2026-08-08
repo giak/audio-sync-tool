@@ -851,9 +851,32 @@ header h1 {
   position: absolute; inset: 0;
   pointer-events: none;
   overflow: hidden;
+  z-index: 2; /* au-dessus de la bande basse (1), sous les régions (5) */
 }
 .cue-grid-line {
   position: absolute; top: 0; bottom: 0; width: 1px;
   background: rgba(0, 212, 255, 0.15);
 }
 .cue-grid-line.strong { width: 2px; background: rgba(0, 212, 255, 0.35); }
+/* Numéros de barre (EPIC-012) : en tête des lignes fortes (tous les 4 beats). */
+.cue-bar-num {
+  position: absolute; top: 2px; left: 3px;
+  font-size: 9px; line-height: 1;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+/* Bande d'énergie basse (EPIC-012) : strip 24px sous la waveform, sous la grille. */
+#cue-editor-bassband {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 24px;
+  display: flex; align-items: flex-end;
+  gap: 1px;
+  padding: 0 1px;
+  pointer-events: none;
+  z-index: 1; /* sous la grille (z-index 2) et les régions (5) */
+}
+#cue-editor-bassband .bass-bar {
+  flex: 1 1 0;
+  background: rgba(0, 212, 255, 0.18);
+  min-height: 1px;
+  border-radius: 1px;
+}

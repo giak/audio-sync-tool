@@ -51,6 +51,7 @@ interface MockWS {
   play: ReturnType<typeof vi.fn>;
   pause: ReturnType<typeof vi.fn>;
   playPause: ReturnType<typeof vi.fn>;
+  getDecodedData: ReturnType<typeof vi.fn>;
   regions: {
     addRegion: ReturnType<typeof vi.fn>;
     getRegions: ReturnType<typeof vi.fn>;
@@ -93,6 +94,9 @@ function makeWS(overrides: Record<string, unknown> = {}): MockWS {
     play: vi.fn(),
     pause: vi.fn(),
     playPause: vi.fn(),
+    // EPIC-012 : bande basse calculée depuis le buffer décodé. Par défaut null
+    // (aucun décodage) → la bande reste vide sans erreur (best-effort).
+    getDecodedData: vi.fn(() => null),
     regions,
     ...overrides,
   };
@@ -1660,5 +1664,113 @@ describe('render/cueEditor écriture grille NML (EPIC-011)', () => {
     await writeGridToCollection();
     const badge = document.getElementById('cue-bpm-badge') as HTMLElement;
     expect(badge.textContent).toBe('NML');
+  });
+});
+
+describe('render/cueEditor bande basse + numéros de barre (EPIC-012)', () => {
+  beforeEach(resetMocks);
+
+  function openSingle(): MockWS {
+    const ws = makeWS();
+    mockWSCreate.mockReturnValue(ws);
+    mockApi.mockResolvedValueOnce({ configured: true }).mockResolvedValueOnce({
+      ok: true,
+      multiple: false,
+      entries: [{ filename: 'a.mp3', filesize: '1', artist: 'X', title: 'Y', cues: [] }],
+    });
+    return ws;
+  }
+
+  function fakeBuffer(seconds = 8, sr = 44100): { sampleRate: number; getChannelData: () => Float32Array } {
+    const n = seconds * sr;
+    // Signal : kicks périodiques à 60 Hz toutes les 0.5 s (énergie non nulle).
+    const data = new Float32Array(n);
+    for (let t = 0; t < seconds; t += 0.5) {
+      const start = Math.round(t * sr);
+      for (let i = 0; i < sr * 0.05; i++) {
+        data[start + i] = 0.8 * Math.sin((2 * Math.PI * 60 * i) / sr);
+      }
+    }
+    return { sampleRate: sr, getChannelData: () => data };
+  }
+
+  it('rend la bande basse au ready quand le buffer décodé est disponible', async () => {
+    const ws = openSingle();
+    (ws.getDecodedData as ReturnType<typeof vi.fn>).mockReturnValue(fakeBuffer());
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0)); // bande calculée en setTimeout(0)
+    const band = document.getElementById('cue-editor-bassband');
+    expect(band).not.toBeNull();
+    const bars = band!.querySelectorAll('.bass-bar');
+    expect(bars.length).toBe(160); // barCount par défaut
+    const heights = Array.from(bars).map(b => (b as HTMLElement).style.height);
+    expect(heights.some(h => h !== '2%')).toBe(true); // au moins une barre énergétique
+  });
+
+  it('pas de bande (ni erreur) quand le buffer décodé est indisponible', async () => {
+    const ws = openSingle(); // getDecodedData → null par défaut
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    const band = document.getElementById('cue-editor-bassband');
+    expect(band).toBeNull(); // jamais créé : best-effort silencieux
+  });
+
+  it('un buffer trop court ne casse rien', async () => {
+    const ws = openSingle();
+    (ws.getDecodedData as ReturnType<typeof vi.fn>).mockReturnValue({
+      sampleRate: 44100,
+      getChannelData: () => new Float32Array(1000),
+    });
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    expect(document.getElementById('cue-editor-bassband')).toBeNull();
+  });
+
+  it('numéros de barre sur les lignes fortes (tous les 4 beats)', async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    // 100 s à 120 BPM → 201 beats, barres de 2 s → espacement 2 % ≥ 1.5 % → numéros affichés.
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '120';
+    bpm.dispatchEvent(new Event('input'));
+    const grid = document.getElementById('cue-editor-grid');
+    const lines = grid!.querySelectorAll('.cue-grid-line');
+    expect(lines.length).toBe(201);
+    const strong = grid!.querySelectorAll('.cue-grid-line.strong');
+    expect(strong.length).toBe(51); // 0,4,8,…200
+    const nums = grid!.querySelectorAll('.cue-bar-num');
+    expect(nums.length).toBe(51);
+    expect(nums[0].textContent).toBe('1');
+    expect(nums[1].textContent).toBe('2');
+    expect(nums[50].textContent).toBe('51');
+    // Premier numéro calé à 0 % (phase 0) — aligné sur la grille.
+    expect((strong[0] as HTMLElement).style.left).toBe('0%');
+  });
+
+  it('pas de numéros quand les barres sont trop serrées (illisible)', async () => {
+    const ws = openSingle();
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    // 100 s à 300 BPM → barres de 0.8 s → 0.8 % < 1.5 % → pas de numéros.
+    const bpm = document.getElementById('cue-bpm') as HTMLInputElement;
+    bpm.value = '300';
+    bpm.dispatchEvent(new Event('input'));
+    const grid = document.getElementById('cue-editor-grid');
+    expect(grid!.querySelectorAll('.cue-bar-num').length).toBe(0);
+    expect(grid!.querySelectorAll('.cue-grid-line.strong').length).toBeGreaterThan(0);
+  });
+
+  it('fermer la modal vide la bande (reset lifecycle)', async () => {
+    const ws = openSingle();
+    (ws.getDecodedData as ReturnType<typeof vi.fn>).mockReturnValue(fakeBuffer());
+    await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
+    ws.emit('ready');
+    await new Promise(r => setTimeout(r, 0)); // bande calculée en setTimeout(0)
+    const band = document.getElementById('cue-editor-bassband');
+    expect(band!.querySelectorAll('.bass-bar').length).toBe(160);
+    mockState.setModal(null); // fermeture → destroyCueEditor
+    expect(band!.querySelectorAll('.bass-bar').length).toBe(0);
   });
 });

@@ -2,6 +2,7 @@
 import WaveSurfer from 'wavesurfer.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
 import { api } from '../api.js';
+import { computeBassBand } from '../bassband.js';
 import { beatInterval, buildBeats, detectBPMFromUrl, snapToBeat } from '../beatgrid.js';
 import type { CueDTO } from '../cueModel.js';
 import { cuesToRegions, hotToLabel, regionToCue } from '../cueModel.js';
@@ -53,6 +54,9 @@ let _beat1Mode = false;
 let _confidence: number | null = null;
 /** Analyse serveur en cours (bouton 🔍 Analyser) — évite le double clic. */
 let _analyzing = false;
+/** Bande d'énergie basse 40-150 Hz (EPIC-012) — barres 0..1 pour valider le calage à l'œil.
+ *  Calculée côté client depuis le buffer décodé de wavesurfer (zéro réseau, best-effort). */
+let _bassBand: number[] = [];
 
 const _wired = new WeakSet<Element>();
 
@@ -268,12 +272,64 @@ function renderGrid(): void {
   gridEl.innerHTML = '';
   const duration = ws?.getDuration() || 0;
   if (_grid.length === 0 || duration <= 0) return;
+  // Espacement entre barres en % du conteneur : en dessous, les numéros se
+  // chevaucheraient → on ne les affiche que si lisible (EPIC-012).
+  // _bpm est non nul ici : _grid n'est peuplé que depuis un BPM valide.
+  const barWidthPct = ((4 * beatInterval(_bpm!)) / duration) * 100;
+  const showBarNums = barWidthPct >= 1.5;
   for (let i = 0; i < _grid.length; i++) {
     const line = document.createElement('div');
     line.className = `cue-grid-line${i % 4 === 0 ? ' strong' : ''}`;
     line.style.left = `${(_grid[i] / duration) * 100}%`;
+    if (i % 4 === 0 && showBarNums) {
+      const num = document.createElement('span');
+      num.className = 'cue-bar-num';
+      num.textContent = String(i / 4 + 1);
+      line.appendChild(num);
+    }
     gridEl.appendChild(line);
   }
+}
+
+/** Bande d'énergie basse (EPIC-012) : calcule et affiche les barres 0..1 sous la
+ *  waveform, depuis le buffer décodé de wavesurfer. Best-effort : un buffer
+ *  indisponible (mock, échec de décodage) laisse la bande vide sans erreur. */
+function loadBassBand(): void {
+  try {
+    const buf = ws?.getDecodedData();
+    if (!buf) return;
+    const ch = buf.getChannelData(0);
+    _bassBand = computeBassBand(ch, buf.sampleRate);
+  } catch {
+    _bassBand = [];
+  }
+  renderBassBand();
+}
+
+/** Dessine la bande basse sous la waveform (24px, sous la grille, pointer-events none). */
+function renderBassBand(): void {
+  const wave = document.getElementById('cue-editor-waveform') as HTMLElement | null;
+  if (!wave) return;
+  if (_bassBand.length === 0) {
+    // Aucune donnée (buffer indisponible/trop court) : pas de bande, ni vide ni fantôme.
+    document.getElementById('cue-editor-bassband')?.remove();
+    return;
+  }
+  let bandEl = document.getElementById('cue-editor-bassband') as HTMLElement | null;
+  if (!bandEl) {
+    bandEl = document.createElement('div');
+    bandEl.id = 'cue-editor-bassband';
+    wave.appendChild(bandEl);
+  }
+  bandEl.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  for (const v of _bassBand) {
+    const bar = document.createElement('i');
+    bar.className = 'bass-bar';
+    bar.style.height = `${Math.max(2, Math.round(v * 100))}%`;
+    frag.appendChild(bar);
+  }
+  bandEl.appendChild(frag);
 }
 
 /** Persiste la grille courante {bpm, phase, source} dans le cache serveur
@@ -864,6 +920,9 @@ export async function renderWaveform(
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = '🔍 Analyser';
   }
+  _bassBand = [];
+  const bandEl = document.getElementById('cue-editor-bassband');
+  if (bandEl) bandEl.innerHTML = '';
   const bpmInput = bpmInputEl();
   if (bpmInput) bpmInput.value = '';
   // DISPL_ORDER d'origine : {hotcue → displ_order} — jamais reconstruit depuis le slot (B9).
@@ -943,6 +1002,9 @@ export async function renderWaveform(
       rebuildGrid();
     }
     void loadCachedGrid();
+    // Bande d'énergie basse (EPIC-012) : calcul O(n) différé (setTimeout 0) pour
+    // ne pas bloquer le rendu initial sur les longues pistes ; best-effort.
+    setTimeout(() => loadBassBand(), 0);
   });
   ws.on('play', () => setPlayingUI(true));
   ws.on('pause', () => setPlayingUI(false));
@@ -988,6 +1050,9 @@ export function destroyCueEditor(): void {
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = '🔍 Analyser';
   }
+  _bassBand = [];
+  const bandEl = document.getElementById('cue-editor-bassband');
+  if (bandEl) bandEl.innerHTML = '';
   const bpmInput = bpmInputEl();
   if (bpmInput) bpmInput.value = '';
   // Sort du plein écran si la modal se ferme dans cet état.
