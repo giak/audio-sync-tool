@@ -217,6 +217,31 @@
   </div>
 </div>
 
+<!-- Cue editor modal -->
+<div id="modal-cue-editor" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content modal-lg">
+    <div class="modal-header">
+      <h3>⌿ Éditeur cues / loops — <span id="cue-editor-title"></span></h3>
+      <button class="modal-close" data-modal="cueEditor">✕</button>
+    </div>
+    <div id="cue-editor-status"></div>
+    <div id="cue-editor-waveform"></div>
+    <div id="cue-editor-controls">
+      <span class="cue-slot" data-slot="0">A</span>
+      <span class="cue-slot" data-slot="1">B</span>
+      <span class="cue-slot" data-slot="2">C</span>
+      <span class="cue-slot" data-slot="3">D</span>
+      <span class="cue-slot" data-slot="4">E</span>
+      <span class="cue-slot" data-slot="5">F</span>
+      <span class="cue-slot" data-slot="6">G</span>
+      <span class="cue-slot" data-slot="7">H</span>
+      <span class="cue-slot-sep"></span>
+      <button id="cue-btn-save">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="/static/dist/script.js?v={{ cache_buster }}"></script>
 </body>
 </html>
