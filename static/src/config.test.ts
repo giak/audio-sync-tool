@@ -8,6 +8,7 @@ vi.hoisted(() => {
     <select id="cfg-select"></select>
     <input id="cfg-name" value="">
     <input id="cfg-source" value="">
+    <input id="cfg-traktor-nml-path" value="">
     <textarea id="cfg-epars"></textarea>
     <span id="config-status"></span>
     <button id="btn-add-config"></button>
@@ -114,6 +115,37 @@ describe('initConfigUI', () => {
     expect(configData.active).toBe(0);
     expect(api).toHaveBeenCalledWith('/config', expect.objectContaining({ method: 'POST' }));
     expect(document.getElementById('config-status')!.textContent).toContain('✓');
+  });
+
+  it('saveConfig stores traktor_nml_path without erasing other keys', async () => {
+    vi.mocked(api).mockResolvedValueOnce({ ok: true });
+    (document.getElementById('cfg-name') as HTMLInputElement).value = 'travail';
+    (document.getElementById('cfg-source') as HTMLInputElement).value = '/src';
+    (document.getElementById('cfg-epars') as HTMLTextAreaElement).value = '/ep1';
+    (document.getElementById('cfg-traktor-nml-path') as HTMLInputElement).value = '/data/collection.nml';
+    const select = document.getElementById('cfg-select') as HTMLSelectElement;
+    select.innerHTML = '<option value="0">travail</option>';
+    select.value = '0';
+    configData.active = 0;
+    configData.configs = [{ name: 'old', source_data: '/old', epars_dirs: ['/ep1'], traktor_nml_path: '' }];
+    initConfigUI();
+    document.getElementById('btn-save-config')!.click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(configData.configs[0].traktor_nml_path).toBe('/data/collection.nml');
+    expect(configData.configs[0].name).toBe('travail');
+    expect(configData.configs[0].source_data).toBe('/src');
+    expect(configData.configs[0].epars_dirs).toEqual(['/ep1']);
+  });
+
+  it('loadActiveConfig fills traktor_nml_path field', () => {
+    configData.configs = [
+      { name: 'travail', source_data: '/src', epars_dirs: [], traktor_nml_path: '/x/collection.nml' },
+    ];
+    const select = document.getElementById('cfg-select') as HTMLSelectElement;
+    select.innerHTML = '<option value="0">travail</option>';
+    select.value = '0';
+    renderConfigSelect();
+    expect((document.getElementById('cfg-traktor-nml-path') as HTMLInputElement).value).toBe('/x/collection.nml');
   });
 
   it('renderConfigSelect handles empty configs gracefully', () => {

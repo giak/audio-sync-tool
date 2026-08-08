@@ -1450,3 +1450,12 @@ def test_export_nml_written(client, tmp_path, monkeypatch):
     assert rv.status_code == 200
     assert os.path.exists(export_root / 'collection.nml')
     assert '<NML' in (export_root / 'collection.nml').read_text()
+
+
+def test_config_preserves_traktor_nml_path(client):
+    payload = make_cfg(source_data='/src')
+    payload['configs'][0]['traktor_nml_path'] = '/data/collection.nml'
+    assert client.post('/config', json=payload).status_code == 200
+    rv = client.get('/config')
+    assert rv.status_code == 200
+    assert rv.json['configs'][0]['traktor_nml_path'] == '/data/collection.nml'

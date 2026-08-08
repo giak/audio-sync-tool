@@ -570,6 +570,11 @@ header h1 {
 .pl-track-duration { font-size: 12px; color: var(--text-secondary); min-width: 36px; text-align: right; flex-shrink: 0; }
 .pl-track-remove { color: var(--text-muted); cursor: pointer; padding: 0 4px; font-size: 12px; flex-shrink: 0; border-radius: 2px; }
 .pl-track-remove:hover { color: var(--led-red); background: var(--bg-hover); }
+.cue-btn {
+  color: var(--text-muted); cursor: pointer; padding: 0 4px; font-size: 13px;
+  flex-shrink: 0; border-radius: 2px; background: none; border: none; line-height: 1;
+}
+.cue-btn:hover { color: var(--accent); background: var(--bg-hover); }
 
 /* Ratings */
 .pl-track-rating {
