@@ -1060,11 +1060,11 @@ npm start
 
 ## Self-Review (doit être fait au moment du run)
 
-- [ ] Spec couverte : §2.1 config ✓ (Task 3) ; §2.2 nml.py ✓ ; §2.3 endpoints ✓ ; §3.1-3.2 frontend ✓ ;
+- [x] Spec couverte : §2.1 config ✓ (Task 3) ; §2.2 nml.py ✓ ; §2.3 endpoints ✓ ; §3.1-3.2 frontend ✓ ;
   §4 robustesse : multi-match ✓ (Task 8), écriture atomique ✓, EXDEV géré par export existant ✓ ;
   §5 tests ✓ (pytest+vitest+manuel).
-- [ ] Pas de placeholders : tout le code tâche par tâche est donné (les « … » volontaires du fichier
+- [x] Pas de placeholders : tout le code tâche par tâche est donné (les « … » volontaires du fichier
   template HTML sont des boutons à compléter par le pattern existant).
-- [ ] Type consistency : `get_cues` → list de dict `{type,start,len,hotcue,name,displ_order,color}` ;
+- [x] Type consistency : `get_cues` → list de dict `{type,start,len,hotcue,name,displ_order,color}` ;
   `write_cues(entry, cues)` — même shape. Front `CueDTO` aligné (`type: str, start:number, len:number,
   hotcue:number, name:string, displ_order:string`).
