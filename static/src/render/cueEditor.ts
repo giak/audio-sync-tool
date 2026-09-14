@@ -992,6 +992,8 @@ function storedIndex(filename: string): number {
 }
 
 export async function openCueEditor(track: PlaylistTrackLite): Promise<void> {
+  state.lastCueTrack = track;
+  document.getElementById('page-cue')?.removeAttribute('disabled');
   const status = await api<{ configured: boolean }>('/api/nml/status');
   if (!status.configured) {
     showToast('⚠️ Configurer traktor_nml_path pour éditer les cues');

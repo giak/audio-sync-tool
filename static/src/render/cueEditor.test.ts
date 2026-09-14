@@ -19,6 +19,7 @@ const mockState = vi.hoisted(() => {
       if (modal) modal.classList.toggle('hidden', v !== 'cueEditor');
       for (const fn of listeners['activeModal:changed'] ?? []) fn();
     },
+    lastCueTrack: null as { filename: string; fullPath: string } | null,
   };
 });
 const mockWSCreate = vi.hoisted(() => vi.fn());
@@ -173,6 +174,7 @@ const MODAL_HTML = `
         <button id="cue-meta-ok">OK</button>
         <button id="cue-meta-cancel">Annuler</button>
       </div>
+      <button id="page-cue" disabled></button>
     </div>
   </div>
 `;
@@ -184,6 +186,7 @@ function resetMocks(): void {
   mockRegionsCreate.mockReset();
   mockMinimapCreate.mockReset();
   mockState.activeModal = null;
+  mockState.lastCueTrack = null;
 }
 
 describe('render/cueEditor scaffold', () => {
@@ -282,6 +285,18 @@ describe('render/cueEditor scaffold', () => {
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     expect(mockState.activeModal).toBeNull();
     expect(showToast).toHaveBeenCalledWith('⚠️ fichier introuvable');
+  });
+
+  it('mémorise lastCueTrack et active #page-cue lors de l\'ouverture', async () => {
+    mockWSCreate.mockReturnValue(makeWS());
+    mockApi
+      .mockResolvedValueOnce({ configured: true })   // /api/nml/status
+      .mockResolvedValueOnce({ ok: true, entries: [], multiple: false }); // /api/track/match
+    const btn = document.getElementById('page-cue') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    await openCueEditor({ filename: 'z.mp3', fullPath: '/x/z.mp3' });
+    expect(mockState.lastCueTrack).toEqual({ filename: 'z.mp3', fullPath: '/x/z.mp3' });
+    expect(btn.disabled).toBe(false);
   });
 });
 
