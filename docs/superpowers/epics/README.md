@@ -42,6 +42,7 @@
 | [EPIC-020](EPIC-020-waveform-3-bandes-rgb.md) | Waveform 3-bandes RGB complète (low/mid/high — FFT fenêtrée, standard DJ) | 🟢 Livré | Moyenne | rapport benchmark §P1-4 |
 | [EPIC-021](EPIC-021-undo-redo-cue-editor.md) | Undo/redo dans le cue editor (poses/suppressions/déplacements de cues et loops) | 🟢 Livré | Moyenne | rapport benchmark §P2 |
 | [EPIC-022](EPIC-022-a11y-responsive-cue-editor.md) | Accessibilité (aria-label) + responsive cue editor + correction bugs CSS (--border/--text) | ⚪ Backlog | Haute | audit UI/UX 2026-08-19 (session) |
+| [EPIC-023](EPIC-023-legend-modal-redesign.md) | Refonte popup ❓ Raccourcis & Légende : modal-xl, grille 4 colonnes (Légende/Sync/Playlist/Cue editor) + fix cache-buster CSS | 🟢 Livré | Basse | spec/plan `2026-09-14-legend-modal-redesign*` |
 
 ## État actuel du projet (2026-08-08)
 
@@ -67,7 +68,8 @@
 - EPIC-014 livrée (UX générale) : police sans CDN (fallback mono système), focus trap + aria sur les
   modales, `prompt()`/`confirm()` → `confirmDialog`/`promptDialog` custom, canal toast séparé de la
   barre d'état, états vides (`.panel-empty`), responsive minimal < 1024 px, validation rating 0-100
-  à la frappe. Cache-buster CSS déjà en place (vérifié).
+  à la frappe. Cache-buster CSS déjà en place (vérifié) — ⚠ rem. EPIC-023 : il ne couvrait en fait
+  que `script.js` (mtime max JS+CSS appliqué en 2026-09-14).
 - EPIC-015 livrée (FILESIZE Ko, découvert par le smoke test navigateur) : le NML Traktor stocke
   INFO/FILESIZE en **Ko arrondis** (prouvé : 581/600 match avec `round(size/1024)` sur la collection
   réelle, 0/600 en octets) alors que le serveur comparait `os.path.getsize()` → match impossible

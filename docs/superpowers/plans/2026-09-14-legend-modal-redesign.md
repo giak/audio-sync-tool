@@ -58,17 +58,13 @@ Remplacer le bloc entier `#legend-grid` (lignes 150-190) par la première colonn
       </div>
 ```
 
-- [ ] **Step 3: Vérifier le HTML**
-
-Run: `npx prettier --check templates/index.html` — si prettier n'est pas configuré pour le HTML, exécuter `npm run lint` puis un contrôle manuel du fichier (structure des 8 `.legend-row`).
-Expected: pas d'erreur de parse, 8 rows dans la colonne Légende.
-
-- [ ] **Step 4: Smoke test min** (pas de +)
+- [ ] **Step 3: Vérifier la structure du HTML**
 
 Run: `npm run build && npm run typecheck`
+(Prettier n'est pas installé dans `package.json` ; le HTML n'est linté par aucun outil — la vérification de structure se fait visuellement au Task 4, Step 3.)
 Expected: build OK (bundle servi), typecheck 0 erreur (aucun JS modifié).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add templates/index.html
