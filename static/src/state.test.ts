@@ -69,7 +69,6 @@ describe('state EventEmitter', () => {
   });
 
   it('lastCueTrack is initialized to null', () => {
-    state.lastCueTrack = null;
     expect(state.lastCueTrack).toBeNull();
   });
 });
