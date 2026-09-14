@@ -142,50 +142,22 @@
 <!-- Legend modal -->
 <div id="modal-legend" class="modal hidden">
   <div class="modal-backdrop"></div>
-  <div class="modal-content">
+  <div class="modal-content modal-xl">
     <div class="modal-header">
       <h3>❓ Raccourcis & Légende</h3>
       <button class="modal-close" data-modal="legend">✕</button>
     </div>
     <div id="legend-grid">
       <div class="legend-section">
-        <h4>Navigation pages</h4>
-        <div class="legend-row">📦 <kbd>Sync</kbd> Copie éparpillé → Source Data</div>
-        <div class="legend-row">🎵 <kbd>Playlist</kbd> Playlists + notation</div>
-      </div>
-      <div class="legend-section">
-        <h4>Statuts</h4>
+        <h4>Légende</h4>
         <div class="legend-row"><span class="led-demo led-demo-nouveau"></span> Nouveau — pas dans la source</div>
         <div class="legend-row"><span class="led-demo led-demo-doublon"></span> Doublon — déjà présent</div>
-        <div class="legend-row"><span class="led-demo led-demo-traite"></span> Traité — copié (absent source)</div>
+        <div class="legend-row"><span class="led-demo led-demo-traite"></span> Traité — copié</div>
         <div class="legend-row"><span class="led-demo led-demo-playing"></span> En lecture</div>
-      </div>
-      <div class="legend-section">
-        <h4>Raccourcis (Sync)</h4>
-        <div class="legend-row"><kbd>↑↓</kbd> Naviguer fichiers/dossiers</div>
-        <div class="legend-row"><kbd>←→</kbd> Navigation colonnes (Source Data)</div>
-        <div class="legend-row"><kbd>Shift + ←→</kbd> Seek audio ±20s</div>
-        <div class="legend-row"><kbd>Tab</kbd> Basculer panneau</div>
-        <div class="legend-row"><kbd>Entrée</kbd> Jouer / Déplier dossier</div>
-        <div class="legend-row"><kbd>Espace</kbd> Sélectionner fichier</div>
-        <div class="legend-row"><kbd>F5</kbd> Copier → dossier</div>
-        <div class="legend-row"><kbd>F7</kbd> / <kbd>/</kbd> Filtrer dossiers</div>
-        <div class="legend-row"><kbd>N</kbd> Noter le fichier (0-100)</div>
-        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / Annuler filtre / Stopper audio</div>
-      </div>
-      <div class="legend-section">
-        <h4>Raccourcis (Playlist)</h4>
-        <div class="legend-row"><kbd>↑↓</kbd> Naviguer source / pistes</div>
-        <div class="legend-row"><kbd>Tab</kbd> Basculer source ↔ sidebar</div>
-        <div class="legend-row"><kbd>Entrée</kbd> Jouer le fichier</div>
-        <div class="legend-row"><kbd>Espace</kbd> Ajouter/retirer morceau</div>
-        <div class="legend-row"><kbd>N</kbd> Noter le morceau (0-100)</div>
-        <div class="legend-row"><kbd>Suppr</kbd> / <kbd>←</kbd> Retirer du sidebar</div>
-        <div class="legend-row"><kbd>Ctrl + S</kbd> Sauvegarder la playlist</div>
-        <div class="legend-row"><kbd>Ctrl + E</kbd> Exporter la playlist</div>
-        <div class="legend-row"><kbd>Ctrl + ↑↓</kbd> Réorganiser les pistes</div>
-        <div class="legend-row"><kbd>F7</kbd> / <kbd>/</kbd> Filtrer dossiers</div>
-        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / Annuler filtre / Stopper audio</div>
+        <div class="legend-row"><span class="badge-demo">✅</span> Dans la playlist active</div>
+        <div class="legend-row"><span class="badge-demo">✓ NML</span> Matché dans la collection Traktor</div>
+        <div class="legend-row"><span class="badge-demo">≈ homonymes</span> Plusieurs entrées NML</div>
+        <div class="legend-row"><span class="badge-demo">✕ non importé</span> Absent du NML</div>
       </div>
     </div>
   </div>
