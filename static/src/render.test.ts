@@ -60,6 +60,7 @@ import {
   setupRenderSubscriptions,
   togglePlaylistSourceDir,
   toggleSourceDir,
+  updatePlaylistLedIndicator,
 } from './render.js';
 import { on } from './state.js';
 import { showContextMenu } from './ui.js';
@@ -1483,5 +1484,52 @@ describe('setupRenderSubscriptions', () => {
   it('calls on() exactly 7 times (5 original + journal + activePanel)', () => {
     setupRenderSubscriptions();
     expect(on).toHaveBeenCalledTimes(7);
+  });
+});
+
+describe('updatePlaylistLedIndicator', () => {
+  it('applique led-playing au nom de la piste en lecture', () => {
+    document.body.innerHTML = `
+      <div id="playlist-sidebar">
+        <div id="playlist-panel">
+          <div class="pl-track">
+            <span class="play-btn playing">⏹</span>
+            <span class="pl-track-name">song.mp3</span>
+          </div>
+        </div>
+      </div>
+    `;
+    updatePlaylistLedIndicator();
+    expect(document.querySelector('.pl-track-name')?.classList.contains('led-playing')).toBe(true);
+  });
+
+  it('retire led-playing quand aucune piste n\'est en lecture', () => {
+    document.body.innerHTML = `
+      <div id="playlist-sidebar">
+        <div id="playlist-panel">
+          <div class="pl-track">
+            <span class="play-btn">▶</span>
+            <span class="pl-track-name led-playing">song.mp3</span>
+          </div>
+        </div>
+      </div>
+    `;
+    updatePlaylistLedIndicator();
+    expect(document.querySelector('.pl-track-name')?.classList.contains('led-playing')).toBe(false);
+  });
+
+  it('no-op quand la sidebar est masquée', () => {
+    document.body.innerHTML = `
+      <div id="playlist-sidebar" class="hidden">
+        <div id="playlist-panel">
+          <div class="pl-track">
+            <span class="play-btn playing">⏹</span>
+            <span class="pl-track-name">song.mp3</span>
+          </div>
+        </div>
+      </div>
+    `;
+    updatePlaylistLedIndicator();
+    expect(document.querySelector('.pl-track-name')?.classList.contains('led-playing')).toBe(false);
   });
 });

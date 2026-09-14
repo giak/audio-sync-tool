@@ -38,6 +38,19 @@ export {
   toggleSourceDir,
 };
 
+export function updatePlaylistLedIndicator(): void {
+  const sidebarEl = document.getElementById('playlist-sidebar');
+  if (!sidebarEl || sidebarEl.classList.contains('hidden')) return;
+  const container = document.getElementById('playlist-panel');
+  if (!container) return;
+  container.querySelectorAll('.led-playing').forEach(el => {
+    el.classList.remove('led-playing');
+  });
+  const playingRow = container.querySelector('.play-btn.playing')?.closest('.pl-track');
+  const name = playingRow?.querySelector('.pl-track-name');
+  if (name) name.classList.add('led-playing');
+}
+
 // ── Event subscriptions (Phase 3: auto-render on state change) ───────────
 
 /** Wire up EventEmitter state changes to auto-renders. Called once at boot. */
@@ -70,19 +83,8 @@ export function setupRenderSubscriptions(): void {
 
   // ── Playlist mode event subscriptions ─────────────────────────────────
 
-  // When audio starts/stops, update the playlist track indicator if visible
-  on('audio:changed', () => {
-    const sidebarEl = document.getElementById('playlist-sidebar');
-    if (sidebarEl && !sidebarEl.classList.contains('hidden')) {
-      const container = document.getElementById('playlist-panel');
-      if (container) {
-        // Remove .led-playing from all playlist tracks
-        container.querySelectorAll('.led-playing').forEach(el => {
-          el.classList.remove('led-playing');
-        });
-      }
-    }
-  });
+  // When audio starts/stops, keep the playlist track indicator in sync
+  on('audio:changed', updatePlaylistLedIndicator);
 
   // When playlist tracks or active tab change, auto-update the panel
   const autoRenderPlaylistPanel = (): void => {
