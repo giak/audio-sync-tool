@@ -41,6 +41,7 @@
 | [EPIC-019](EPIC-019-renommage-couleur-cues.md) | Renommage + recolorisation des cues (double-clic slot/région, round-trip NML) | 🟢 Livré | Moyenne | rapport benchmark §P1 |
 | [EPIC-020](EPIC-020-waveform-3-bandes-rgb.md) | Waveform 3-bandes RGB complète (low/mid/high — FFT fenêtrée, standard DJ) | 🟢 Livré | Moyenne | rapport benchmark §P1-4 |
 | [EPIC-021](EPIC-021-undo-redo-cue-editor.md) | Undo/redo dans le cue editor (poses/suppressions/déplacements de cues et loops) | 🟢 Livré | Moyenne | rapport benchmark §P2 |
+| [EPIC-022](EPIC-022-a11y-responsive-cue-editor.md) | Accessibilité (aria-label) + responsive cue editor + correction bugs CSS (--border/--text) | ⚪ Backlog | Haute | audit UI/UX 2026-08-19 (session) |
 
 ## État actuel du projet (2026-08-08)
 
