@@ -84,6 +84,13 @@ input, button, select, textarea { font-family: inherit; }
 .page-btn:hover {
   background: var(--bg-focus);
 }
+.page-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.page-btn:disabled:hover {
+  background: var(--bg-hover);
+}
 
 /* ===== Header & Toolbar ============================================== */
 header {
