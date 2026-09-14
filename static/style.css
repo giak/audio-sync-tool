@@ -490,30 +490,57 @@ header h1 {
 #config-status { margin-top: 4px; font-size: 12px; color: var(--accent-green); }
 
 /* ===== Legend (inside modal) ========================================= */
-#legend-grid { display: flex; gap: 24px; }
-.legend-section { flex: 1; }
-.legend-section h4 { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+#legend-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px 32px;
+}
+.legend-section h4 {
+  font-size: 13px; font-weight: 600; color: var(--accent);
+  margin: 0 0 8px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-panel);
+}
 .legend-row {
   font-size: 13px; color: var(--text-secondary);
   padding: 2px 0;
-  display: flex; align-items: center; gap: 6px;
+  display: grid; grid-template-columns: max-content 1fr;
+  gap: 8px; align-items: baseline;
 }
 /* LED demos in legend share base size, override per status */
 .led-demo {
   display: inline-block;
   width: 8px; height: 8px; border-radius: 50%;
-  flex-shrink: 0;
+  flex-shrink: 0; align-self: center;
 }
 .led-demo-nouveau { background: var(--led-blue); box-shadow: 0 0 6px var(--led-blue); }
 .led-demo-doublon { background: var(--led-grey); }
 .led-demo-traite  { background: var(--led-green); box-shadow: 0 0 6px var(--led-green); }
 .led-demo-playing { background: var(--led-cyan);  box-shadow: 0 0 8px var(--led-cyan); }
+/* Chips badges NML (✓ / ≈ / ✕) et ✅ — cohérents avec matchStatus.ts */
+.badge-demo {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px; white-space: nowrap;
+  color: var(--text-primary);
+  border: 1px solid var(--border-panel);
+  border-radius: 3px; padding: 1px 5px;
+  align-self: center;
+}
 .legend-row kbd {
-  font-size: 12px;
+  font-size: 12.5px;
   background: var(--bg-hover); color: var(--text-primary);
   border: 1px solid var(--border-panel);
   padding: 2px 5px; margin: 0 2px; border-radius: 2px;
 }
+/* Pied de modal : notes transverses */
+#legend-footer {
+  margin-top: 16px; padding-top: 10px;
+  border-top: 1px solid var(--border-panel);
+  font-size: 12px; color: var(--text-muted);
+  display: flex; gap: 24px; flex-wrap: wrap;
+}
+@media (max-width: 1180px) { .modal-content.modal-xl { width: 92vw; } }
+@media (max-width: 1100px) { #legend-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { #legend-grid { grid-template-columns: 1fr; } }
 
 /* ===== Journal (inside modal) ======================================== */
 #journal-content { font-size: 13px; max-height: 50vh; overflow-y: auto; }
@@ -766,6 +793,9 @@ header h1 {
 /* ===== Cue editor modal ============================================ */
 .modal-content.modal-lg {
   min-width: 780px; max-width: 1100px;
+}
+.modal-content.modal-xl {
+  min-width: 860px; max-width: 1200px;
 }
 .cue-slot {
   display: inline-block;
