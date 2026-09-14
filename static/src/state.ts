@@ -3,6 +3,8 @@
 // Invalid values are silently rejected (console.warn) to prevent corruption.
 // Emits `${prop}:changed` events automatically on write, batched via RAF.
 
+import type { PlaylistTrackLite } from './render/cueEditor.js';
+
 // ── EventEmitter (Phase 3) ─────────────────────────────────────────────────
 type Listener = () => void;
 const _listeners = new Map<string, Set<Listener>>();
@@ -117,6 +119,7 @@ interface AppState {
   navIndex: number;
   ratings: Record<string, number>;
   focusListId: 'epars' | 'source' | 'playlist-source' | 'playlist-tracks';
+  lastCueTrack: PlaylistTrackLite | null;
 }
 
 export interface EparsSelection {
@@ -160,6 +163,7 @@ const _state: AppState = {
   navIndex: -1,
   ratings: {},
   focusListId: 'epars',
+  lastCueTrack: null,
 };
 
 export const state = new Proxy<AppState>(_state, {

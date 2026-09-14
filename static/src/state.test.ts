@@ -67,4 +67,9 @@ describe('state EventEmitter', () => {
   it('focusListId is initialized to epars', () => {
     expect(state.focusListId).toBe('epars');
   });
+
+  it('lastCueTrack is initialized to null', () => {
+    state.lastCueTrack = null;
+    expect(state.lastCueTrack).toBeNull();
+  });
 });
