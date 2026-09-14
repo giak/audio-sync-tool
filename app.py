@@ -213,9 +213,15 @@ def config():
 
 @app.route('/')
 def index():
-    # Cache-buster: use dist script.js mtime so browser always gets fresh JS/CSS
-    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'dist', 'script.js')
-    cache_buster = str(int(os.path.getmtime(script_path))) if os.path.exists(script_path) else '1'
+    # Cache-buster: la plus récente mtime de script.js ET style.css, pour que le
+    # navigateur rafraîchisse le CSS/JS dès qu'un des deux fichiers change.
+    base = os.path.dirname(os.path.abspath(__file__))
+    paths = (
+        os.path.join(base, 'static', 'dist', 'script.js'),
+        os.path.join(base, 'static', 'style.css'),
+    )
+    mt = [int(os.path.getmtime(p)) for p in paths if os.path.exists(p)]
+    cache_buster = str(max(mt)) if mt else '1'
     return render_template('index.html', cache_buster=cache_buster)
 
 

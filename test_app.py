@@ -42,6 +42,27 @@ def make_cfg(source_data='', epars_dirs=None):
         'active': 0,
         'configs': [{'name': 'test', 'source_data': source_data, 'epars_dirs': epars_dirs or []}]
     }
+
+
+def test_cache_buster_covers_css(client):
+    """Le cache-buster doit refléter la mtime de style.css, pas seulement celle de
+    script.js — sinon le navigateur sert une CSS périmée (cache définitif)."""
+    import app as app_module
+
+    base = os.path.dirname(os.path.abspath(app_module.__file__))
+    css_path = os.path.join(base, 'static', 'style.css')
+    assert os.path.exists(css_path)
+
+    future = 2_000_000_000
+    orig = os.stat(css_path).st_mtime
+    os.utime(css_path, (future, future))
+    try:
+        html = client.get('/').data.decode()
+    finally:
+        os.utime(css_path, (orig, orig))
+
+    target = f'/static/style.css?v={int(future)}'
+    assert target in html, f'style.css non invalidé par le cache-buster: attendu {target}'
 def test_log_journal():
     """Test that log_journal() appends entries correctly."""
     from app import JOURNAL_PATH
