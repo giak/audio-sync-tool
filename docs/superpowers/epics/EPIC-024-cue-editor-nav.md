@@ -44,7 +44,7 @@ Donner au header un point d'entrée « 🎛️ Cue Editor » qui rouvre la derni
 | `84b5e19` | feat(state): lastCueTrack |
 | `9f9365d` | feat(ui): nav — bouton #page-cue |
 | `e7191c7` | feat(cueEditor): openCueEditor mémorise lastCueTrack + active #page-cue |
-| `…` | feat(nav): handler script.ts — clic #page-cue ouvre lastCueTrack |
+| `2dd0838` | feat(nav): handler script.ts — clic #page-cue ouvre lastCueTrack |
 
 ## Décisions
 
