@@ -24,6 +24,7 @@ import {
 } from './render.js';
 import { state } from './state.js';
 import { closeAllModals, confirmDialog, initFilterPalette, openModal } from './ui.js';
+import { openCueEditor } from './render/cueEditor.js';
 
 // ── Playlist mode helpers ─────────────────────────────────────────────────
 
@@ -104,6 +105,10 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 };
 (document.getElementById('page-playlist') as HTMLElement | null)!.onclick = async () => {
   if (!state.playlistMode) await enterPlaylistMode();
+};
+(document.getElementById('page-cue') as HTMLElement | null)!.onclick = () => {
+  if (state.activeModal === 'cueEditor' || !state.lastCueTrack) return;
+  void openCueEditor(state.lastCueTrack);
 };
 
 // ── Panel click ───────────────────────────────────────────────────────────

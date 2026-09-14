@@ -80,6 +80,7 @@ vi.hoisted(() => {
     <div id="page-nav">
       <button id="page-sync" class="page-btn active">📦 Sync</button>
       <button id="page-playlist" class="page-btn">🎵 Playlist</button>
+      <button id="page-cue" class="page-btn" disabled>🎛️ Cue Editor</button>
     </div>
     </div>
   </header>
