@@ -7,6 +7,7 @@ import { stopPlayer, togglePlay } from './audio.js';
 import { focusItemByElement, setActivePanel } from './focus.js';
 import { getRating } from './ratings.js';
 import { makeFileTable } from './render/fileRow.js';
+import { openCueEditor } from './render/cueEditor.js';
 import { state, type TreeNode } from './state.js';
 import { computeStatus, countAllEparsFiles, formatDuration } from './utils.js';
 
@@ -132,7 +133,7 @@ export function patchSourceFileAfterCopy(
       // contient pas encore de table, on en crée une et on y déplace les rows.
       let tbody = dirEl.querySelector('.file-table tbody') as HTMLTableSectionElement | null;
       if (!tbody) {
-        const table = makeFileTable();
+        const table = makeFileTable(true);
         tbody = table.querySelector('tbody');
         for (const r of [...children.children]) {
           if (r.classList.contains('file-row')) tbody?.appendChild(r);
@@ -183,6 +184,19 @@ export function patchSourceFileAfterCopy(
       durTd.className = 'duration';
       durTd.textContent = fileData.duration ? formatDuration(fileData.duration) : '';
       newRow.appendChild(durTd);
+
+      const cueTd = document.createElement('td');
+      cueTd.className = 'cue-cell';
+      const cueBtn = document.createElement('button');
+      cueBtn.className = 'cue-btn';
+      cueBtn.textContent = 'Cues';
+      cueBtn.title = 'Éditeur cues / loops (waveform)';
+      cueBtn.onclick = (e: MouseEvent) => {
+        e.stopPropagation();
+        openCueEditor({ filename, fullPath: `${destDir}/${filename}` });
+      };
+      cueTd.appendChild(cueBtn);
+      newRow.appendChild(cueTd);
 
       newRow.onclick = (e: MouseEvent) => {
         e.stopPropagation();

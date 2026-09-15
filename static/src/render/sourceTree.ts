@@ -148,7 +148,7 @@ function buildSourceChildren(
 
   if (!isFiltered) {
     const status: FileStatus = inPlaylistPaths ? 'nouveau' : 'doublon';
-    const fileTable = makeFileTable();
+    const fileTable = makeFileTable(true);
     const tbody = fileTable.querySelector('tbody');
     for (const f of (node.__files__ || []) as FileEntry[]) {
       const fullFilePath = `${baseDir}/${f.relPath}`;

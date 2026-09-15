@@ -117,7 +117,7 @@ export function renderEpars(): void {
     container.appendChild(fileList);
 
     const sorted = Object.entries(files).sort((a, b) => a[0].localeCompare(b[0]));
-    const fileTable = makeFileTable();
+    const fileTable = makeFileTable(false);
     const tbody = fileTable.querySelector('tbody');
     for (const [filename, data] of sorted) {
       const relPath = data.path;

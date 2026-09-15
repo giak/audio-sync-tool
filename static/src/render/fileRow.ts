@@ -1,8 +1,11 @@
 // ─── File row DOM factory ──────────────────────────────────────────────────
-// Retourne un <tr class="file-row"> avec 7 <td> ALWAYS présents (le tableau,
+// Retourne un <tr class="file-row"> en colonnes FIXES (le tableau,
 // table-layout: fixed + colgroup, garantit l'alignement en colonnes même quand
 // année / codec / durée sont vides). Les cellules conditionnelles du milieu
 // décaleraient les colonnes suivantes — d'où les cellules toujours rendues.
+// « Cues » : partout sauf sur l'épars (page Sync, panneau gauche) — d'où une
+// 7ᵉ colonne optionnelle : l'épars n'en rend pas, donc la durée (6ᵉ) est la
+// dernière colonne et reste collée au bord droit.
 
 import { stopPlayer, togglePlay } from '../audio.js';
 import { focusItemByElement, setActivePanel } from '../focus.js';
@@ -10,13 +13,16 @@ import { getRating } from '../ratings.js';
 import { showContextMenu } from '../ui.js';
 import { type FileStatus, formatDuration } from '../utils.js';
 
-// Table vide (colgroup 7 colonnes fixes + tbody) : chaque dossier expandé de
-// la source / éparpillé reçoit SA table — les lignes partagent les colonnes.
-export function makeFileTable(): HTMLTableElement {
+// Table vide (colgroup fixe + tbody) : chaque dossier expandé de la source /
+// éparpillé reçoit SA table — les lignes partagent les colonnes.
+// withCuesCol=true pour tout l'arbre source / playlists (7 colonnes, bouton
+// Cues collé à droite) ; false pour l'épars (6 colonnes, durée collée à droite).
+export function makeFileTable(withCuesCol: boolean): HTMLTableElement {
   const table = document.createElement('table');
   table.className = 'file-table';
   const colgroup = document.createElement('colgroup');
-  for (let i = 0; i < 7; i++) colgroup.appendChild(document.createElement('col'));
+  const cols = withCuesCol ? 7 : 6;
+  for (let i = 0; i < cols; i++) colgroup.appendChild(document.createElement('col'));
   table.appendChild(colgroup);
   const tbody = document.createElement('tbody');
   table.appendChild(tbody);
