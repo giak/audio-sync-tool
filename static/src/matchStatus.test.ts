@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { _clearMatchCache, getMatchStatus, matchBadgeHtml, matchBadgeParts } from './matchStatus.js';
 
 function mockFetchResponse(status: number, body: unknown) {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: status >= 200 && status < 300,
-    json: async () => body,
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: status >= 200 && status < 300,
+      json: async () => body,
+    }),
+  );
 }
 
 describe('matchStatus — badge match NML (EPIC-016)', () => {
@@ -55,7 +58,12 @@ describe('matchStatus — badge match NML (EPIC-016)', () => {
 
   it('appels CONCURRENTS pour le même fullPath : un seul fetch (cache de promesses)', async () => {
     let resolveFetch: (v: unknown) => void;
-    const fetchMock = vi.fn().mockImplementation(() => new Promise(r => { resolveFetch = r; }));
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise(r => {
+          resolveFetch = r;
+        }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     const p1 = getMatchStatus('/p/race.mp3');
     const p2 = getMatchStatus('/p/race.mp3');

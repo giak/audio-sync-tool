@@ -287,10 +287,10 @@ describe('render/cueEditor scaffold', () => {
     expect(showToast).toHaveBeenCalledWith('⚠️ fichier introuvable');
   });
 
-  it('mémorise lastCueTrack et active #page-cue lors de l\'ouverture', async () => {
+  it("mémorise lastCueTrack et active #page-cue lors de l'ouverture", async () => {
     mockWSCreate.mockReturnValue(makeWS());
     mockApi
-      .mockResolvedValueOnce({ configured: true })   // /api/nml/status
+      .mockResolvedValueOnce({ configured: true }) // /api/nml/status
       .mockResolvedValueOnce({ ok: true, entries: [], multiple: false }); // /api/track/match
     const btn = document.getElementById('page-cue') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
@@ -1869,7 +1869,7 @@ describe('render/cueEditor zoom waveform (EPIC-017)', () => {
     expect(ws.zoom).toHaveBeenCalledWith(1600);
   });
 
-  it("zoomToOneBeat sans BPM → message explicite, pas de zoom", async () => {
+  it('zoomToOneBeat sans BPM → message explicite, pas de zoom', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -1879,7 +1879,7 @@ describe('render/cueEditor zoom waveform (EPIC-017)', () => {
     expect(status!.textContent).toContain('BPM');
   });
 
-  it("les boutons + / Fit pilotent le zoom", async () => {
+  it('les boutons + / Fit pilotent le zoom', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -1890,7 +1890,7 @@ describe('render/cueEditor zoom waveform (EPIC-017)', () => {
     expect(ws.zoom).toHaveBeenCalledWith(0);
   });
 
-  it("la molette sur la waveform zoome (haut = avant, bas = arrière)", async () => {
+  it('la molette sur la waveform zoome (haut = avant, bas = arrière)', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -1901,7 +1901,7 @@ describe('render/cueEditor zoom waveform (EPIC-017)', () => {
     expect(ws.zoom).toHaveBeenLastCalledWith(8); // 10 / 1,25
   });
 
-  it("la grille ne dessine que la fenêtre visible quand on zoome", async () => {
+  it('la grille ne dessine que la fenêtre visible quand on zoome', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -1916,7 +1916,7 @@ describe('render/cueEditor zoom waveform (EPIC-017)', () => {
     expect(grid!.querySelectorAll('.cue-grid-line').length).toBe(101); // beats ≤ 50 s
   });
 
-  it("le beat 1 de la grille porte la classe différenciée beat1", async () => {
+  it('le beat 1 de la grille porte la classe différenciée beat1', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -1944,7 +1944,7 @@ describe('render/cueEditor raccourcis clavier cue/zoom (EPIC-017)', () => {
     return ws;
   }
 
-  it("les touches 1–8 posent un cue dans le slot correspondant", async () => {
+  it('les touches 1–8 posent un cue dans le slot correspondant', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -1966,7 +1966,7 @@ describe('render/cueEditor raccourcis clavier cue/zoom (EPIC-017)', () => {
     expect(one.disabled).toBe(false); // BPM saisi → bouton activé immédiatement
   });
 
-  it("la touche C pose un cue au curseur dans le premier slot libre", async () => {
+  it('la touche C pose un cue au curseur dans le premier slot libre', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -1974,7 +1974,7 @@ describe('render/cueEditor raccourcis clavier cue/zoom (EPIC-017)', () => {
     expect(ws.regions.addRegion).toHaveBeenCalledWith(expect.objectContaining({ id: 0, start: 25 }));
   });
 
-  it("la touche C déplace le cue sous le curseur (même slot)", async () => {
+  it('la touche C déplace le cue sous le curseur (même slot)', async () => {
     const ws = openSingle();
     ws.getCurrentTime.mockReturnValue(12);
     const region = { id: 2, start: 10, end: 14, setOptions: vi.fn() };
@@ -1986,7 +1986,7 @@ describe('render/cueEditor raccourcis clavier cue/zoom (EPIC-017)', () => {
     expect(ws.regions.addRegion).not.toHaveBeenCalled();
   });
 
-  it("C avec les 8 slots pleins → toast, aucun cue posé", async () => {
+  it('C avec les 8 slots pleins → toast, aucun cue posé', async () => {
     const ws = openSingle();
     const regions = Array.from({ length: 8 }, (_, i) => ({
       id: i,
@@ -2001,7 +2001,7 @@ describe('render/cueEditor raccourcis clavier cue/zoom (EPIC-017)', () => {
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('pleins'));
   });
 
-  it("les touches + / − zooment la waveform", async () => {
+  it('les touches + / − zooment la waveform', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -2011,7 +2011,7 @@ describe('render/cueEditor raccourcis clavier cue/zoom (EPIC-017)', () => {
     expect(ws.zoom).toHaveBeenLastCalledWith(8);
   });
 
-  it("raccourcis ignorés quand une autre modale est ouverte", async () => {
+  it('raccourcis ignorés quand une autre modale est ouverte', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -2052,7 +2052,7 @@ describe('render/cueEditor minimap + bande basse colorée (EPIC-018)', () => {
     return ws;
   }
 
-  it("crée un minimap dans son conteneur dédié (overview)", async () => {
+  it('crée un minimap dans son conteneur dédié (overview)', async () => {
     const ws = openSingle();
     const minimapInst = { plugin: 'minimap' };
     mockMinimapCreate.mockReturnValue(minimapInst);
@@ -2065,7 +2065,7 @@ describe('render/cueEditor minimap + bande basse colorée (EPIC-018)', () => {
     expect(ws.registerPlugin).toHaveBeenCalledWith(minimapInst);
   });
 
-  it("sans conteneur minimap → aucun plugin (dégradation silencieuse)", async () => {
+  it('sans conteneur minimap → aucun plugin (dégradation silencieuse)', async () => {
     document.getElementById('cue-editor-minimap')!.remove();
     openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
@@ -2095,7 +2095,7 @@ describe('render/cueEditor minimap + bande basse colorée (EPIC-018)', () => {
     expect(mockMinimapCreate.mock.calls[1][0].container).toBe(mini);
   });
 
-  it("le zoom fonctionne toujours avec le minimap (aucune interférence)", async () => {
+  it('le zoom fonctionne toujours avec le minimap (aucune interférence)', async () => {
     const ws = openSingle();
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -2142,10 +2142,8 @@ describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () =
     return ws;
   }
 
-  it('le double-clic sur un slot ouvre l\'éditeur nom/couleur pré-rempli', async () => {
-    const ws = openWithCues([
-      { type: '0', start: 5, len: 0, hotcue: 0, name: 'Intro', displ_order: '0' },
-    ]);
+  it("le double-clic sur un slot ouvre l'éditeur nom/couleur pré-rempli", async () => {
+    const ws = openWithCues([{ type: '0', start: 5, len: 0, hotcue: 0, name: 'Intro', displ_order: '0' }]);
     ws.regions.getRegions = vi.fn(() => [{ id: 0, start: 5, end: 5.08, color: '#55aaff' }]);
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -2158,7 +2156,7 @@ describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () =
     expect(document.querySelectorAll('#cue-meta-colors .cue-meta-swatch').length).toBe(8);
   });
 
-  it('double-clic sur un slot vide pose d\'abord un cue au curseur puis ouvre l\'éditeur', async () => {
+  it("double-clic sur un slot vide pose d'abord un cue au curseur puis ouvre l'éditeur", async () => {
     const ws = openWithCues([]);
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -2171,7 +2169,7 @@ describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () =
     expect(document.getElementById('cue-meta-slot')!.textContent).toBe('D');
   });
 
-  it('le double-clic sur une région ouvre l\'éditeur (region-double-clicked)', async () => {
+  it("le double-clic sur une région ouvre l'éditeur (region-double-clicked)", async () => {
     const ws = openWithCues([]);
     ws.regions.getRegions = vi.fn(() => [{ id: 5, start: 10, end: 10.08, color: '#ff6b6b' }]);
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
@@ -2191,7 +2189,7 @@ describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () =
     openCueMetaEditor(1);
     const name = document.getElementById('cue-meta-name') as HTMLInputElement;
     name.value = 'Drop';
-    (document.querySelector<HTMLElement>('#cue-meta-colors .cue-meta-swatch[data-color="#ff6b6b"]')!).click();
+    document.querySelector<HTMLElement>('#cue-meta-colors .cue-meta-swatch[data-color="#ff6b6b"]')!.click();
     applyCueMeta();
     expect(region.setOptions).toHaveBeenCalledWith({ color: '#ff6b6b' });
     expect(region.setContent).toHaveBeenCalled();
@@ -2202,9 +2200,7 @@ describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () =
   });
 
   it('le save injecte nom/couleur dans le payload (round-trip écriture)', async () => {
-    const ws = openWithCues([
-      { type: '0', start: 5, len: 0, hotcue: 2, name: 'n.n.', displ_order: '7' },
-    ]);
+    const ws = openWithCues([{ type: '0', start: 5, len: 0, hotcue: 2, name: 'n.n.', displ_order: '7' }]);
     const region = { id: 2, start: 5, end: 5.08, color: '#55aaff', setOptions: vi.fn(), setContent: vi.fn() };
     ws.regions.getRegions = vi.fn(() => [region]);
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
@@ -2213,7 +2209,7 @@ describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () =
     openCueMetaEditor(2);
     const name = document.getElementById('cue-meta-name') as HTMLInputElement;
     name.value = 'Drop';
-    (document.querySelector<HTMLElement>('#cue-meta-colors .cue-meta-swatch[data-color="#ff6b6b"]')!).click();
+    document.querySelector<HTMLElement>('#cue-meta-colors .cue-meta-swatch[data-color="#ff6b6b"]')!.click();
     applyCueMeta();
     mockApi.mockResolvedValueOnce({ ok: true });
     await onSaveClicked();
@@ -2230,7 +2226,15 @@ describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () =
     const ws = openWithCues([
       { type: '0', start: 5, len: 0, hotcue: 4, name: 'Drop', color: '#ff6b6b', displ_order: '0' },
     ]);
-    const region = { id: 4, start: 5, end: 5.08, color: '#ff6b6b', remove: vi.fn(), setOptions: vi.fn(), setContent: vi.fn() };
+    const region = {
+      id: 4,
+      start: 5,
+      end: 5.08,
+      color: '#ff6b6b',
+      remove: vi.fn(),
+      setOptions: vi.fn(),
+      setContent: vi.fn(),
+    };
     let regions = [region];
     ws.regions.getRegions = vi.fn(() => regions);
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
@@ -2247,9 +2251,7 @@ describe('render/cueEditor EPIC-019 (nom + couleur des cues, double-clic)', () =
   });
 
   it('le nom du cue est affiché dans la région au chargement (round-trip lecture)', async () => {
-    const ws = openWithCues([
-      { type: '0', start: 5, len: 0, hotcue: 0, name: 'Intro', displ_order: '0' },
-    ]);
+    const ws = openWithCues([{ type: '0', start: 5, len: 0, hotcue: 0, name: 'Intro', displ_order: '0' }]);
     ws.regions.getRegions = vi.fn(() => [{ id: 0, start: 5, end: 5.08, color: '#55aaff' }]);
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
@@ -2316,9 +2318,7 @@ describe('render/cueEditor waveform 3-bandes RGB (EPIC-020)', () => {
     expect(layers[2].classList.contains('rgb-high')).toBe(true);
     // Chaque couche porte 160 barres ; la couche low (kicks) a des barres énergétiques.
     expect(layers[0].querySelectorAll('.rgb-bar').length).toBe(160);
-    const lowHeights = Array.from(layers[0].querySelectorAll('.rgb-bar')).map(
-      b => (b as HTMLElement).style.height,
-    );
+    const lowHeights = Array.from(layers[0].querySelectorAll('.rgb-bar')).map(b => (b as HTMLElement).style.height);
     expect(lowHeights.some(h => h !== '2%')).toBe(true);
   });
 
@@ -2510,7 +2510,7 @@ describe('render/cueEditor undo/redo (EPIC-021)', () => {
 
   it('la fermeture de la modal vide les piles (reset lifecycle)', async () => {
     const ws = openSingle();
-    const store = makeRegionStore(ws);
+    makeRegionStore(ws);
     await openCueEditor({ filename: 'a.mp3', fullPath: '/x/a.mp3' });
     ws.emit('ready');
     onSlotClicked(0);

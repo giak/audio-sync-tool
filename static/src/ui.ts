@@ -183,7 +183,9 @@ export function showToast(msg: string): void {
   container.appendChild(toast);
   // Nettoyage : l'ancien toast disparaît, le plus récent reste 3 s.
   const prev = container.querySelectorAll('.toast:not(:last-child)');
-  prev.forEach(el => el.remove());
+  prev.forEach(el => {
+    el.remove();
+  });
   setTimeout(() => {
     if (container.contains(toast)) toast.remove();
   }, 3000);

@@ -6,8 +6,8 @@ const mockApi = vi.hoisted(() => vi.fn());
 vi.mock('../api.js', () => ({ api: mockApi }));
 vi.mock('../ui.js', () => ({ showToast: vi.fn() }));
 
-import { showToast } from '../ui.js';
 import { state } from '../state.js';
+import { showToast } from '../ui.js';
 import { clearJournal, renderJournal } from './journalUI.js';
 
 const JOURNAL_HTML = `

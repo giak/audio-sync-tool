@@ -118,10 +118,13 @@ describe('playlistUI bouton Cues', () => {
   });
 
   it('remplit le badge en lazy avec le statut réel (matché → ✓ NML)', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true, entries: [{ filename: 'a.mp3' }], multiple: false }),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true, entries: [{ filename: 'a.mp3' }], multiple: false }),
+      }),
+    );
     pendingTracks.tracks = [{ filename: 'a.mp3', fullPath: '/x/a.mp3', duration: 60 }];
     renderPlaylistPanel();
     await new Promise(r => setTimeout(r, 10));
@@ -134,10 +137,13 @@ describe('playlistUI bouton Cues', () => {
   });
 
   it('badge « non importé » quand aucune entrée NML', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true, entries: [], multiple: false }),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true, entries: [], multiple: false }),
+      }),
+    );
     pendingTracks.tracks = [{ filename: 'b.mp3', fullPath: '/x/b.mp3', duration: 60 }];
     renderPlaylistPanel();
     await new Promise(r => setTimeout(r, 10));
@@ -146,7 +152,7 @@ describe('playlistUI bouton Cues', () => {
     expect(badge.className).toContain('pl-match-missing');
   });
 
-  it('badge neutre « ? » si l\'appel API échoue (pas d\'alerte)', async () => {
+  it("badge neutre « ? » si l'appel API échoue (pas d'alerte)", async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'x' }) }));
     pendingTracks.tracks = [{ filename: 'c.mp3', fullPath: '/x/c.mp3', duration: 60 }];
     renderPlaylistPanel();

@@ -53,7 +53,11 @@ const PARTS: Record<string, BadgeParts> = {
   loading: { cls: 'pl-match-loading', text: '…', title: 'Vérification collection…' },
   matched: { cls: 'pl-match-ok', text: '✓ NML', title: 'Dans la collection Traktor — cues sauvegardables' },
   multiple: { cls: 'pl-match-multi', text: '≈ homonymes', title: 'Plusieurs entrées homonymes dans la collection' },
-  missing: { cls: 'pl-match-missing', text: '✕ non importé', title: 'Absente de la collection Traktor — visualisation seule' },
+  missing: {
+    cls: 'pl-match-missing',
+    text: '✕ non importé',
+    title: 'Absente de la collection Traktor — visualisation seule',
+  },
   error: { cls: 'pl-match-error', text: '?', title: 'Match impossible (erreur réseau/API)' },
 };
 

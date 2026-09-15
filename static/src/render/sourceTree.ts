@@ -205,7 +205,9 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
       dirEl.appendChild(childrenEl);
       requestAnimationFrame(() => {
         const cont = dirEl.closest('#source-container, #playlist-source-container') as HTMLElement | null;
-        const firstChild = dirEl.querySelector('.children > .directory, .children > .file-table .file-row') as HTMLElement | null;
+        const firstChild = dirEl.querySelector(
+          '.children > .directory, .children > .file-table .file-row',
+        ) as HTMLElement | null;
         if (cont && firstChild) focusItemByElement(cont, firstChild);
       });
     }

@@ -4,10 +4,10 @@ import Minimap from 'wavesurfer.js/dist/plugins/minimap.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
 import { api } from '../api.js';
 import { computeRGBBands, type RGBBands } from '../bands.js';
-import { _clearMatchCache } from '../matchStatus.js';
 import { beatInterval, buildBeats, detectBPMFromUrl, snapToBeat } from '../beatgrid.js';
 import type { CueDTO } from '../cueModel.js';
 import { cuesToRegions, hotToLabel, regionToCue } from '../cueModel.js';
+import { _clearMatchCache } from '../matchStatus.js';
 import { emit, on, state } from '../state.js';
 import { showToast } from '../ui.js';
 import { formatTime } from '../utils.js';
@@ -1207,9 +1207,7 @@ export async function renderWaveform(
   // Conteneur dédié (sous la waveform) pour ne pas chevaucher la grille/bande.
   const mini = minimapEl();
   if (mini) {
-    ws.registerPlugin(
-      Minimap.create({ container: mini, height: 56, overlayColor: 'rgba(0, 212, 255, 0.18)' }),
-    );
+    ws.registerPlugin(Minimap.create({ container: mini, height: 56, overlayColor: 'rgba(0, 212, 255, 0.18)' }));
   }
   ws.on('ready', () => {
     _regions = ws!.registerPlugin(Regions.create());
@@ -1267,9 +1265,10 @@ export async function renderWaveform(
         const start = snapToBeat(region.start, _grid);
         const end = Math.max(start + 0.2, snapToBeat(region.end, _grid));
         region.setOptions({ start, end });
-      }    refreshLiveSlot();
-    refreshSlotBadges();
-  });
+      }
+      refreshLiveSlot();
+      refreshSlotBadges();
+    });
     // Undo/redo (EPIC-021) : un loop dessiné (id string généré par le drag) est
     // créé APRÈS region-initialized → pousser l'état AVANT sa création ici. Les
     // cues posés (addRegion, id numérique) poussent déjà via onSlotClicked / C.
@@ -1454,7 +1453,9 @@ export function openCueMetaEditor(slot: number): void {
       sw.title = c;
       if (c === current) sw.classList.add('selected');
       sw.addEventListener('click', () => {
-        colorsEl.querySelectorAll('.cue-meta-swatch').forEach(s => s.classList.remove('selected'));
+        colorsEl.querySelectorAll('.cue-meta-swatch').forEach(s => {
+          s.classList.remove('selected');
+        });
         sw.classList.add('selected');
       });
       colorsEl.appendChild(sw);

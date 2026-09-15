@@ -1,6 +1,7 @@
 // ─── Playlist mode rendering: tabs, tracks, source tree, manager ──────────
 
 import { togglePlay } from '../audio.js';
+import { getMatchStatus, matchBadgeParts } from '../matchStatus.js';
 import {
   createNewPlaylist,
   deletePlaylist,
@@ -17,7 +18,6 @@ import { getRating } from '../ratings.js';
 import { state } from '../state.js';
 import { closeAllModals, confirmDialog, promptDialog, showContextMenu } from '../ui.js';
 import { openCueEditor } from './cueEditor.js';
-import { getMatchStatus, matchBadgeParts } from '../matchStatus.js';
 import { _ratingClickHandler } from './ratingEdit.js';
 import { renderDirTree, togglePlaylistSourceDir } from './sourceTree.js';
 
@@ -325,7 +325,6 @@ async function fillMatchBadges(container: HTMLElement): Promise<void> {
   });
   await Promise.all(workers);
 }
-
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 

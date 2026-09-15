@@ -6,8 +6,8 @@
 import { stopPlayer, togglePlay } from './audio.js';
 import { focusItemByElement, setActivePanel } from './focus.js';
 import { getRating } from './ratings.js';
-import { makeFileTable } from './render/fileRow.js';
 import { openCueEditor } from './render/cueEditor.js';
+import { makeFileTable } from './render/fileRow.js';
 import { state, type TreeNode } from './state.js';
 import { computeStatus, countAllEparsFiles, formatDuration } from './utils.js';
 

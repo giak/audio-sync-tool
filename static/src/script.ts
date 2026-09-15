@@ -10,9 +10,10 @@ import './commands/playlist.js';
 import './commands/modals.js';
 import { initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
+import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
 import { setActivePanel } from './focus.js';
 import { createNewPlaylist, loadPlaylists, savePlaylist, setPendingTracks } from './playlist.js';
-import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
+import { openCueEditor } from './render/cueEditor.js';
 import {
   clearJournal,
   renderJournal,
@@ -24,7 +25,6 @@ import {
 } from './render.js';
 import { state } from './state.js';
 import { closeAllModals, confirmDialog, initFilterPalette, openModal } from './ui.js';
-import { openCueEditor } from './render/cueEditor.js';
 
 // ── Playlist mode helpers ─────────────────────────────────────────────────
 
