@@ -41,14 +41,25 @@
 | [EPIC-019](EPIC-019-renommage-couleur-cues.md) | Renommage + recolorisation des cues (double-clic slot/région, round-trip NML) | 🟢 Livré | Moyenne | rapport benchmark §P1 |
 | [EPIC-020](EPIC-020-waveform-3-bandes-rgb.md) | Waveform 3-bandes RGB complète (low/mid/high — FFT fenêtrée, standard DJ) | 🟢 Livré | Moyenne | rapport benchmark §P1-4 |
 | [EPIC-021](EPIC-021-undo-redo-cue-editor.md) | Undo/redo dans le cue editor (poses/suppressions/déplacements de cues et loops) | 🟢 Livré | Moyenne | rapport benchmark §P2 |
-| [EPIC-022](EPIC-022-a11y-responsive-cue-editor.md) | Accessibilité (aria-label) + responsive cue editor + correction bugs CSS (--border/--text) | ⚪ Backlog | Haute | audit UI/UX 2026-08-19 (session) |
+| [EPIC-022](EPIC-022-a11y-responsive-cue-editor.md) | Accessibilité (aria-label) + responsive cue editor + correction bugs CSS (`--border`/`--text`) | ⚪ Backlog | Haute | audit UI/UX 2026-08-19 (session) |
 | [EPIC-023](EPIC-023-legend-modal-redesign.md) | Refonte popup ❓ Raccourcis & Légende : modal-xl, grille 4 colonnes (Légende/Sync/Playlist/Cue editor) + fix cache-buster CSS | 🟢 Livré | Basse | spec/plan `2026-09-14-legend-modal-redesign*` |
 | [EPIC-024](EPIC-024-cue-editor-nav.md) | Point d'entrée nav « 🎛️ Cue Editor » — lastCueTrack + bouton grisé | 🟢 Livré | Basse | spec `2026-09-14-cue-editor-nav-design.md` |
 | [EPIC-025](EPIC-025-playlist-playback.md) | Lecture dans le panneau Playlist — bouton ▶ par piste + glow du nom | 🟢 Livré | Moyenne | spec `2026-09-14-playlist-playback-design.md` |
+| [EPIC-026](EPIC-026-liste-fichiers-tableau-contraste.md) | Liste fichiers en vrai tableau (colgroup `table-layout: fixed`) + « Cues » hors épars + textes éclaircis | 🟢 Livré | Haute | mesures headless `/tmp/opencode/measure-*.html` |
 
-## État actuel du projet (2026-08-08)
+## État actuel du projet (2026-09-15)
 
-- Tests : **672 vitest** / **173 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs).
+- Tests : **739 vitest** / **174 pytest** — tous verts.
+- EPIC-023–026 livrées (2026-09) : refonte popup Légende (4 colonnes) + fix cache-buster
+  CSS, point d'entrée nav Cue Editor, lecture playlist, et **EPIC-026** (liste fichiers en
+  vrai tableau `<table>` + colgroup `table-layout: fixed`, « Cues » hors épars, durée collée
+  au bord droit, textes éclaircis ×2).
+- Prochain chantier : **EPIC-022** (backlog, priorité Haute) — a11y + responsive cue editor.
+- Historique antérieur : voir ci-dessous (2026-08-08).
+
+## Historique projet (2026-08-08)
+
+- Tests : **672 vitest** / **173 pytest** — tous verts, y compris en `--sequence.shuffle` (25+ runs) (état 2026-08-08).
 - EPIC-009 livrée (phase manuelle + cache beatgrid) : nudge ←/→ 1/4, « ◎ Beat 1 », cascade
   NML → cache (`data/beatgrids.json`) → détection, invalidation par FILESIZE.
 - EPIC-010 livrée (analyse serveur kick/phase) : pipeline DSP maison pur Python (`analysis.py`,
