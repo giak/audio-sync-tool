@@ -139,6 +139,7 @@ function renderPlaylistTracks(): void {
     tracks.forEach((track, i) => {
       html += `<div class="pl-track" draggable="true" data-index="${i}">`;
       html += `<span class="pl-drag-handle">⬍</span>`;
+      html += `<span class="play-btn" title="Écouter">▶</span>`;
       html += `<span class="pl-track-name">${escapeHtml(track.filename)}</span>`;
       if (track.year) html += `<span class="pl-track-year">${escapeHtml(track.year)}</span>`;
       if (track.codec) html += `<span class="pl-track-codec">${escapeHtml(track.codec)}</span>`;
@@ -190,10 +191,20 @@ function renderPlaylistTracks(): void {
     };
   });
 
+  container.querySelectorAll('.play-btn').forEach(btn => {
+    (btn as HTMLElement).onclick = (e: MouseEvent) => {
+      e.stopPropagation();
+      const row = (btn as HTMLElement).closest('.pl-track') as HTMLElement | null;
+      const fullPath = (row?.querySelector('.pl-track-remove') as HTMLElement | null)?.dataset.fullpath || '';
+      const filename = (row?.querySelector('.pl-track-name') as HTMLElement | null)?.textContent || '';
+      if (fullPath) togglePlay(filename, fullPath, btn as HTMLElement);
+    };
+  });
+
   container.querySelectorAll('.pl-track').forEach(el => {
     const trackEl = el as HTMLElement;
     trackEl.onclick = (e: MouseEvent) => {
-      if ((e.target as HTMLElement).closest('.pl-track-remove, .pl-track-rating, .pl-drag-handle')) return;
+      if ((e.target as HTMLElement).closest('.pl-track-remove, .pl-track-rating, .pl-drag-handle, .play-btn')) return;
       const tracksContainer = document.getElementById('playlist-tracks');
       if (tracksContainer) {
         tracksContainer.querySelectorAll('.pl-track.focused').forEach(f => {

@@ -39,6 +39,7 @@ vi.mock('./ratingEdit.js', () => ({
 }));
 vi.mock('./cueEditor.js', () => ({ openCueEditor: mockOpenCueEditor }));
 
+import { togglePlay } from '../audio.js';
 import { _clearMatchCache } from '../matchStatus.js';
 import { showContextMenu } from '../ui.js';
 import { renderPlaylistPanel } from './playlistUI.js';
@@ -53,6 +54,7 @@ describe('playlistUI bouton Cues', () => {
     `;
     pendingTracks.tracks = [];
     mockOpenCueEditor.mockReset();
+    vi.mocked(togglePlay).mockClear();
   });
 
   afterEach(() => {
@@ -142,5 +144,31 @@ describe('playlistUI bouton Cues', () => {
     await new Promise(r => setTimeout(r, 10));
     const badge = document.querySelector('.pl-track-match') as HTMLElement;
     expect(badge.className).toContain('pl-match-error');
+  });
+
+  it('affiche un bouton play ▶ (title Écouter) sur chaque piste', () => {
+    pendingTracks.tracks = [{ filename: 'a.mp3', fullPath: '/x/a.mp3', duration: 60 }];
+    renderPlaylistPanel();
+    const playBtn = document.querySelector('.play-btn') as HTMLElement | null;
+    expect(playBtn).not.toBeNull();
+    expect(playBtn!.textContent).toBe('▶');
+    expect(playBtn!.title).toBe('Écouter');
+  });
+
+  it('le clic sur play lance togglePlay avec la piste', () => {
+    pendingTracks.tracks = [{ filename: 'a.mp3', fullPath: '/x/a.mp3', duration: 60 }];
+    renderPlaylistPanel();
+    const playBtn = document.querySelector('.play-btn') as HTMLElement;
+    playBtn.click();
+    expect(togglePlay).toHaveBeenCalledWith('a.mp3', '/x/a.mp3', playBtn);
+  });
+
+  it('le clic sur play ne déplace pas le focus de la ligne', () => {
+    pendingTracks.tracks = [{ filename: 'a.mp3', fullPath: '/x/a.mp3', duration: 60 }];
+    renderPlaylistPanel();
+    const playBtn = document.querySelector('.play-btn') as HTMLElement;
+    const track = document.querySelector('.pl-track') as HTMLElement;
+    playBtn.click();
+    expect(track.classList.contains('focused')).toBe(false);
   });
 });
