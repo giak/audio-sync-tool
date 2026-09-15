@@ -3,7 +3,7 @@
 import { focusItemByElement, setActivePanel } from '../focus.js';
 import { type EparsSelection, state } from '../state.js';
 import { computeStatus, countAllEparsFiles, type FileStatus } from '../utils.js';
-import { makeFileEl } from './fileRow.js';
+import { makeFileEl, makeFileTable } from './fileRow.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
 
 // ── File selection logic ─────────────────────────────────────────────────
@@ -117,6 +117,8 @@ export function renderEpars(): void {
     container.appendChild(fileList);
 
     const sorted = Object.entries(files).sort((a, b) => a[0].localeCompare(b[0]));
+    const fileTable = makeFileTable();
+    const tbody = fileTable.querySelector('tbody');
     for (const [filename, data] of sorted) {
       const relPath = data.path;
       const fullpath = `${dirPath}/${relPath}`;
@@ -143,7 +145,10 @@ export function renderEpars(): void {
           selectEparsFile(label2, filename, dirPath, { ctrl: e.ctrlKey, shift: e.shiftKey });
         };
       }
-      fileList.appendChild(row);
+      tbody?.appendChild(row);
+    }
+    if (tbody?.childElementCount) {
+      fileList.appendChild(fileTable);
     }
   }
 

@@ -26,7 +26,16 @@ vi.mock('../playlist.js', () => ({
 vi.mock('../ratings.js', () => ({ getRating: vi.fn(() => undefined) }));
 vi.mock('../state.js', () => ({ state: mockState }));
 vi.mock('../utils.js', () => ({}));
-vi.mock('./fileRow.js', () => ({ makeFileEl: vi.fn() }));
+vi.mock('./fileRow.js', () => ({
+  makeFileEl: vi.fn(),
+  makeFileTable: () => {
+    const table = document.createElement('table');
+    table.className = 'file-table';
+    const tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+    return table;
+  },
+}));
 vi.mock('./sourceTree.js', () => ({
   renderDirTree: vi.fn(),
   togglePlaylistSourceDir: vi.fn(),

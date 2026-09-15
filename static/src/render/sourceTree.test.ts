@@ -43,7 +43,16 @@ vi.mock('../focus.js', () => ({ focusItemByElement, setActivePanel }));
 vi.mock('../ui.js', () => ({ showContextMenu }));
 vi.mock('../playlist.js', () => ({ getActivePlaylistName, getPendingTracks }));
 vi.mock('../utils.js', () => ({ dirHasMatchingDescendant }));
-vi.mock('./fileRow.js', () => ({ makeFileEl }));
+vi.mock('./fileRow.js', () => ({
+  makeFileEl,
+  makeFileTable: () => {
+    const table = document.createElement('table');
+    table.className = 'file-table';
+    const tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+    return table;
+  },
+}));
 vi.mock('./ratingEdit.js', () => ({ startSourceRatingEdit }));
 vi.mock('./dragDrop.js', () => ({ doDragCopy }));
 vi.mock('./batchCopy.js', () => ({ setBatchCopy }));

@@ -160,40 +160,54 @@ header h1 {
   margin-left: 8px;
 }
 
-/* ===== File Rows ===================================================== */
-.file-row {
-  display: grid; align-items: center;
-  grid-template-columns: auto minmax(0, 1fr) 30px 44px 110px 60px 54px;
-  gap: 4px; padding: 2px 0;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 28px;
+/* ===== File Rows — vrai tableau (table-layout: fixed + colgroup) ====== */
+/* Chaque dossier expandé / éparpillé rend SA <table class="file-table">.
+   table-layout: fixed + colonnes définies par le <colgroup> (cf. nth-child
+   ci-dessous) : toutes les lignes partagent EXACTEMENT les mêmes colonnes,
+   année/codec/durée restent alignées verticalement quoi qu'il arrive et la
+   largeur résiduelle est absorbée par la colonne 2 (width: 100%) — zéro vide à droite. */
+.file-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
 }
-.file-row.focused { background: var(--bg-focus); outline: 1px solid var(--border-focus); }
-.file-row:active   { background: var(--bg-focus); opacity: 0.8; }
+.file-table col:nth-child(1) { width: 22px; }
+.file-table col:nth-child(2) { width: 100%; }
+.file-table col:nth-child(3) { width: 26px; }
+.file-table col:nth-child(4) { width: 44px; }
+.file-table col:nth-child(5) { width: 110px; }
+.file-table col:nth-child(6) { width: 60px; }
+.file-table col:nth-child(7) { width: 54px; }
+
+.file-row > td {
+  padding: 0 4px 0 0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.file-row.focused > td { background: var(--bg-focus); }
+.file-row:active { opacity: 0.8; }
 
 /* Play button */
-.play-btn {
-  font-size: 12px; cursor: pointer;
-  color: var(--text-muted);
-  padding: 2px 4px; flex-shrink: 0;
-  grid-column: 1;
+td.play-btn {
+  font-size: 12px; cursor: pointer; text-align: center;
+  color: var(--text-muted); padding: 2px 0;
+  flex-shrink: 0;
   background: none; border: none; border-radius: 2px;
 }
-.play-btn:hover   { color: var(--accent-green); background: var(--bg-hover); }
-.play-btn.playing { color: var(--accent-green); }
+td.play-btn:hover   { color: var(--accent-green); background: var(--bg-hover); }
+td.play-btn.playing { color: var(--accent-green); }
 
 /* File labels */
-.file {
-  padding: 2px 0 2px 4px; font-size: 14px;
-  cursor: default; flex-grow: 1; grid-column: 2;
-  display: flex; align-items: center; gap: 4px;
+td.file {
+  padding: 2px 4px; font-size: 14px;
+  cursor: default; text-overflow: ellipsis; overflow: hidden;
 }
-.file:hover       { background: var(--bg-hover); }
-.file.nouveau     { color: var(--led-blue);       cursor: pointer; }
-.file.doublon     { color: var(--text-muted); }
-.file.traite      { color: var(--accent-green); }
-.file.selected    { background: var(--bg-focus);  outline: 1px solid var(--led-blue); }
-.file.focused     { background: var(--bg-focus);  outline: 1px solid var(--border-focus); }
+td.file:hover       { background: var(--bg-hover); }
+td.file.nouveau     { color: var(--led-blue);       cursor: pointer; }
+td.file.doublon     { color: var(--text-muted); }
+td.file.traite      { color: var(--accent-green); }
+td.file.selected    { background: var(--bg-focus);  outline: 1px solid var(--led-blue); }
+td.file.focused     { background: var(--bg-focus);  outline: 1px solid var(--border-focus); }
 
 /* ===== LED Status Dots =============================================== */
 /* Shared base — individual overrides only set background + optional shadow */
@@ -211,23 +225,23 @@ header h1 {
 .led-playing::before { background: var(--led-cyan);  box-shadow: 0 0 8px var(--led-cyan); }
 
 /* ===== File Metadata (year / codec / duration) ======================= */
-.year, .codec, .duration { padding-right: 4px; white-space: nowrap; }
-.year     { grid-column: 4; font-size: 13px; color: var(--text-muted); text-align: right; }
-.codec    { grid-column: 5; font-size: 12px; color: var(--text-dim); }
-.duration { grid-column: 6; font-size: 12px; color: var(--text-secondary); text-align: right; }
+/* Cellules de table : TOUJOURS présentes (vides si vide) — c'est ce qui
+   garantit la colonne droite alignée entre lignes. */
+.year, .codec, .duration { white-space: nowrap; }
+.year     { text-align: right; font-size: 13px; color: var(--text-muted); }
+.codec    { text-align: right; font-size: 12px; color: var(--text-dim); }
+.duration { text-align: right; font-size: 12px; color: var(--text-secondary); }
 
 /* ===== File-level rating display (Source Data tree) ================== */
 .file-rating {
   font-size: 12px;
   color: var(--text-dim);
-  min-width: 24px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 0 4px;
   border-radius: 2px;
   flex-shrink: 0;
-  grid-column: 3;
 }
 .file-rating:hover {
   color: var(--text-primary);
@@ -685,6 +699,7 @@ header h1 {
 .pl-track-duration { font-size: 12px; color: var(--text-secondary); min-width: 36px; text-align: right; flex-shrink: 0; }
 .pl-track-remove { color: var(--text-muted); cursor: pointer; padding: 0 4px; font-size: 12px; flex-shrink: 0; border-radius: 2px; }
 .pl-track-remove:hover { color: var(--led-red); background: var(--bg-hover); }
+.cue-cell { text-align: right; }
 .cue-btn {
   color: var(--text-secondary); cursor: pointer;
   padding: 1px 8px; font-size: 12px;
@@ -692,8 +707,6 @@ header h1 {
   background: var(--bg-hover);
   border: 1px solid var(--border-panel);
   line-height: 1.5;
-  grid-column: 7;
-  justify-self: end;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 .cue-btn:hover {

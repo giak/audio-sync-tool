@@ -202,7 +202,7 @@ describe('patchSourceFileAfterCopy', () => {
       expect(newRow.querySelector('.duration')?.textContent).toBe('3:15');
     });
 
-    it('omits metadata spans when absent', () => {
+    it('renders empty metadata cells when absent', () => {
       patchSourceFileAfterCopy('/home/Music/Rock', 'bare.mp3', {
         path: 'Rock/bare.mp3',
         year: null,
@@ -212,9 +212,9 @@ describe('patchSourceFileAfterCopy', () => {
 
       const rows = document.querySelectorAll('#source-container .file-row');
       const newRow = [...rows].find(r => r.querySelector('.file')?.textContent === 'bare.mp3') as HTMLElement;
-      expect(newRow.querySelector('.year')).toBeNull();
-      expect(newRow.querySelector('.codec')).toBeNull();
-      expect(newRow.querySelector('.duration')).toBeNull();
+      expect(newRow.querySelector('.year')?.textContent).toBe('');
+      expect(newRow.querySelector('.codec')?.textContent).toBe('');
+      expect(newRow.querySelector('.duration')?.textContent).toBe('');
     });
 
     it('updates the count badge', () => {

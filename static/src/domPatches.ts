@@ -6,6 +6,7 @@
 import { stopPlayer, togglePlay } from './audio.js';
 import { focusItemByElement, setActivePanel } from './focus.js';
 import { getRating } from './ratings.js';
+import { makeFileTable } from './render/fileRow.js';
 import { state, type TreeNode } from './state.js';
 import { computeStatus, countAllEparsFiles, formatDuration } from './utils.js';
 
@@ -127,53 +128,61 @@ export function patchSourceFileAfterCopy(
 
     const children = dirEl.querySelector('.children');
     if (children) {
-      const newRow = document.createElement('div');
+      // Migration de secours (fixtures/tests ou vieux DOM) : si le dossier ne
+      // contient pas encore de table, on en crée une et on y déplace les rows.
+      let tbody = dirEl.querySelector('.file-table tbody') as HTMLTableSectionElement | null;
+      if (!tbody) {
+        const table = makeFileTable();
+        tbody = table.querySelector('tbody');
+        for (const r of [...children.children]) {
+          if (r.classList.contains('file-row')) tbody?.appendChild(r);
+        }
+        children.appendChild(table);
+      }
+      const tableBody = tbody!;
+      const newRow = document.createElement('tr');
       newRow.className = 'file-row';
       newRow.dataset.focuspath = `${destDir}/${filename}`;
 
-      const playBtn = document.createElement('span');
-      playBtn.className = 'play-btn';
-      playBtn.textContent = '▶';
-      playBtn.title = 'Écouter';
-      playBtn.onclick = (e: MouseEvent) => {
+      const playTd = document.createElement('td');
+      playTd.className = 'play-btn';
+      playTd.textContent = '▶';
+      playTd.title = 'Écouter';
+      playTd.onclick = (e: MouseEvent) => {
         e.stopPropagation();
-        togglePlay(filename, `${destDir}/${filename}`, playBtn);
+        togglePlay(filename, `${destDir}/${filename}`, playTd);
       };
-      newRow.appendChild(playBtn);
+      newRow.appendChild(playTd);
 
-      const label = document.createElement('span');
+      const label = document.createElement('td');
       label.className = 'file doublon led-doublon';
       label.textContent = filename;
       label.dataset.filename = filename;
       label.dataset.fullpath = `${destDir}/${filename}`;
       newRow.appendChild(label);
 
-      if (fileData.year) {
-        const s = document.createElement('span');
-        s.className = 'year';
-        s.textContent = fileData.year;
-        newRow.appendChild(s);
-      }
-      if (fileData.codec) {
-        const s = document.createElement('span');
-        s.className = 'codec';
-        s.textContent = fileData.codec;
-        newRow.appendChild(s);
-      }
-      newRow.dataset.durationSeconds = fileData.duration ? String(fileData.duration) : '';
-      if (fileData.duration) {
-        const s = document.createElement('span');
-        s.className = 'duration';
-        s.textContent = formatDuration(fileData.duration);
-        newRow.appendChild(s);
-      }
-
       const ratingVal = getRating(`${destDir}/${filename}`);
-      const ratingSpan = document.createElement('span');
-      ratingSpan.className = 'file-rating';
-      ratingSpan.dataset.fullpath = `${destDir}/${filename}`;
-      if (ratingVal !== undefined) ratingSpan.textContent = String(ratingVal);
-      newRow.appendChild(ratingSpan);
+      const ratingTd = document.createElement('td');
+      ratingTd.className = 'file-rating';
+      ratingTd.dataset.fullpath = `${destDir}/${filename}`;
+      if (ratingVal !== undefined) ratingTd.textContent = String(ratingVal);
+      newRow.appendChild(ratingTd);
+
+      const yearTd = document.createElement('td');
+      yearTd.className = 'year';
+      yearTd.textContent = fileData.year ?? '';
+      newRow.appendChild(yearTd);
+
+      const codecTd = document.createElement('td');
+      codecTd.className = 'codec';
+      codecTd.textContent = fileData.codec ?? '';
+      newRow.appendChild(codecTd);
+
+      newRow.dataset.durationSeconds = fileData.duration ? String(fileData.duration) : '';
+      const durTd = document.createElement('td');
+      durTd.className = 'duration';
+      durTd.textContent = fileData.duration ? formatDuration(fileData.duration) : '';
+      newRow.appendChild(durTd);
 
       newRow.onclick = (e: MouseEvent) => {
         e.stopPropagation();
@@ -199,16 +208,16 @@ export function patchSourceFileAfterCopy(
       newRow.ondragend = () => newRow.classList.remove('dragging-source');
 
       let inserted = false;
-      const rows = children.querySelectorAll('.file-row');
+      const rows = tableBody.querySelectorAll('.file-row');
       for (const row of rows) {
         const existing = (row.querySelector('.file') as HTMLElement | null)?.textContent || '';
         if (filename.localeCompare(existing) < 0) {
-          children.insertBefore(newRow, row);
+          tableBody.insertBefore(newRow, row);
           inserted = true;
           break;
         }
       }
-      if (!inserted) children.appendChild(newRow);
+      if (!inserted) tableBody.appendChild(newRow);
     }
   }
 

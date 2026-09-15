@@ -58,7 +58,7 @@ function makeRow(
     startSourceRatingEditFn?: () => void;
     onCueEditFn?: (filename: string, fullPath: string) => void;
   } = {},
-): HTMLDivElement {
+): HTMLTableRowElement {
   const {
     status = 'nouveau',
     fullpath = '/media/usb/song.mp3',
@@ -126,9 +126,11 @@ describe('DOM structure', () => {
     expect(yr.textContent).toBe('2021');
   });
 
-  it('omits year span when year is null', () => {
+  it('renders an empty year cell when year is null', () => {
     const row = makeRow({ year: null });
-    expect(row.querySelector('.year')).toBeNull();
+    const yr = row.querySelector('.year') as HTMLElement;
+    expect(yr).not.toBeNull();
+    expect(yr.textContent).toBe('');
   });
 
   it('includes codec span when codec is provided', () => {
@@ -138,9 +140,11 @@ describe('DOM structure', () => {
     expect(c.textContent).toBe('FLAC');
   });
 
-  it('omits codec span when codec is null', () => {
+  it('renders an empty codec cell when codec is null', () => {
     const row = makeRow({ codec: null });
-    expect(row.querySelector('.codec')).toBeNull();
+    const c = row.querySelector('.codec') as HTMLElement;
+    expect(c).not.toBeNull();
+    expect(c.textContent).toBe('');
   });
 
   it('includes duration span when duration is provided', () => {
@@ -150,9 +154,11 @@ describe('DOM structure', () => {
     expect(d.textContent).toBe('3:15');
   });
 
-  it('omits duration span when duration is null', () => {
+  it('renders an empty duration cell when duration is null', () => {
     const row = makeRow({ duration: null });
-    expect(row.querySelector('.duration')).toBeNull();
+    const d = row.querySelector('.duration') as HTMLElement;
+    expect(d).not.toBeNull();
+    expect(d.textContent).toBe('');
   });
 
   it('sets duration-seconds dataset', () => {

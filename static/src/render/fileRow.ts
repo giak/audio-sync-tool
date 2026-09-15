@@ -1,11 +1,27 @@
 // ─── File row DOM factory ──────────────────────────────────────────────────
-// Returns an HTMLDivElement with play, focus, rate, and context menu handlers.
+// Retourne un <tr class="file-row"> avec 7 <td> ALWAYS présents (le tableau,
+// table-layout: fixed + colgroup, garantit l'alignement en colonnes même quand
+// année / codec / durée sont vides). Les cellules conditionnelles du milieu
+// décaleraient les colonnes suivantes — d'où les cellules toujours rendues.
 
 import { stopPlayer, togglePlay } from '../audio.js';
 import { focusItemByElement, setActivePanel } from '../focus.js';
 import { getRating } from '../ratings.js';
 import { showContextMenu } from '../ui.js';
 import { type FileStatus, formatDuration } from '../utils.js';
+
+// Table vide (colgroup 7 colonnes fixes + tbody) : chaque dossier expandé de
+// la source / éparpillé reçoit SA table — les lignes partagent les colonnes.
+export function makeFileTable(): HTMLTableElement {
+  const table = document.createElement('table');
+  table.className = 'file-table';
+  const colgroup = document.createElement('colgroup');
+  for (let i = 0; i < 7; i++) colgroup.appendChild(document.createElement('col'));
+  table.appendChild(colgroup);
+  const tbody = document.createElement('tbody');
+  table.appendChild(tbody);
+  return table;
+}
 
 export function makeFileEl(
   filename: string,
@@ -18,57 +34,36 @@ export function makeFileEl(
   selectEparsFileFn?: (el: HTMLElement, filename: string, eparDir: string) => void,
   startSourceRatingEditFn?: () => void,
   onCueEditFn?: (filename: string, fullPath: string) => void,
-): HTMLDivElement {
-  const row = document.createElement('div');
+): HTMLTableRowElement {
+  const row = document.createElement('tr');
   row.className = 'file-row';
   row.dataset.focuspath = fullpath;
 
-  const playBtn = document.createElement('span');
-  playBtn.className = 'play-btn';
-  playBtn.textContent = '▶';
-  playBtn.title = 'Écouter';
-  playBtn.onclick = (e: MouseEvent) => {
+  const playTd = document.createElement('td');
+  playTd.className = 'play-btn';
+  playTd.textContent = '▶';
+  playTd.title = 'Écouter';
+  playTd.onclick = (e: MouseEvent) => {
     e.stopPropagation();
-    togglePlay(filename, fullpath, playBtn);
+    togglePlay(filename, fullpath, playTd);
   };
-  row.appendChild(playBtn);
+  row.appendChild(playTd);
 
-  const label = document.createElement('span');
+  const label = document.createElement('td');
   label.className = `file ${status} led-${status}`;
   label.textContent = filename;
   label.dataset.filename = filename;
   label.dataset.fullpath = fullpath;
   row.appendChild(label);
 
-  if (year) {
-    const span = document.createElement('span');
-    span.className = 'year';
-    span.textContent = year;
-    row.appendChild(span);
-  }
-  if (codec) {
-    const span = document.createElement('span');
-    span.className = 'codec';
-    span.textContent = codec;
-    row.appendChild(span);
-  }
-  row.dataset.durationSeconds = duration ? String(duration) : '';
-  if (duration) {
-    const span = document.createElement('span');
-    span.className = 'duration';
-    span.textContent = formatDuration(duration);
-    row.appendChild(span);
-  }
-
-  // Rating display
   const ratingVal = getRating(fullpath);
-  const ratingSpan = document.createElement('span');
-  ratingSpan.className = 'file-rating';
-  ratingSpan.dataset.fullpath = fullpath;
+  const ratingTd = document.createElement('td');
+  ratingTd.className = 'file-rating';
+  ratingTd.dataset.fullpath = fullpath;
   if (ratingVal !== undefined) {
-    ratingSpan.textContent = String(ratingVal);
+    ratingTd.textContent = String(ratingVal);
   }
-  ratingSpan.onclick = (e: MouseEvent) => {
+  ratingTd.onclick = (e: MouseEvent) => {
     e.stopPropagation();
     const cont = row.closest('#epars-container, #source-container, #playlist-source-container') as HTMLElement | null;
     if (!cont) return;
@@ -78,19 +73,39 @@ export function makeFileEl(
       startSourceRatingEditFn();
     }
   };
-  row.appendChild(ratingSpan);
+  row.appendChild(ratingTd);
 
-  // Cue editor access (source trees only — éparpillé ne passe pas onCueEditFn)
+  const yearTd = document.createElement('td');
+  yearTd.className = 'year';
+  yearTd.textContent = year ?? '';
+  row.appendChild(yearTd);
+
+  const codecTd = document.createElement('td');
+  codecTd.className = 'codec';
+  codecTd.textContent = codec ?? '';
+  row.appendChild(codecTd);
+
+  row.dataset.durationSeconds = duration ? String(duration) : '';
+  const durTd = document.createElement('td');
+  durTd.className = 'duration';
+  durTd.textContent = duration ? formatDuration(duration) : '';
+  row.appendChild(durTd);
+
+  // Cue editor access (source trees only — éparpillé ne passe pas onCueEditFn).
+  // Cellule de queue : son absence ne décale rien (le colgroup fixe les colonnes).
   if (onCueEditFn) {
-    const cueBtn = document.createElement('button');
-    cueBtn.className = 'cue-btn';
-    cueBtn.textContent = 'Cues';
-    cueBtn.title = 'Éditeur cues / loops (waveform)';
-    cueBtn.onclick = (e: MouseEvent) => {
+    const cueTd = document.createElement('td');
+    cueTd.className = 'cue-cell';
+    const btn = document.createElement('button');
+    btn.className = 'cue-btn';
+    btn.textContent = 'Cues';
+    btn.title = 'Éditeur cues / loops (waveform)';
+    btn.onclick = (e: MouseEvent) => {
       e.stopPropagation();
       onCueEditFn(filename, fullpath);
     };
-    row.appendChild(cueBtn);
+    cueTd.appendChild(btn);
+    row.appendChild(cueTd);
   }
 
   // Click-to-focus

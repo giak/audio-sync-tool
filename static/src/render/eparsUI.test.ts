@@ -25,7 +25,16 @@ const { focusItemByElement, setActivePanel, computeStatus, countAllEparsFiles, m
 
 vi.mock('../focus.js', () => ({ focusItemByElement, setActivePanel }));
 vi.mock('../utils.js', () => ({ computeStatus, countAllEparsFiles }));
-vi.mock('./fileRow.js', () => ({ makeFileEl }));
+vi.mock('./fileRow.js', () => ({
+  makeFileEl,
+  makeFileTable: () => {
+    const table = document.createElement('table');
+    table.className = 'file-table';
+    const tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+    return table;
+  },
+}));
 vi.mock('./ratingEdit.js', () => ({ startSourceRatingEdit }));
 
 import { renderEpars } from './eparsUI.js';

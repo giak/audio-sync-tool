@@ -8,7 +8,7 @@ import { dirHasMatchingDescendant, type FileStatus } from '../utils.js';
 import { setBatchCopy } from './batchCopy.js';
 import { openCueEditor } from './cueEditor.js';
 import { doDragCopy } from './dragDrop.js';
-import { makeFileEl } from './fileRow.js';
+import { makeFileEl, makeFileTable } from './fileRow.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
 
 // ── Internal types ────────────────────────────────────────────────────────
@@ -148,6 +148,8 @@ function buildSourceChildren(
 
   if (!isFiltered) {
     const status: FileStatus = inPlaylistPaths ? 'nouveau' : 'doublon';
+    const fileTable = makeFileTable();
+    const tbody = fileTable.querySelector('tbody');
     for (const f of (node.__files__ || []) as FileEntry[]) {
       const fullFilePath = `${baseDir}/${f.relPath}`;
       const row = makeFileEl(
@@ -166,7 +168,10 @@ function buildSourceChildren(
         const label = row.querySelector('.file');
         if (label) label.classList.add('in-playlist');
       }
-      childContainer.appendChild(row);
+      tbody?.appendChild(row);
+    }
+    if (tbody?.childElementCount) {
+      childContainer.appendChild(fileTable);
     }
   }
   return childContainer;
@@ -200,7 +205,7 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
       dirEl.appendChild(childrenEl);
       requestAnimationFrame(() => {
         const cont = dirEl.closest('#source-container, #playlist-source-container') as HTMLElement | null;
-        const firstChild = dirEl.querySelector('.children > .directory, .children > .file-row') as HTMLElement | null;
+        const firstChild = dirEl.querySelector('.children > .directory, .children > .file-table .file-row') as HTMLElement | null;
         if (cont && firstChild) focusItemByElement(cont, firstChild);
       });
     }
