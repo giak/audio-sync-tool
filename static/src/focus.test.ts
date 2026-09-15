@@ -138,6 +138,22 @@ describe('focusItemByElement', () => {
     focusItemByElement(container, div);
     expect(state.eparsFocusPath).toBeNull();
   });
+
+  it('writes the path of the CONTAINER panel, not the active panel', () => {
+    // Clic dans le panneau NON actif : le path doit aller au bon panneau,
+    // sinon le Tab suivant restaure un path pollué et remonte en tête de liste.
+    state.activePanel = 'epars';
+    const source = document.getElementById('source-container') as HTMLElement;
+    focusItemByElement(source, source.querySelector('[data-focuspath="/src/Jazz"]')!);
+    expect(state.sourceFocusPath).toBe('/src/Jazz');
+    expect(state.eparsFocusPath).toBeNull();
+
+    state.activePanel = 'source';
+    const epars = document.getElementById('epars-container') as HTMLElement;
+    focusItemByElement(epars, epars.querySelector('[data-focuspath="/media/usb/track.flac"]')!);
+    expect(state.eparsFocusPath).toBe('/media/usb/track.flac');
+    expect(state.sourceFocusPath).toBe('/src/Jazz');
+  });
 });
 
 describe('navigateFocus', () => {

@@ -17,9 +17,15 @@ function getFocusPath(): string | null {
   return state.activePanel === 'source' ? state.sourceFocusPath : state.eparsFocusPath;
 }
 
-function setFocusPath(path: string | null): void {
-  if (state.activePanel === 'source') state.sourceFocusPath = path;
-  else state.eparsFocusPath = path;
+function setFocusPath(container: HTMLElement, path: string | null): void {
+  // Dériver le panneau du CONTAINER (pas de state.activePanel) : un clic dans
+  // le panneau non actif écrit dans le path du bon panneau — sinon le Tab
+  // suivante restaure un path pollué et retombe sur le 1er item de la liste.
+  if (container.id === 'source-container' || container.id === 'playlist-source-container') {
+    state.sourceFocusPath = path;
+  } else {
+    state.eparsFocusPath = path;
+  }
 }
 
 export function getItems(container: HTMLElement): NodeListOf<Element> {
@@ -59,7 +65,7 @@ export function focusItemByElement(container: HTMLElement, el: Element, opts?: {
   for (const el of container.querySelectorAll('.focused')) el.classList.remove('focused');
   el.classList.add('focused');
   el.scrollIntoView({ block: 'nearest' });
-  setFocusPath(focusPath);
+  setFocusPath(container, focusPath);
 
   // Push to nav history (A12) — skip when restoring from history
   if (!opts?.noHistory && focusPath) {

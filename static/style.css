@@ -184,7 +184,13 @@ header h1 {
   vertical-align: middle;
   white-space: nowrap;
 }
+/* Focus ligne fichier : barre d'accent à gauche + contour net — bien visible
+   sur écran de DJ booth en périphérie. La barre verticale traverse les td via
+   box-shadow inset (pas de décalage de layout). */
 .file-row.focused > td { background: var(--bg-focus); }
+.file-row.focused > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.file-row.focused > td:last-child { box-shadow: inset -1px 0 0 var(--border-focus); }
+.file-row.focused td.file { outline: 1px solid var(--border-focus); }
 .file-row:active { opacity: 0.8; }
 
 /* Play button */

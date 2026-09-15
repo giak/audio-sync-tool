@@ -412,6 +412,41 @@ describe('Keyboard navigation', () => {
     expect(state.activePanel).toBe('epars');
   });
 
+  it('Tab retains focus position on both panels (round-trip)', async () => {
+    renderEpars();
+    renderSource();
+    state.activePanel = 'epars';
+    setActivePanel('epars');
+    await flush();
+
+    // Colonne gauche : descendre de quelques lignes
+    dispatchKey('ArrowDown');
+    dispatchKey('ArrowDown');
+    await flush();
+    const eparsItems = document.querySelectorAll('#epars-container .file-row, #epars-container .directory');
+    const eparsFocusedIdx = [...eparsItems].findIndex(el => el.classList.contains('focused'));
+    expect(eparsFocusedIdx).toBeGreaterThan(0);
+
+    // Tab → droite : le focus droit précédent doit être restauré (pas le haut)
+    dispatchKey('Tab');
+    await flush();
+    const sourceItems = document.querySelectorAll('#source-container .directory, #source-container .file-row');
+    expect([...sourceItems].some(el => el.classList.contains('focused'))).toBe(true);
+    const sourceFocusedIdx = [...sourceItems].findIndex(el => el.classList.contains('focused'));
+
+    // Naviguer à droite puis revenir à gauche
+    dispatchKey('ArrowDown');
+    await flush();
+    const sourceFocusedIdx2 = [...sourceItems].findIndex(el => el.classList.contains('focused'));
+    expect(sourceFocusedIdx2).toBeGreaterThan(sourceFocusedIdx);
+
+    dispatchKey('Tab');
+    await flush();
+    // Colonne gauche : le focus doit être RESTÉ sur la position d'avant le Tab
+    const eparsFocusedIdx2 = [...eparsItems].findIndex(el => el.classList.contains('focused'));
+    expect(eparsFocusedIdx2).toBe(eparsFocusedIdx);
+  });
+
   it('Escape while modal is open closes it', async () => {
     document.getElementById('btn-legend')!.click();
     await flush();
