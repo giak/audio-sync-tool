@@ -62,7 +62,7 @@ sans passer par le système de fichiers à la main ni attendre un scan.
 
 - [x] Typecheck (`npm run typecheck`) — 0 erreur
 - [x] Tests frontend (`npx vitest run`) — **750 passed**
-- [x] Tests backend (`./venv/bin/python -m pytest test_app.py -q`) — **138 passed**
+- [x] Tests backend (`./venv/bin/python -m pytest -q`, 3 fichiers) — **182 passed**
 - [x] Lint (`npm run lint`) — 63 fichiers, 0 erreur
 - [ ] Vérification navigateur (`npm start` → :8765) — à faire par l'utilisateur
 
@@ -92,6 +92,10 @@ sans passer par le système de fichiers à la main ni attendre un scan.
 
 ## Notes / Risques
 
+- Correction compteur (2026-09-15, double-check) : la validation initiale
+  citait « 138 pytest » — c'est test_app.py seul. Total réel du backend :
+  **182** (test_app 138 + test_nml 29 + test_analysis 15). Le 174 du registre
+  historique = 130 (test_app avant EPIC-027) + 29 + 15.
 - Le bouton ➕ reste visible même si aucun dossier n'est configuré : dans ce
   cas `createSourceFolder()` affiche un message d'aide (config + scan d'abord)
   au lieu d'ouvrir le prompt.

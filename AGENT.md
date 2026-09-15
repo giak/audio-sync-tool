@@ -61,9 +61,11 @@ $  → scope/périmètre (était ⟐ dans source)
   $storage: JSON (data/)
   !Zéro dépendance npm frontend — npm only for devDeps
 
-%STRUCTURE [arbre: 16 entrées racine]
+%STRUCTURE [arbre: 22 entrées racine (hors venv/node_modules/cache), 20 lignes documentées ici]
   app.py ← Flask (8765)
   test_app.py ← pytest (138 tests)
+  test_nml.py ← pytest (29 tests)
+  test_analysis.py ← pytest (15 tests)
   templates/index.html ← 2-panel + Playlist UI
   static/ ← 34 modules ES (src/ + render/ + commands/) + *.test.ts (750 tests)
     script.js ← routage clavier + toolbar
