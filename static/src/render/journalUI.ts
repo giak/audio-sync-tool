@@ -8,7 +8,7 @@ export function renderJournal(): void {
   const container = document.getElementById('journal-content');
   if (!container) return;
   if (!state.journal || state.journal.length === 0) {
-    container.innerHTML = '<div style="color:#585b70">Aucune opération enregistrée.</div>';
+    container.innerHTML = '<div style="color:var(--text-muted)">Aucune opération enregistrée.</div>';
     return;
   }
   container.innerHTML = [...state.journal]
