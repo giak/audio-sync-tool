@@ -46,14 +46,19 @@
 | [EPIC-024](EPIC-024-cue-editor-nav.md) | Point d'entrée nav « 🎛️ Cue Editor » — lastCueTrack + bouton grisé | 🟢 Livré | Basse | spec `2026-09-14-cue-editor-nav-design.md` |
 | [EPIC-025](EPIC-025-playlist-playback.md) | Lecture dans le panneau Playlist — bouton ▶ par piste + glow du nom | 🟢 Livré | Moyenne | spec `2026-09-14-playlist-playback-design.md` |
 | [EPIC-026](EPIC-026-liste-fichiers-tableau-contraste.md) | Liste fichiers en vrai tableau (colgroup `table-layout: fixed`) + « Cues » hors épars + textes éclaircis | 🟢 Livré | Haute | mesures headless `/tmp/opencode/measure-*.html` |
+| [EPIC-027](EPIC-027-mkdir-dossier-racine-source.md) | Créer un dossier racine Source Data via bouton ➕ (`/mkdir` + `extra_dirs.json`, retrait index-only) | 🟢 Livré | Moyenne | session 2026-09-15 |
 
 ## État actuel du projet (2026-09-15)
 
-- Tests : **739 vitest** / **174 pytest** — tous verts.
-- EPIC-023–026 livrées (2026-09) : refonte popup Légende (4 colonnes) + fix cache-buster
-  CSS, point d'entrée nav Cue Editor, lecture playlist, et **EPIC-026** (liste fichiers en
-  vrai tableau `<table>` + colgroup `table-layout: fixed`, « Cues » hors épars, durée collée
-  au bord droit, textes éclaircis ×2).
+- Tests : **750 vitest** / **138 pytest** — tous verts.
+- EPIC-023–027 livrées (2026-09) : refonte popup Légende (4 colonnes) + fix cache-buster
+  CSS, point d'entrée nav Cue Editor, lecture playlist, liste fichiers en vrai tableau
+  `<table>` + colgroup `table-layout: fixed` (EPIC-026), et **EPIC-027** (création d'un
+  dossier racine Source Data via bouton ➕ — `/mkdir` + `data/extra_dirs.json`, retrait
+  index-only).
+- Session 2026-09-15 hors EPIC (fixes directs, tests inclus) : F5 copie avec focus sur
+  ligne fichier d'un dossier déplié (`04d93e1`), Tab focus retenu + visibilité focus
+  colonne gauche (`0f572df`), lint 0 erreur sur 63 fichiers (`1194c51`).
 - Prochain chantier : **EPIC-022** (backlog, priorité Haute) — a11y + responsive cue editor.
 - Historique antérieur : voir ci-dessous (2026-08-08).
 

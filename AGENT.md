@@ -19,7 +19,7 @@ $  → scope/périmètre (était ⟐ dans source)
   ├── identity: "Audio Sync Tool — synchronisation fichiers audio"
   ├── stack: Python3.12 + Flask3.x + VanillaJS + Vitest + pytest + mutagen
   ├── port: 8765
-  ├── storage: JSON in data/ (config, journal, cache, playlists)
+  ├── storage: JSON in data/ (config, journal, cache, playlists, beatgrids, extra_dirs)
   └── user: Christophe/Giak (music collection)
 
 %DATA-SAFETY [priorité: ABSOLUE]
@@ -28,7 +28,7 @@ $  → scope/périmètre (était ⟐ dans source)
   #3: NE JAMAIS modifier config/journal/cache/playlists sans demande
   #4: NE JAMAIS supprimer cache (auto-régénéré)
   #5: Demander avant opération destructive
-  $data_files: data/config.json, data/journal.json, data/cache.json, data/playlists.json
+  $data_files: data/config.json, data/journal.json, data/cache.json, data/playlists.json, data/beatgrids.json, data/extra_dirs.json
   $allowed_auto: Lire data/, créer /tmp/, modifier code, ajouter tests
   $needs_confirm: Supprimer/écraser data/, modifier config, supprimer audio, rm/rmdir/delete, modifier .gitignore
 
@@ -63,17 +63,17 @@ $  → scope/périmètre (était ⟐ dans source)
 
 %STRUCTURE [arbre: 16 entrées racine]
   app.py ← Flask (8765)
-  test_app.py ← pytest (49 tests)
+  test_app.py ← pytest (138 tests)
   templates/index.html ← 2-panel + Playlist UI
-  static/ ← 9 modules ES + *.test.js (151 tests)
+  static/ ← 34 modules ES (src/ + render/ + commands/) + *.test.ts (750 tests)
     script.js ← routage clavier + toolbar
-    state.js ← état global mutable
-    api.js ← fetch wrapper
+    state.js ← état global mutable (EventEmitter, Proxy)
+    api.js ← fetch wrapper (retry réseau)
     audio.js ← togglePlay, seek, stop
     focus.js ← navigation spatiale ↑↓←→Tab
-    ui.js ← modales, filtre palette
-    render.js ← DOM rendering (epars, source, journal, playlist)
-    actions.js ← config, scan, copy
+    ui.js ← modales, filtre palette, toasts
+    render.js ← assembler (re-export render/)
+    actions.js ← config, scan, copy, mkdir
     playlist.js ← CRUD + drag-drop
     utils.js ← formatTime, formatDuration, computeStatus
   data/ ← NE PAS TOUCHER
@@ -84,7 +84,7 @@ $  → scope/périmètre (était ⟐ dans source)
   AGENT.md ← ce fichier
 
 %ARCHITECTURE
-  $routes: /config, /scan, /load, /copy, /journal, /audio, /playlists
+  $routes: /config, /scan, /load, /copy, /delete, /mkdir, /journal, /audio, /playlists
   $storage_logic: load_json()/save_json() ← data/
   $metadata: mutagen ← année, durée, codec
   $export: os.link ← fallback shutil.copy2 (EXDEV)
