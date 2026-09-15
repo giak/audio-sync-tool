@@ -1503,7 +1503,7 @@ describe('updatePlaylistLedIndicator', () => {
     expect(document.querySelector('.pl-track-name')?.classList.contains('led-playing')).toBe(true);
   });
 
-  it('retire led-playing quand aucune piste n\'est en lecture', () => {
+  it("retire led-playing quand aucune piste n'est en lecture", () => {
     document.body.innerHTML = `
       <div id="playlist-sidebar">
         <div id="playlist-panel">
@@ -1531,5 +1531,13 @@ describe('updatePlaylistLedIndicator', () => {
     `;
     updatePlaylistLedIndicator();
     expect(document.querySelector('.pl-track-name')?.classList.contains('led-playing')).toBe(false);
+  });
+
+  it('no-op quand le panneau playlist est absent', () => {
+    document.body.innerHTML = `
+      <div id="playlist-sidebar"></div>
+    `;
+    updatePlaylistLedIndicator();
+    expect(document.body.querySelectorAll('.led-playing').length).toBe(0);
   });
 });
