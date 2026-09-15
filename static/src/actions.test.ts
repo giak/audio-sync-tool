@@ -299,6 +299,27 @@ describe('actions', () => {
       expect(openModal).toHaveBeenCalledWith('dialog');
     });
 
+    it('opens dialog when right focus is a file row inside a directory', () => {
+      setupEparsFile();
+      setupDialog();
+      // Dossier déplié : le focus est sur une ligne fichier imbriquée, pas sur
+      // le dossier lui-même — le parent .directory doit servir de destination.
+      const c = document.createElement('div');
+      c.id = 'source-container';
+      const dir = document.createElement('div');
+      dir.className = 'directory';
+      dir.dataset.dirpath = '/source/music';
+      const row = document.createElement('div');
+      row.className = 'file-row focused';
+      dir.appendChild(row);
+      c.appendChild(dir);
+      document.body.appendChild(c);
+      state.eparsFiles = { '/epars': { 'song.mp3': { path: 'song.mp3', year: null, duration: null, codec: null } } };
+
+      executeCopy();
+      expect(openModal).toHaveBeenCalledWith('dialog');
+    });
+
     it('performs batch copy when batch exists', () => {
       getBatchCopy.mockReturnValue({ target: '/dest', files: [{ filename: 'f.mp3', eparDir: '/epars' }] });
       setupDialog();

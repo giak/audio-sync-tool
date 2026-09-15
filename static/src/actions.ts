@@ -256,7 +256,12 @@ export function executeCopy(): void {
 
   // ── Single-file copy (original F5 flow) ───────────────────────────
   const leftFocus = document.querySelector('#epars-container .focused .file') as HTMLElement | null;
-  const rightFocus = document.querySelector('#source-container .focused.directory') as HTMLElement | null;
+  // Dossier cible : focus direct sur un dossier OU sur une ligne fichier d'un
+  // dossier déplié (navigation Tab/↑↓) → le dossier parent sert de destination.
+  const rightFocused = document.querySelector('#source-container .focused') as HTMLElement | null;
+  const rightFocus = rightFocused?.classList.contains('directory')
+    ? rightFocused
+    : (rightFocused?.closest('.directory') as HTMLElement | null);
 
   if (!leftFocus) {
     if (statusText) statusText.textContent = "Met d'abord en surbrillance un fichier à gauche (↑↓).";
