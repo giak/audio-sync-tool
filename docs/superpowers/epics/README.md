@@ -44,6 +44,7 @@
 | [EPIC-022](EPIC-022-a11y-responsive-cue-editor.md) | Accessibilité (aria-label) + responsive cue editor + correction bugs CSS (--border/--text) | ⚪ Backlog | Haute | audit UI/UX 2026-08-19 (session) |
 | [EPIC-023](EPIC-023-legend-modal-redesign.md) | Refonte popup ❓ Raccourcis & Légende : modal-xl, grille 4 colonnes (Légende/Sync/Playlist/Cue editor) + fix cache-buster CSS | 🟢 Livré | Basse | spec/plan `2026-09-14-legend-modal-redesign*` |
 | [EPIC-024](EPIC-024-cue-editor-nav.md) | Point d'entrée nav « 🎛️ Cue Editor » — lastCueTrack + bouton grisé | 🟢 Livré | Basse | spec `2026-09-14-cue-editor-nav-design.md` |
+| [EPIC-025](EPIC-025-playlist-playback.md) | Lecture dans le panneau Playlist — bouton ▶ par piste + glow du nom | 🟢 Livré | Moyenne | spec `2026-09-14-playlist-playback-design.md` |
 
 ## État actuel du projet (2026-08-08)
 
