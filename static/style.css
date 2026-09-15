@@ -11,10 +11,10 @@
   --bg-input:      #080b1f;
 
   /* Text */
-  --text-primary:  #eef3fa;
-  --text-secondary:#aab4d4;
-  --text-muted:    #8792b4;
-  --text-dim:      #67739a;
+  --text-primary:  #f5f8ff;
+  --text-secondary:#c3cdee;
+  --text-muted:    #aab4d2;
+  --text-dim:      #909bbf;
 
   /* Borders */
   --border-panel:  rgba(0, 136, 255, 0.12);
