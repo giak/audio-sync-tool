@@ -3,7 +3,7 @@
 > **Statut** : 🟢 Livré
 > **Créée** : 2026-09-14 · **Dernière mise à jour** : 2026-09-15
 > **Priorité** : Moyenne (UX : écouter sa playlist sans passer par l'arbre source)
-> **Docs liées** : [spec](../specs/2026-09-14-playlist-playback-design.md)
+> **Docs liées** : [spec](../specs/2026-09-14-playlist-playback-design.md), [plan](../plans/2026-09-14-playlist-playback.md)
 
 ## Objectif
 
@@ -51,3 +51,6 @@ Lancer la lecture de n'importe quelle piste de la playlist en un clic (bouton �
 
 - Le glow ne concerne que `#playlist-panel` ; le glow `.file-row` de l'arbre source reste géré par `togglePlay`.
 - Les 12 erreurs biome pré-existantes persistent — hors périmètre (EPIC « dette » dédiée).
+- **Suivi review finale (hors périmètre, non bloquant, Ready to merge ✅)** :
+  1. **Desync re-render** : pendant une lecture active, un re-render du panneau (`eparsPlaylist:changed`, ex. édit de rating) rebâtit les `.play-btn` en `▶` sans ré-asseoir `.playing`/glow — même comportement pré-existant pour `.file-row` → à traiter une fois au niveau `audio.ts` (ré-assertion via le fullpath courant, source de vérité unique).
+  2. **Test d'intégration du chemin complet** clic ▶ → `audio:changed` → glow → stop → retrait : non automatisé (chaque maillon l'est unitairement) → à ajouter sur le flux réel `audio.ts`.
