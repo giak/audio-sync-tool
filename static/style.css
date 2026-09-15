@@ -163,7 +163,7 @@ header h1 {
 /* ===== File Rows ===================================================== */
 .file-row {
   display: grid; align-items: center;
-  grid-template-columns: auto minmax(0, 1fr) 34px 40px 44px 30px 50px;
+  grid-template-columns: auto minmax(0, 1fr) 40px 110px 60px 30px 50px;
   gap: 4px; padding: 2px 0;
   content-visibility: auto;
   contain-intrinsic-size: auto 28px;
@@ -211,7 +211,7 @@ header h1 {
 .led-playing::before { background: var(--led-cyan);  box-shadow: 0 0 8px var(--led-cyan); }
 
 /* ===== File Metadata (year / codec / duration) ======================= */
-.year, .codec, .duration { padding-right: 4px; }
+.year, .codec, .duration { padding-right: 4px; white-space: nowrap; }
 .year     { grid-column: 3; font-size: 13px; color: var(--text-muted); text-align: right; }
 .codec    { grid-column: 4; font-size: 12px; color: var(--text-dim); }
 .duration { grid-column: 5; font-size: 12px; color: var(--text-secondary); text-align: right; }
