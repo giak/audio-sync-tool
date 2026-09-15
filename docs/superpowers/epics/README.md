@@ -47,10 +47,11 @@
 | [EPIC-025](EPIC-025-playlist-playback.md) | Lecture dans le panneau Playlist — bouton ▶ par piste + glow du nom | 🟢 Livré | Moyenne | spec `2026-09-14-playlist-playback-design.md` |
 | [EPIC-026](EPIC-026-liste-fichiers-tableau-contraste.md) | Liste fichiers en vrai tableau (colgroup `table-layout: fixed`) + « Cues » hors épars + textes éclaircis | 🟢 Livré | Haute | mesures headless `/tmp/opencode/measure-*.html` |
 | [EPIC-027](EPIC-027-mkdir-dossier-racine-source.md) | Créer un dossier racine Source Data via bouton ➕ (`/mkdir` + `extra_dirs.json`, retrait index-only) | 🟢 Livré | Moyenne | session 2026-09-15 |
+| [EPIC-028](EPIC-028-doublons-remplacement-qualite.md) | Doublons épars ↔ source : détection (durée ±2 s + nom fuzzy) + remplacement qualité (FLAC vs MP3) via trash `_trash/` — jamais d'effacement | ⚪ Backlog | Haute | spec `2026-09-15-doublons-detection-design.md` |
 
 ## État actuel du projet (2026-09-15)
 
-- Tests : **750 vitest** / **138 pytest** — tous verts.
+- Tests : **750 vitest** / **182 pytest** (test_app 138 + test_nml 29 + test_analysis 15) — tous verts.
 - EPIC-023–027 livrées (2026-09) : refonte popup Légende (4 colonnes) + fix cache-buster
   CSS, point d'entrée nav Cue Editor, lecture playlist, liste fichiers en vrai tableau
   `<table>` + colgroup `table-layout: fixed` (EPIC-026), et **EPIC-027** (création d'un
@@ -59,7 +60,9 @@
 - Session 2026-09-15 hors EPIC (fixes directs, tests inclus) : F5 copie avec focus sur
   ligne fichier d'un dossier déplié (`04d93e1`), Tab focus retenu + visibilité focus
   colonne gauche (`0f572df`), lint 0 erreur sur 63 fichiers (`1194c51`).
-- Prochain chantier : **EPIC-022** (backlog, priorité Haute) — a11y + responsive cue editor.
+- Prochains chantiers : **EPIC-028** (backlog, priorité Haute — doublons épars ↔
+  source, design validé 2026-09-15) et **EPIC-022** (backlog, priorité Haute) — a11y +
+  responsive cue editor.
 - Historique antérieur : voir ci-dessous (2026-08-08).
 
 ## Historique projet (2026-08-08)
