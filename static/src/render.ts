@@ -64,6 +64,11 @@ export function setupRenderSubscriptions(): void {
     const container = document.getElementById('source-container');
     if (container && !container.classList.contains('hidden')) renderSource();
   });
+  // Dossiers racine créés via ➕ (sourceTree.renderExtraDirs)
+  on('sourceExtraDirs:changed', () => {
+    const container = document.getElementById('source-container');
+    if (container && !container.classList.contains('hidden')) renderSource();
+  });
 
   // Journal change → epars badges need recomputation
   on('journal:changed', () => {

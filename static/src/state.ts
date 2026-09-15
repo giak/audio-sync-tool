@@ -95,6 +95,9 @@ type PlaylistFocusZone = 'source' | 'sidebar';
 
 interface AppState {
   sourceFiles: Record<string, FileIndex>;
+  /** Dossiers racine vides créés via l'UI (➕) — le scan n'indexe que les fichiers
+   *  audio, ils seraient invisibles sans ce suivi. Chemins absolus. */
+  sourceExtraDirs: Set<string>;
   eparsFiles: Record<string, FileIndex>;
   journal: JournalEntry[];
   activeModal: ActiveModal;
@@ -139,6 +142,7 @@ const VALID_PLAYLIST_FOCUS = new Set<PlaylistFocusZone>(['source', 'sidebar']);
 
 const _state: AppState = {
   sourceFiles: {},
+  sourceExtraDirs: new Set(),
   eparsFiles: {},
   journal: [],
   activeModal: null,

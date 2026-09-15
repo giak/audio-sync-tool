@@ -1,9 +1,10 @@
 // ─── Source Data panel: tree building, toggle, filtering, rendering ───────
 
+import { api } from '../api.js';
 import { focusItemByElement, setActivePanel } from '../focus.js';
 import { getActivePlaylistName, getPendingTracks } from '../playlist.js';
 import { state, type TreeNode } from '../state.js';
-import { showContextMenu } from '../ui.js';
+import { confirmDialog, showContextMenu, showError } from '../ui.js';
 import { dirHasMatchingDescendant, type FileStatus } from '../utils.js';
 import { setBatchCopy } from './batchCopy.js';
 import { openCueEditor } from './cueEditor.js';
@@ -43,7 +44,42 @@ function showDirContextMenu(x: number, y: number, dirPath: string): void {
       action: () => batchCopyToDir(dirPath),
     });
   }
+  if (state.sourceExtraDirs.has(dirPath)) {
+    items.push({
+      label: "❌ Retirer de l'index (dossier conservé sur disque)",
+      danger: true,
+      action: () => removeSourceExtraDir(dirPath),
+    });
+  }
   showContextMenu(x, y, items);
+}
+
+/** Retire un dossier ➕ de l'index (DELETE /mkdir) — le disque n'est jamais
+ *  touché (DATA-SAFETY) : seul le suivi extra_dirs.json est nettoyé. */
+function removeSourceExtraDir(dirPath: string): void {
+  const sep = dirPath.lastIndexOf('/');
+  const name = sep > 0 ? dirPath.slice(sep + 1) : dirPath;
+  const root = sep > 0 ? dirPath.slice(0, sep) : dirPath;
+  confirmDialog(
+    `Retirer « ${name} » de l'index ? Le dossier reste sur le disque.`,
+    async () => {
+      try {
+        await api('/mkdir', {
+          method: 'DELETE',
+          body: JSON.stringify({ root, name }),
+        });
+        const next = new Set(state.sourceExtraDirs);
+        next.delete(dirPath);
+        state.sourceExtraDirs = next; // EventEmitter → re-render
+        state.journal = await api<typeof state.journal>('/journal');
+        const statusText = document.getElementById('status-text');
+        if (statusText) statusText.textContent = `✓ « ${name} » retiré de l'index (dossier conservé sur le disque).`;
+      } catch (err) {
+        showError(`Échec du retrait : ${err instanceof Error ? err.message : String(err)}`);
+      }
+    },
+    'Retirer',
+  );
 }
 
 function batchCopyToDir(destDir: string): void {
@@ -379,6 +415,64 @@ function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath:
   }
 }
 
+// ── Dossiers racine créés via ➕ ─────────────────────────────────────
+
+/** Les dossiers créés via le bouton ➕ sont vides : absents de l'arbre dérivé
+ *  des fichiers scannés, ils seraient invisibles. Rendus ici, au même niveau
+ *  que les dossiers scannés. Ceux qui reçoivent des fichiers via Scan
+ *  redeviennent des nœuds normaux (exclus de ce rendu). */
+function dirExistsInTree(tree: TreeNode, relPath: string): boolean {
+  let node: TreeNode = tree;
+  for (const seg of relPath.split('/')) {
+    const next = node[seg] as TreeNode | undefined;
+    if (!next || Array.isArray(next)) return false;
+    node = next;
+  }
+  return true;
+}
+
+function renderExtraDirs(container: HTMLElement, allTrees: TreeAndDir[]): void {
+  for (const dirPath of state.sourceExtraDirs) {
+    let existsAsScanned = false;
+    for (const { tree, dirPath: base } of allTrees) {
+      if (dirPath === base) {
+        existsAsScanned = true;
+        break;
+      }
+      if (dirPath.startsWith(`${base}/`) && dirExistsInTree(tree, dirPath.slice(base.length + 1))) {
+        existsAsScanned = true;
+        break;
+      }
+    }
+    if (existsAsScanned) continue;
+    const name = dirPath.split('/').pop() || dirPath;
+    const dirEl = document.createElement('div');
+    dirEl.className = 'directory';
+    dirEl.dataset.dirpath = dirPath;
+    dirEl.dataset.focuspath = dirPath;
+    dirEl.dataset.extra = '1';
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = name;
+    dirEl.appendChild(nameSpan);
+    const countSpan = document.createElement('span');
+    countSpan.className = 'dir-count';
+    countSpan.textContent = '(vide)';
+    dirEl.appendChild(countSpan);
+    dirEl.onclick = () => {
+      const cont = dirEl.closest('#source-container, #playlist-source-container') as HTMLElement | null;
+      if (cont) {
+        focusItemByElement(cont, dirEl);
+        if (cont.id !== 'playlist-source-container') setActivePanel('source');
+      }
+    };
+    dirEl.oncontextmenu = (e: MouseEvent) => {
+      e.preventDefault();
+      showDirContextMenu(e.clientX, e.clientY, dirPath);
+    };
+    container.appendChild(dirEl);
+  }
+}
+
 // ── Main render ───────────────────────────────────────────────────────────
 
 export function renderSource(): void {
@@ -442,6 +536,7 @@ export function renderSource(): void {
     for (const { tree, dirPath } of allTrees) {
       renderDirTree(tree, container, dirPath);
     }
+    renderExtraDirs(container, allTrees);
     if (headerCount) headerCount.textContent = totalCount > 0 ? `(${totalCount.toLocaleString('fr')})` : '';
     if (!state.filterActive) {
       const filterCount = document.getElementById('source-filter-count');

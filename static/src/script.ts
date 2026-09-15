@@ -8,7 +8,7 @@ import './commands/filter.js';
 import './commands/rating.js';
 import './commands/playlist.js';
 import './commands/modals.js';
-import { initApp, initConfigUI, runScan } from './actions.js';
+import { createSourceFolder, initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
 import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
 import { setActivePanel } from './focus.js';
@@ -94,6 +94,10 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   confirmDialog('Vider tout le journal ?', () => void clearJournal(), 'Vider');
 });
 (document.getElementById('btn-scan') as HTMLElement | null)!.onclick = runScan;
+// Bouton ➕ : création d'un dossier racine dans Source Data (page sync).
+(document.getElementById('btn-add-dir') as HTMLElement | null)?.addEventListener('click', () => {
+  void createSourceFolder();
+});
 (document.getElementById('pl-manage') as HTMLElement | null)!.onclick = () => {
   renderPlaylistManager();
   openModal('playlists');

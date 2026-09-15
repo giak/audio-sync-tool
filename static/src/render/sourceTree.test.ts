@@ -12,6 +12,9 @@ const {
   focusItemByElement,
   setActivePanel,
   showContextMenu,
+  confirmDialog,
+  showError,
+  api,
   getActivePlaylistName,
   getPendingTracks,
   dirHasMatchingDescendant,
@@ -23,6 +26,11 @@ const {
   focusItemByElement: vi.fn(),
   setActivePanel: vi.fn(),
   showContextMenu: vi.fn(),
+  confirmDialog: vi.fn((_msg: string, onConfirm: () => void) => {
+    onConfirm();
+  }),
+  showError: vi.fn(),
+  api: vi.fn(),
   getActivePlaylistName: vi.fn(() => 'playlist-1'),
   getPendingTracks: vi.fn(() => []),
   dirHasMatchingDescendant: vi.fn(() => false),
@@ -40,7 +48,8 @@ const {
 // ── Module mocks ──────────────────────────────────────────────────────────
 
 vi.mock('../focus.js', () => ({ focusItemByElement, setActivePanel }));
-vi.mock('../ui.js', () => ({ showContextMenu }));
+vi.mock('../ui.js', () => ({ showContextMenu, confirmDialog, showError }));
+vi.mock('../api.js', () => ({ api }));
 vi.mock('../playlist.js', () => ({ getActivePlaylistName, getPendingTracks }));
 vi.mock('../utils.js', () => ({ dirHasMatchingDescendant }));
 vi.mock('./fileRow.js', () => ({
@@ -123,6 +132,7 @@ describe('render/sourceTree', () => {
     state.sourceFilter = '';
     state.playlistMode = false;
     state.selectedEparsFiles = new Map();
+    state.sourceExtraDirs = new Set();
   });
 
   afterAll(() => {
@@ -350,6 +360,91 @@ describe('render/sourceTree', () => {
   });
 
   // ── renderSource ────────────────────────────────────────────────────
+
+  // ── Dossiers racine créés via ➕ (extra dirs) ────────────────────
+
+  describe('extra dirs (bouton ➕)', () => {
+    it('renderSource displays an empty root folder created via ➕, with (vide) badge', () => {
+      const c = setupContainer();
+      state.sourceFiles = {
+        '/base': {
+          'song.mp3': { path: 'Music/song.mp3', year: '2024', duration: 180, codec: 'MP3' },
+        },
+      };
+      state.sourceExtraDirs = new Set(['/base/Vide']);
+
+      renderSource();
+
+      const extra = c.querySelector('.directory[data-extra="1"]') as HTMLElement | null;
+      expect(extra).not.toBeNull();
+      expect(extra!.dataset.dirpath).toBe('/base/Vide');
+      expect(extra!.querySelector('.dir-count')?.textContent).toBe('(vide)');
+      // focusable comme les autres dossiers (Tab/↑↓)
+      expect(extra!.dataset.focuspath).toBe('/base/Vide');
+      c.remove();
+    });
+
+    it('extra dir that received files via scan is no longer shown as empty', () => {
+      const c = setupContainer();
+      state.sourceFiles = {
+        '/base': {
+          'a.mp3': { path: 'Ambient/a.mp3', year: '2024', duration: 180, codec: 'MP3' },
+        },
+      };
+      state.sourceExtraDirs = new Set(['/base/Ambient']);
+
+      renderSource();
+
+      // Rendu comme dossier normal (pas de marqueur extra, pas de badge vide)
+      const normal = c.querySelector('.directory[data-dirpath="/base/Ambient"]') as HTMLElement | null;
+      expect(normal).not.toBeNull();
+      expect(normal!.dataset.extra).toBeUndefined();
+      expect(normal!.querySelector('.dir-count')?.textContent).not.toBe('(vide)');
+      expect(c.querySelector('.directory[data-extra="1"]')).toBeNull();
+      c.remove();
+    });
+
+    it('context menu on extra dir offers "Retirer"; confirm calls DELETE /mkdir', async () => {
+      const c = setupContainer();
+      state.sourceFiles = { '/base': {} };
+      state.sourceExtraDirs = new Set(['/base/Temporaire']);
+      api.mockResolvedValueOnce({ ok: true }); // DELETE /mkdir
+      api.mockResolvedValueOnce([]); // GET /journal
+
+      renderSource();
+
+      const extra = c.querySelector('.directory[data-extra="1"]') as HTMLElement;
+      extra.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+
+      expect(showContextMenu).toHaveBeenCalledTimes(1);
+      const items = showContextMenu.mock.calls[0][2] as Array<{ label: string; action: () => void }>;
+      expect(items.some(i => i.label.includes('Retirer'))).toBe(true);
+
+      // confirmDialog mocké : exécute onConfirm immédiatement
+      const item = items.find(i => i.label.includes('Retirer'))!;
+      item.action();
+      await vi.waitFor(() => {
+        expect(api).toHaveBeenCalledWith('/mkdir', expect.objectContaining({ method: 'DELETE' }));
+      });
+      await vi.waitFor(() => {
+        expect(state.sourceExtraDirs.has('/base/Temporaire')).toBe(false);
+      });
+      c.remove();
+    });
+
+    it('extra dir click focuses it without error (no toggle, no children)', () => {
+      const c = setupContainer();
+      state.sourceFiles = { '/base': {} };
+      state.sourceExtraDirs = new Set(['/base/Vide']);
+
+      renderSource();
+
+      const extra = c.querySelector('.directory[data-extra="1"]') as HTMLElement;
+      expect(() => extra.click()).not.toThrow();
+      expect(focusItemByElement).toHaveBeenCalledWith(c, extra);
+      c.remove();
+    });
+  });
 
   describe('renderSource', () => {
     it('renders source tree from state.sourceFiles', () => {

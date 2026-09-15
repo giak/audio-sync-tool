@@ -138,6 +138,23 @@ header h1 {
   font-weight: normal; margin-left: 8px;
 }
 
+/* ===== Bouton ➕ création dossier (header panneau Source Data) ======== */
+.panel-add-btn {
+  float: right;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-panel);
+  border-radius: 3px;
+  padding: 1px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.panel-add-btn:hover {
+  background: var(--bg-focus);
+  border-color: var(--border-emph);
+  color: var(--text-primary);
+}
+
 /* ===== Source Container (2-column layout) ============================ */
 #source-container { column-count: 2; column-gap: 14px; }
 

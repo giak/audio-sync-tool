@@ -29,6 +29,9 @@ RATINGS_PATH = os.path.join(DATA_DIR, 'ratings.json')
 # Cache de grille par piste (EPIC-009) — fichier séparé du cache de scan :
 # {bpm, phase, source} persistés entre sessions pour les pistes sans grille NML.
 BEATGRID_PATH = os.path.join(DATA_DIR, 'beatgrids.json')
+# Dossiers racine vides créés via l'UI (➕) : le scan n'indexe que les fichiers
+# audio, donc un dossier vide disparaîtrait au prochain rendu sans ce fichier.
+EXTRA_DIRS_PATH = os.path.join(DATA_DIR, 'extra_dirs.json')
 
 
 def load_json(path, default=None, log_corrupt=True):
@@ -68,6 +71,16 @@ def save_json(path, data):
 
 
 MUSIC_EXTENSIONS = ('.mp3', '.flac', '.wav', '.ogg', '.m4a', '.wma')
+
+
+def load_extra_dirs():
+    """Dossiers racine vides créés via l'UI (➕) — hors cache de scan."""
+    return load_json(EXTRA_DIRS_PATH, [])
+
+
+def save_extra_dirs(dirs):
+    """Persistance triée/dédupliquée des dossiers racine additionnels."""
+    save_json(EXTRA_DIRS_PATH, sorted(set(dirs)))
 
 # ── Scan progress tracking ────────────────────────────────────────────────
 _scan_progress = {
@@ -447,6 +460,7 @@ def scan():
             result['source'][source_dir] = index_files(source_dir, 'Source Data')
         for d in epars_dirs:
             result['epars'][d] = index_files(d, 'Éparpillé')
+        result['extra_dirs'] = load_extra_dirs()
 
         save_json(CACHE_PATH, result)
 
@@ -467,7 +481,67 @@ def scan():
 
 @app.route('/load')
 def load_cached():
-    return jsonify(load_json(CACHE_PATH, {'source': {}, 'epars': {}}))
+    data = load_json(CACHE_PATH, {'source': {}, 'epars': {}})
+    data.setdefault('source', {})
+    data['extra_dirs'] = load_extra_dirs()
+    return jsonify(data)
+
+
+@app.route('/mkdir', methods=['POST', 'DELETE'])
+def mkdir_source_dir():
+    """Créer (POST) ou retirer de l'index (DELETE) un dossier racine de Source Data.
+
+    Le scan (os.walk) n'indexe que les fichiers audio : un dossier vide créé
+    via l'UI serait invisible au prochain rendu. On le trace donc dans
+    data/extra_dirs.json, réinjecté dans /load et /scan.
+    DELETE ne supprime jamais rien du disque — il retire uniquement le dossier
+    de l'index (règle DATA-SAFETY).
+    """
+    data = request.json
+    if data is None:
+        return jsonify({'ok': False, 'error': 'Request body must be JSON'}), 400
+    root = data.get('root', '')
+    name = (data.get('name') or '').strip()
+    if not root or not name:
+        return jsonify({'ok': False, 'error': 'Missing required key: root, name'}), 400
+    if '/' in name or '\\' in name or name in ('.', '..'):
+        return jsonify({'ok': False, 'error': 'Nom de dossier invalide'}), 400
+
+    if not is_path_allowed(os.path.join(root, name)):
+        return jsonify({'ok': False, 'error': 'Path not within allowed directories'}), 403
+
+    target = os.path.join(root, name)
+
+    if request.method == 'DELETE':
+        dirs = load_extra_dirs()
+        if target not in dirs:
+            return jsonify({'ok': False, 'error': "Dossier introuvable dans l'index"}), 404
+        dirs.remove(target)
+        save_extra_dirs(dirs)
+        log_journal({
+            'timestamp': datetime.now().isoformat(),
+            'action': "Dossier retiré de l'index",
+            'details': target,
+            'status': 'mkdir'
+        })
+        return jsonify({'ok': True, 'name': name})
+
+    try:
+        os.makedirs(target, exist_ok=True)
+    except OSError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+    dirs = load_extra_dirs()
+    if target not in dirs:
+        dirs.append(target)
+        save_extra_dirs(dirs)
+    log_journal({
+        'timestamp': datetime.now().isoformat(),
+        'action': 'Dossier créé',
+        'details': target,
+        'status': 'mkdir'
+    })
+    return jsonify({'ok': True, 'name': name, 'path': target})
 
 
 @app.route('/copy', methods=['POST'])

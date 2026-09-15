@@ -6,7 +6,7 @@ import { revalidateFocus, setActivePanel } from './focus.js';
 import { loadRatings } from './ratings.js';
 import { getBatchCopy } from './render.js';
 import { type FileIndex, state } from './state.js';
-import { closeAllModals, openModal, showError } from './ui.js';
+import { closeAllModals, openModal, promptDialog, showError } from './ui.js';
 
 // ── Config types ───────────────────────────────────────────────────────────
 
@@ -149,9 +149,14 @@ export async function runScan(): Promise<void> {
 
   let scanFailed = false;
   try {
-    const data = await api<{ source: Record<string, FileIndex>; epars: Record<string, FileIndex> }>('/scan');
+    const data = await api<{
+      source: Record<string, FileIndex>;
+      epars: Record<string, FileIndex>;
+      extra_dirs?: string[];
+    }>('/scan');
     state.sourceFiles = (data.source || {}) as typeof state.sourceFiles;
     state.eparsFiles = (data.epars || {}) as typeof state.eparsFiles;
+    state.sourceExtraDirs = new Set(data.extra_dirs || []);
     state.journal = await api<typeof state.journal>('/journal');
     // EventEmitter auto-renders panels via subscriptions
     // Double-RAF restores focus after EventEmitter's deferred render
@@ -337,12 +342,50 @@ export function executeCopy(): void {
   if (cancelBtn) cancelBtn.onclick = () => closeAllModals();
 }
 
+// ── Create folder (bouton ➕ du panneau Source Data) ──────────────────────
+
+/** Ouvre le prompt « nom du dossier », POST /mkdir, met à jour l'état local
+ *  (EventEmitter → re-render). Le dossier est créé à la racine de Source Data,
+ *  au même niveau que les autres. */
+export async function createSourceFolder(): Promise<void> {
+  const sourceDir = Object.keys(state.sourceFiles)[0] || null;
+  if (!sourceDir) {
+    showError("Configure d'abord le dossier Source Data (⚙️ Config) puis lance Scan.");
+    return;
+  }
+  promptDialog(
+    'Nom du nouveau dossier (à la racine de Source Data) :',
+    '',
+    async name => {
+      try {
+        const res = await api<{ ok: boolean; path: string }>('/mkdir', {
+          method: 'POST',
+          body: JSON.stringify({ root: sourceDir, name }),
+        });
+        if (!res.ok) {
+          showError('Création refusée par le serveur.');
+          return;
+        }
+        const next = new Set(state.sourceExtraDirs);
+        next.add(res.path);
+        state.sourceExtraDirs = next; // EventEmitter → re-render
+        const statusText = document.getElementById('status-text');
+        if (statusText) statusText.textContent = `✓ Dossier "${name}" créé à la racine de Source Data.`;
+        requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
+      } catch (err) {
+        showError(`Échec de la création : ${err instanceof Error ? err.message : String(err)}`);
+      }
+    },
+    'Créer',
+  );
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 export async function initApp(): Promise<void> {
   try {
     const [config, cache, journal] = await Promise.all([
       api<ConfigData>('/config'),
-      api<{ source?: Record<string, FileIndex>; epars?: Record<string, FileIndex> }>('/load'),
+      api<{ source?: Record<string, FileIndex>; epars?: Record<string, FileIndex>; extra_dirs?: string[] }>('/load'),
       api<typeof state.journal>('/journal'),
     ]);
 
@@ -357,6 +400,8 @@ export async function initApp(): Promise<void> {
       state.sourceFiles = (cache.source || {}) as typeof state.sourceFiles;
       state.eparsFiles = (cache.epars || {}) as typeof state.eparsFiles;
     }
+    // Dossiers racine vides (➕) — toujours, même sans cache de scan.
+    state.sourceExtraDirs = new Set(cache?.extra_dirs || []);
 
     loadRatings().catch(() => {
       /* ratings are optional */

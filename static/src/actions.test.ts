@@ -13,6 +13,7 @@ const {
   loadRatings,
   closeAllModals,
   openModal,
+  promptDialog,
   showError,
   // Références aux éléments config CRÉÉS AVANT l'import d'actions.ts : les
   // constantes module-level de actions.ts (cfgSelect…) y sont liées à l'import.
@@ -43,6 +44,10 @@ const {
     loadRatings: vi.fn(async () => {}),
     closeAllModals: vi.fn(),
     openModal: vi.fn(),
+    // promptDialog mocké : exécute onOk(value) immédiatement (jsdom)
+    promptDialog: vi.fn((_msg: string, _default: string, onOk: (v: string) => void) => {
+      onOk('Ambient');
+    }),
     showError: vi.fn(),
     cfgElements: Array.from(
       document.querySelectorAll(
@@ -56,9 +61,17 @@ vi.mock('./api.js', () => ({ api }));
 vi.mock('./focus.js', () => ({ revalidateFocus, setActivePanel }));
 vi.mock('./render.js', () => ({ getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderSource }));
 vi.mock('./ratings.js', () => ({ loadRatings }));
-vi.mock('./ui.js', () => ({ closeAllModals, openModal, showError }));
+vi.mock('./ui.js', () => ({ closeAllModals, openModal, promptDialog, showError }));
 
-import { configData, executeCopy, initApp, initConfigUI, renderConfigSelect, runScan } from './actions.js';
+import {
+  configData,
+  createSourceFolder,
+  executeCopy,
+  initApp,
+  initConfigUI,
+  renderConfigSelect,
+  runScan,
+} from './actions.js';
 
 // ── Config tests (separate describe — needs cfgSelect elements in DOM) ────
 describe('config', () => {
@@ -174,6 +187,7 @@ describe('actions', () => {
     state.eparsFiles = {};
     state.journal = [];
     state.selectedEparsFiles = new Map();
+    state.sourceExtraDirs = new Set();
   });
 
   // ── Scan ───────────────────────────────────────────────────────────
@@ -228,6 +242,68 @@ describe('actions', () => {
 
       const status = document.getElementById('status-text');
       expect(status?.textContent).toContain('Scan terminé');
+    });
+  });
+
+  // ── createSourceFolder (bouton ➕) ───────────────────────────────
+
+  describe('createSourceFolder', () => {
+    function setupStatusEl(): HTMLElement {
+      let status = document.getElementById('status-text');
+      if (!status) {
+        status = document.createElement('div');
+        status.id = 'status-text';
+        document.body.appendChild(status);
+      }
+      return status;
+    }
+
+    it('shows guidance when no source dir is configured', async () => {
+      setupStatusEl();
+      state.sourceFiles = {};
+
+      await createSourceFolder();
+
+      expect(showError).toHaveBeenCalledWith(expect.stringContaining('Source Data'));
+      expect(promptDialog).not.toHaveBeenCalled();
+    });
+
+    it('prompts for a name and POSTs /mkdir with root and name', async () => {
+      setupStatusEl();
+      state.sourceFiles = { '/src': {} };
+      api.mockResolvedValueOnce({ ok: true, path: '/src/Ambient' });
+
+      await createSourceFolder();
+
+      expect(promptDialog).toHaveBeenCalledTimes(1);
+      // promptDialog mocké : le callback onOk s'exécute immédiatement
+      await vi.waitFor(() => {
+        expect(api).toHaveBeenCalledWith(
+          '/mkdir',
+          expect.objectContaining({
+            method: 'POST',
+            body: expect.stringContaining('Ambient'),
+          }),
+        );
+      });
+      // La mise à jour d'état suit l'appel api (même tick) — elle peut n'être
+      // pas encore visible au moment où l'appel est observable.
+      await vi.waitFor(() => {
+        expect(state.sourceExtraDirs.has('/src/Ambient')).toBe(true);
+      });
+    });
+
+    it('shows error when POST /mkdir fails', async () => {
+      setupStatusEl();
+      state.sourceFiles = { '/src': {} };
+      api.mockRejectedValueOnce(new Error('HTTP 403'));
+
+      await createSourceFolder();
+
+      await vi.waitFor(() => {
+        expect(showError).toHaveBeenCalledWith(expect.stringContaining('403'));
+      });
+      expect(state.sourceExtraDirs.size).toBe(0);
     });
   });
 

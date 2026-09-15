@@ -1481,9 +1481,14 @@ describe('setupRenderSubscriptions', () => {
     expect(on).toHaveBeenCalledWith('sourceFiles:changed', expect.any(Function));
   });
 
-  it('calls on() exactly 7 times (5 original + journal + activePanel)', () => {
+  it('registers sourceExtraDirs:changed listener (dossiers créés via ➕)', () => {
     setupRenderSubscriptions();
-    expect(on).toHaveBeenCalledTimes(7);
+    expect(on).toHaveBeenCalledWith('sourceExtraDirs:changed', expect.any(Function));
+  });
+
+  it('calls on() exactly 8 times (5 original + journal + activePanel + sourceExtraDirs)', () => {
+    setupRenderSubscriptions();
+    expect(on).toHaveBeenCalledTimes(8);
   });
 });
 

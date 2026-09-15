@@ -4,6 +4,7 @@ import struct
 import tempfile
 import pytest
 from xml.etree import ElementTree as ET
+import app as app_module
 from app import (
     app,
     JOURNAL_MAX_ENTRIES,
@@ -210,7 +211,8 @@ def test_copy_missing_source(client):
 def test_load_empty_cache(client):
     rv = client.get('/load')
     assert rv.status_code == 200
-    assert rv.json == {'source': {}, 'epars': {}}
+    # extra_dirs : dossiers racine créés via ➕ (toujours présent dans la réponse)
+    assert rv.json == {'source': {}, 'epars': {}, 'extra_dirs': []}
 
 
 def test_load_after_scan(client):
@@ -414,6 +416,101 @@ def test_scan_nonexistent_source_dir(client):
     assert rv.status_code == 200
     assert rv.json['source'] == {'/no/such/dir': {}}
     assert rv.json['epars'] == {}
+
+
+# --- /mkdir tests ---
+
+@pytest.fixture
+def clean_extra_dirs(monkeypatch, tmp_path):
+    """Isolate data/extra_dirs.json in tmp_path for /mkdir tests."""
+    monkeypatch.setattr('app.EXTRA_DIRS_PATH', str(tmp_path / 'extra_dirs.json'))
+
+
+def test_mkdir_creates_root_dir_and_persists(client, clean_extra_dirs):
+    """POST /mkdir crée le dossier disque + le trace dans extra_dirs.json."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        rv = client.post('/mkdir', json={'root': tmp, 'name': 'Ambient'})
+        assert rv.status_code == 200
+        assert rv.json['ok'] is True
+        assert os.path.isdir(os.path.join(tmp, 'Ambient'))
+        # Persisté dans extra_dirs.json (via app.EXTRA_DIRS_PATH isolé)
+        assert load_json(app_module.EXTRA_DIRS_PATH, []) == [os.path.join(tmp, 'Ambient')]
+
+
+def test_mkdir_idempotent(client, clean_extra_dirs):
+    """POST /mkdir sur un dossier existant → 200, pas de doublon dans l'index."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        rv1 = client.post('/mkdir', json={'root': tmp, 'name': 'Ambient'})
+        rv2 = client.post('/mkdir', json={'root': tmp, 'name': 'Ambient'})
+        assert rv1.status_code == 200
+        assert rv2.status_code == 200
+        assert load_json(app_module.EXTRA_DIRS_PATH, []).count(os.path.join(tmp, 'Ambient')) == 1
+
+
+def test_mkdir_invalid_name_rejected(client, clean_extra_dirs):
+    """Nom vide / '.' / '..' / avec séparateur → 400, rien créé."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        for bad in ('', 'a/b', 'a\\\\b', '.', '..'):
+            rv = client.post('/mkdir', json={'root': tmp, 'name': bad})
+            assert rv.status_code == 400, f'name={bad!r}'
+        assert os.listdir(tmp) == []
+
+
+def test_mkdir_outside_allowed_returns_403(client, clean_extra_dirs):
+    """POST /mkdir sur un root hors config → 403, rien créé."""
+    with tempfile.TemporaryDirectory() as tmp:
+        outside = os.path.join(tmp, 'outside')
+        os.makedirs(outside)
+        client.post('/config', json=make_cfg(source_data=os.path.join(tmp, 'allowed')))
+        rv = client.post('/mkdir', json={'root': outside, 'name': 'Nope'})
+        assert rv.status_code == 403
+        assert not os.path.exists(os.path.join(outside, 'Nope'))
+
+
+def test_mkdir_delete_removes_from_index_only(client, clean_extra_dirs):
+    """DELETE /mkdir retire le dossier de l'index, jamais du disque (DATA-SAFETY)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        client.post('/mkdir', json={'root': tmp, 'name': 'Temporaire'})
+        target = os.path.join(tmp, 'Temporaire')
+        # Non-vide : la garantie « jamais rien supprimé du disque » est prouvée
+        # par un contenu qui doit survivre au DELETE.
+        open(os.path.join(target, 'keep.mp3'), 'w').close()
+
+        rv = client.delete('/mkdir', json={'root': tmp, 'name': 'Temporaire'})
+        assert rv.status_code == 200
+        assert os.path.isdir(target)  # disque intact
+        assert os.path.exists(os.path.join(target, 'keep.mp3'))
+        assert load_json(app_module.EXTRA_DIRS_PATH, []) == []
+
+        # Deuxième DELETE → 404 (déjà retiré)
+        rv2 = client.delete('/mkdir', json={'root': tmp, 'name': 'Temporaire'})
+        assert rv2.status_code == 404
+
+
+def test_mkdir_requires_json_body(client, clean_extra_dirs):
+    """POST /mkdir sans JSON → 415 (Flask: content-type absent), comme /copy."""
+    rv = client.post('/mkdir')
+    assert rv.status_code == 415
+
+
+def test_mkdir_root_missing_key(client, clean_extra_dirs):
+    """POST /mkdir sans root/name → 400."""
+    rv = client.post('/mkdir', json={'root': '/x'})
+    assert rv.status_code == 400
+
+
+def test_load_and_scan_inject_extra_dirs(client, clean_extra_dirs):
+    """Les dossiers ➕ ressortent dans /load et /scan (extra_dirs)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        client.post('/mkdir', json={'root': tmp, 'name': 'Ambient'})
+        assert client.get('/load').json['extra_dirs'] == [os.path.join(tmp, 'Ambient')]
+        scan = client.get('/scan').json
+        assert scan['extra_dirs'] == [os.path.join(tmp, 'Ambient')]
 
 
 # --- /audio tests ---
