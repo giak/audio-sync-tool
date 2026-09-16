@@ -13,6 +13,7 @@
     <div id="page-nav">
       <button id="page-sync" class="page-btn active">📦 Sync</button>
       <button id="page-playlist" class="page-btn">🎵 Playlist</button>
+      <button id="page-dups" class="page-btn" title="Doublons épars ↔ rangés (homonymes probables)">↔ Doublons</button>
       <button id="page-cue" class="page-btn" disabled title="Ouvre un cue (ligne playlist ou [Cues])">🎛️ Cue Editor</button>
     </div>
     <div id="toolbar">
@@ -41,6 +42,15 @@
   <div id="filter-palette" class="hidden">
     <input type="text" id="source-filter" placeholder="Filtrer les dossiers…" spellcheck="false" autocomplete="off">
     <span id="source-filter-count"></span>
+  </div>
+
+  <!-- Doublons mode layout (EPIC-028 P2, hidden by default) -->
+  <div id="dups-layout" class="hidden">
+    <div id="dups-main" class="panel">
+      <h2>↔ Doublons épars ↔ rangés <span id="dups-count"></span></h2>
+      <p id="dups-hint">↑↓ naviguer · <b>R</b> remplacer (l'ancien rangé → _trash) · Échap/clic 📦 Sync pour revenir</p>
+      <div id="dups-list"></div>
+    </div>
   </div>
 
   <!-- Playlist mode layout (hidden by default, shown when playlistMode === true) -->
@@ -188,6 +198,12 @@
         <div class="legend-row"><kbd>Échap</kbd> Fermer modale / Annuler filtre / Stopper audio</div>
       </div>
       <div class="legend-section">
+        <h4>Raccourcis (Doublons)</h4>
+        <div class="legend-row"><kbd>↔ Doublons</kbd> Ouvrir la vue (nav)</div>
+        <div class="legend-row"><kbd>↑↓</kbd> Naviguer les paires</div>
+        <div class="legend-row"><kbd>R</kbd> Remplacer (l'ancien rangé → _trash)</div>
+        <div class="legend-row"><kbd>Échap</kbd> / <kbd>📦 Sync</kbd> Revenir à la page Sync</div>
+        <div class="legend-section">
         <h4>Raccourcis (Cue editor)</h4>
         <div class="legend-row"><kbd>←→</kbd> Seek ±5s</div>
         <div class="legend-row"><kbd>+</kbd> / <kbd>−</kbd> Zoom (molette aussi)</div>

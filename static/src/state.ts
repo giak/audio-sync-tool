@@ -90,7 +90,7 @@ interface SourceNodeInfo {
   baseDir: string;
 }
 
-type ActiveModal = 'config' | 'legend' | 'journal' | 'dialog' | 'playlists' | 'cueEditor' | null;
+type ActiveModal = 'config' | 'legend' | 'journal' | 'dialog' | 'playlists' | 'cueEditor' | 'dups' | null;
 type ActivePanel = 'epars' | 'source';
 type PlaylistFocusZone = 'source' | 'sidebar';
 
@@ -143,7 +143,7 @@ interface NavHistoryEntry {
 }
 
 const VALID_PANELS = new Set<ActivePanel>(['epars', 'source']);
-const VALID_MODALS = new Set<ActiveModal>([null, 'config', 'legend', 'journal', 'dialog', 'playlists', 'cueEditor']);
+const VALID_MODALS = new Set<ActiveModal>([null, 'config', 'legend', 'journal', 'dialog', 'playlists', 'cueEditor', 'dups']);
 const VALID_PLAYLIST_FOCUS = new Set<PlaylistFocusZone>(['source', 'sidebar']);
 
 const _state: AppState = {

@@ -9,12 +9,14 @@ import './commands/rating.js';
 import './commands/playlist.js';
 import './commands/modals.js';
 import './commands/replace.js';
+import './commands/dups.js';
 import { createSourceFolder, initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
 import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
 import { initTwinHint, setActivePanel } from './focus.js';
 import { createNewPlaylist, loadPlaylists, savePlaylist, setPendingTracks } from './playlist.js';
 import { openCueEditor } from './render/cueEditor.js';
+import { openDupsMode } from './render/dupsUI.js';
 import {
   clearJournal,
   renderJournal,
@@ -115,6 +117,12 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   if (state.activeModal === 'cueEditor' || !state.lastCueTrack) return;
   void openCueEditor(state.lastCueTrack);
 };
+
+// Vue Doublons (EPIC-028 P2) : la page revient sur Sync à la fermeture
+// (closeAllModals standard — le clic ici rouvre la vue si déjà fermée).
+(document.getElementById('page-dups') as HTMLElement | null)?.addEventListener('click', () => {
+  openDupsMode();
+});
 
 // ── Panel click ───────────────────────────────────────────────────────────
 (document.getElementById('panel-left') as HTMLElement | null)!.onclick = () => setActivePanel('epars');
