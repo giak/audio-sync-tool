@@ -1,50 +1,43 @@
-// ─── Unit tests: render/dupsUI.ts — vue Doublons (EPIC-028 P2) ────────────
-// ui.js est mocké (openModal/closeAllModals) ; focus.js et actions.js aussi.
+// ─── Unit tests: render/dupsUI.ts — vue Doublons v2 (groupes) ─────────────
+// actions.js et focus.js mockés ; router.js RÉEL (exclusivité des pages).
 // jsdom n'a pas scrollIntoView → stub sur Element.prototype (pattern connu).
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { openModal, closeAllModals, revalidateFocus, executeReplace, refreshDupMatches } = vi.hoisted(() => ({
-  openModal: vi.fn(),
-  closeAllModals: vi.fn(),
+const { revalidateFocus, applyGroupPlan, refreshDupMatches } = vi.hoisted(() => ({
   revalidateFocus: vi.fn(),
-  executeReplace: vi.fn(),
+  applyGroupPlan: vi.fn(),
   refreshDupMatches: vi.fn(),
 }));
 
-vi.mock('../ui.js', () => ({ openModal, closeAllModals }));
 vi.mock('../focus.js', () => ({ revalidateFocus }));
-vi.mock('../actions.js', () => ({ executeReplace, refreshDupMatches }));
+vi.mock('../actions.js', () => ({ applyGroupPlan, refreshDupMatches }));
 
 import { state } from '../state.js';
-import { closeDupsMode, dupsMoveFocus, dupsReplaceFocused, openDupsMode, renderDups } from './dupsUI.js';
-
-const MATCH_A = {
-  eparsFullPath: '/epars/aaa.flac',
-  sourceFullPath: '/source/rock/aaa.mp3',
-  eparsFilename: 'aaa.flac',
-  sourceFilename: 'aaa.mp3',
-  sim: 0.97,
-  delta: 0,
-  verdict: 'left-better' as const,
-};
-const MATCH_B = {
-  eparsFullPath: '/epars/bbb.flac',
-  sourceFullPath: '/source/rock/bbb.mp3',
-  eparsFilename: 'bbb.flac',
-  sourceFilename: 'bbb.mp3',
-  sim: 0.95,
-  delta: 1,
-  verdict: 'equal' as const,
-};
+import { closeDupsMode, dupsApplyFocused, dupsMoveFocus, openDupsMode, renderDups } from './dupsUI.js';
 
 function setupDom(): void {
   document.body.innerHTML = `
     <div id="main-panels"></div>
-    <div id="status-text"></div>
+    <div id="playlist-layout" class="hidden"></div>
     <div id="dups-layout" class="hidden">
       <h2>↔ Doublons <span id="dups-count"></span></h2>
       <div id="dups-list"></div>
+    </div>
+    <div id="page-nav">
+      <button id="page-sync" class="page-btn active">📦 Sync</button>
+      <button id="page-playlist" class="page-btn">🎵 Playlist</button>
+      <button id="page-dups" class="page-btn">↔ Doublons</button>
+    </div>
+    <div id="status-text"></div>
+    <div id="modal-dialog" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header"><h3>Confirm</h3></div>
+        <div id="dialog-msg"></div>
+        <button id="dialog-confirm">OK</button>
+        <button id="dialog-cancel">Annuler</button>
+      </div>
     </div>
   `;
   Element.prototype.scrollIntoView = vi.fn();
@@ -53,8 +46,20 @@ function setupDom(): void {
 beforeEach(() => {
   vi.clearAllMocks();
   setupDom();
-  (state as unknown as { activeModal: string | null }).activeModal = null;
-  state.dupMatches = new Map();
+  state.page = 'sync';
+  state.playlistMode = false;
+  state.eparsFiles = {
+    '/e': {
+      'song.flac': { path: 'song.flac', duration: 200, codec: 'FLAC' },
+      'other.mp3': { path: 'other.mp3', duration: 500, codec: 'MP3 128kbps' },
+    },
+  };
+  state.sourceFiles = {
+    '/s': {
+      'song.mp3': { path: 'song.mp3', duration: 200, codec: 'MP3 320kbps' },
+      'other.mp3': { path: 'other.mp3', duration: 500, codec: 'MP3 320kbps' },
+    },
+  };
 });
 
 afterAll(() => {
@@ -62,128 +67,108 @@ afterAll(() => {
   delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
 });
 
-describe('dupsUI', () => {
-  describe('renderDups', () => {
-    it('renders empty message when no matches', () => {
-      renderDups();
-      expect(document.querySelector('.dups-empty')).not.toBeNull();
-      expect(document.getElementById('dups-count')!.textContent).toBe('');
-    });
+/** Groupe attendu avec cette fixture : other.mp3 (2 exemplaires) et song (2). */
+function expectCards(n: number): void {
+  const cards = document.querySelectorAll('.dup-card');
+  expect(cards.length).toBe(n);
+  return;
+}
 
-    it('renders one row per match with verdict and score', () => {
-      state.dupMatches = new Map([
-        ['/epars/aaa.flac', MATCH_A],
-        ['/epars/bbb.flac', MATCH_B],
-      ]);
-      renderDups();
+describe('dupsUI v2 (groupes)', () => {
+  it('renders one card per version-group with winner marked', () => {
+    openDupsMode();
+    expectCards(2);
 
-      const rows = document.querySelectorAll('.dup-row');
-      expect(rows.length).toBe(2);
-      expect(document.getElementById('dups-count')!.textContent).toContain('2');
-      expect(rows[0].innerHTML).toContain('aaa.flac');
-      expect(rows[0].innerHTML).toContain('aaa.mp3');
-      expect(rows[0].innerHTML).toContain('épars gagne');
-      expect(rows[1].innerHTML).toContain('qualité équivalente');
-      expect(rows[1].innerHTML).toContain('sim 95 %');
-    });
+    const songCard = [...document.querySelectorAll('.dup-card')].find(c => c.textContent?.includes('song'))!;
+    const winnerRow = songCard.querySelector('.dup-member.winner')!;
+    expect(winnerRow.textContent).toContain('song.flac'); // FLAC gagne sur MP3 320
+    expect(songCard.innerHTML).toContain('épars');
+    expect(songCard.innerHTML).toContain('rangé');
+  });
 
-    it('escapes HTML in filenames', () => {
-      const xss = {
-        ...MATCH_A,
-        eparsFilename: '<img src=x onerror=alert(1)>.flac',
-        eparsFullPath: '/epars/<img src=x onerror=alert(1)>.flac',
-      };
-      state.dupMatches = new Map([['/epars/x.flac', xss]]);
-      renderDups();
-
-      expect(document.querySelector('#dups-list img')).toBeNull();
-      expect(document.querySelectorAll('.dup-row').length).toBe(1);
+  it('clicking a member overrides the winner', () => {
+    openDupsMode();
+    const songCard = [...document.querySelectorAll('.dup-card')].find(c =>
+      c.textContent?.includes('song (2 versions)'),
+    )!;
+    const mp3Row = [...songCard.querySelectorAll('.dup-member')].find(r => r.textContent?.includes('song.mp3'))!;
+    mp3Row.click();
+    vi.waitFor(() => {
+      expect(songCard.querySelector('.dup-member.winner')!.textContent).toContain('song.mp3');
     });
   });
 
-  describe('openDupsMode', () => {
-    it('refreshes matches, shows layout and sets activeModal via openModal', () => {
-      openDupsMode();
+  it('apply button calls applyGroupPlan with the group and override', async () => {
+    const { applyGroupPlan: mockedApply } = await import('../actions.js');
+    openDupsMode();
+    const songCard = [...document.querySelectorAll('.dup-card')].find(c =>
+      c.textContent?.includes('song (2 versions)'),
+    )!;
+    const mp3Row = [...songCard.querySelectorAll('.dup-member')].find(r => r.textContent?.includes('song.mp3'))!;
+    mp3Row.click(); // override
+    const applyBtn = songCard.querySelector('.dup-apply') as HTMLButtonElement;
+    applyBtn.click();
 
-      expect(refreshDupMatches).toHaveBeenCalled();
-      expect(openModal).toHaveBeenCalledWith('dups');
-      expect(document.getElementById('dups-layout')!.classList.contains('hidden')).toBe(false);
-      expect(document.getElementById('main-panels')!.classList.contains('hidden')).toBe(true);
-    });
+    // confirmDialog réel → modal-dialog doit exister et être ouvert ; on confirme
+    const confirmBtn = document.getElementById('dialog-confirm');
+    expect(confirmBtn).not.toBeNull();
+    confirmBtn!.click();
+
+    expect(vi.mocked(mockedApply)).toHaveBeenCalledTimes(1);
+    const [group, override] = vi.mocked(mockedApply).mock.calls[0];
+    expect(group.winner.filename).toBe('song.flac');
+    // fullPath membre rangé = dir + '/' + relPath (convention dupDetect)
+    expect(override).toBe('/s/song.mp3');
   });
 
-  describe('closeDupsMode', () => {
-    it('hides layout, closes modal state and restores sync focus', () => {
-      openDupsMode();
-      vi.clearAllMocks();
+  it('apply button uses the arbitrated winner without override', async () => {
+    const { applyGroupPlan: mockedApply } = await import('../actions.js');
+    openDupsMode();
+    const songCard = [...document.querySelectorAll('.dup-card')].find(c =>
+      c.textContent?.includes('song (2 versions)'),
+    )!;
+    (songCard.querySelector('.dup-apply') as HTMLButtonElement).click();
+    document.getElementById('dialog-confirm')!.click();
 
-      closeDupsMode();
-
-      expect(closeAllModals).not.toHaveBeenCalled(); // activeModal était null (mock openModal ne le pose pas)
-      expect(document.getElementById('dups-layout')!.classList.contains('hidden')).toBe(true);
-      expect(document.getElementById('main-panels')!.classList.contains('hidden')).toBe(false);
-    });
-
-    it('calls closeAllModals when the dups modal is the active one', () => {
-      (state as unknown as { activeModal: string | null }).activeModal = 'dups';
-
-      closeDupsMode();
-
-      expect(closeAllModals).toHaveBeenCalled();
-    });
+    const [, override] = vi.mocked(applyGroupPlan).mock.calls[0];
+    expect(override).toBeNull();
   });
 
-  describe('dupsMoveFocus', () => {
-    it('moves focus within bounds and paints rows', () => {
-      state.dupMatches = new Map([
-        ['/epars/aaa.flac', MATCH_A],
-        ['/epars/bbb.flac', MATCH_B],
-      ]);
-      renderDups();
+  it('keyboard focus paints one card and R applies the focused group', async () => {
+    openDupsMode();
+    dupsMoveFocus(1); // → carte 0
+    expect(document.querySelector('.dup-card.focused')).not.toBeNull();
 
-      // Depuis « rien de focusé » (index -1), le premier ↓ sélectionne la 1re ligne
-      dupsMoveFocus(1);
-      expect(document.querySelector('.dup-row[data-index="0"]')!.classList.contains('focused')).toBe(true);
-
-      dupsMoveFocus(1);
-      expect(document.querySelector('.dup-row[data-index="1"]')!.classList.contains('focused')).toBe(true);
-
-      dupsMoveFocus(5); // clamp au dernier
-      expect(document.querySelector('.dup-row[data-index="1"]')!.classList.contains('focused')).toBe(true);
-
-      dupsMoveFocus(-1);
-      expect(document.querySelector('.dup-row[data-index="0"]')!.classList.contains('focused')).toBe(true);
-    });
-
-    it('is a no-op with no matches', () => {
-      renderDups();
-      dupsMoveFocus(1);
-      expect(document.querySelector('.dup-row.focused')).toBeNull();
-    });
+    dupsApplyFocused();
+    document.getElementById('dialog-confirm')!.click();
+    expect(vi.mocked(applyGroupPlan)).toHaveBeenCalledTimes(1);
   });
 
-  describe('dupsReplaceFocused', () => {
-    it('calls executeReplace with the focused match path', () => {
-      state.dupMatches = new Map([
-        ['/epars/aaa.flac', MATCH_A],
-        ['/epars/bbb.flac', MATCH_B],
-      ]);
-      renderDups();
-      dupsMoveFocus(1); // → index 0 (première ligne)
-      dupsMoveFocus(1); // → index 1
+  it('close : retour page sync exclusive', () => {
+    openDupsMode();
+    closeDupsMode();
 
-      dupsReplaceFocused();
-      expect(executeReplace).toHaveBeenCalledWith('/epars/bbb.flac');
-    });
+    expect(state.page).toBe('sync');
+    expect(document.getElementById('dups-layout')!.classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('main-panels')!.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('page-sync')!.classList.contains('active')).toBe(true);
+    expect(document.getElementById('page-dups')!.classList.contains('active')).toBe(false);
+  });
 
-    it('does nothing before any focus move', () => {
-      state.dupMatches = new Map([['/epars/aaa.flac', MATCH_A]]);
-      // openDupsMode reset focusIndex=-1 (entrée réelle dans la vue) — le test
-      // précédent laisse un focusIndex résiduel (variable module-level).
-      openDupsMode();
+  it('open : page exclusive + bouton .active exclusif', () => {
+    openDupsMode();
 
-      dupsReplaceFocused();
-      expect(executeReplace).not.toHaveBeenCalled();
-    });
+    expect(state.page).toBe('dups');
+    expect(document.getElementById('dups-layout')!.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('main-panels')!.classList.contains('hidden')).toBe(true);
+    expect(document.getElementById('page-dups')!.classList.contains('active')).toBe(true);
+    expect(document.getElementById('page-sync')!.classList.contains('active')).toBe(false);
+  });
+
+  it('empty state when no groups', () => {
+    state.eparsFiles = { '/e': {} };
+    state.sourceFiles = { '/s': {} };
+    renderDups();
+    expect(document.querySelector('.dups-empty')).not.toBeNull();
   });
 });

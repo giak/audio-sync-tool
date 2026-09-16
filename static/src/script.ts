@@ -28,19 +28,13 @@ import {
 } from './render.js';
 import { state } from './state.js';
 import { closeAllModals, confirmDialog, initFilterPalette, openModal } from './ui.js';
-
-// ── Playlist mode helpers ─────────────────────────────────────────────────
+import { goPage } from './router.js';
 
 async function enterPlaylistMode(): Promise<void> {
-  await loadPlaylists();
-  state.playlistMode = true;
+  goPage('playlist');
   state.playlistFocus = 'source';
 
-  document.getElementById('main-panels')?.classList.add('hidden');
-  document.getElementById('playlist-layout')?.classList.remove('hidden');
-  document.getElementById('page-sync')?.classList.remove('active');
-  document.getElementById('page-playlist')?.classList.add('active');
-
+  await loadPlaylists();
   if (state.playlists.length === 0 && Object.keys(state.pendingPlaylists).length === 0) {
     createNewPlaylist('playlist-1');
     state.activePlaylistIndex = 0;
@@ -68,13 +62,7 @@ async function exitPlaylistMode(): Promise<void> {
     }
   }
   await Promise.all(savePromises);
-  state.playlistMode = false;
-  document.getElementById('playlist-layout')?.classList.add('hidden');
-  document.getElementById('main-panels')?.classList.remove('hidden');
-  document.getElementById('page-playlist')?.classList.remove('active');
-  document.getElementById('page-sync')?.classList.add('active');
-  const statusText = document.getElementById('status-text');
-  if (statusText) statusText.textContent = 'Prêt.';
+  goPage('sync');
 }
 
 // ── Keyboard router (refactored — Phase 1) ─────────────────────────────────
@@ -108,20 +96,20 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 (document.getElementById('pl-save') as HTMLElement | null)!.onclick = () => void saveCurrentPlaylist();
 (document.getElementById('pl-export') as HTMLElement | null)!.onclick = () => void showExportModal();
 (document.getElementById('page-sync') as HTMLElement | null)!.onclick = async () => {
-  if (state.playlistMode) await exitPlaylistMode();
+  if (state.page === 'playlist') await exitPlaylistMode();
+  else goPage('sync');
 };
 (document.getElementById('page-playlist') as HTMLElement | null)!.onclick = async () => {
-  if (!state.playlistMode) await enterPlaylistMode();
+  if (state.page !== 'playlist') await enterPlaylistMode();
 };
 (document.getElementById('page-cue') as HTMLElement | null)!.onclick = () => {
   if (state.activeModal === 'cueEditor' || !state.lastCueTrack) return;
   void openCueEditor(state.lastCueTrack);
 };
 
-// Vue Doublons (EPIC-028 P2) : la page revient sur Sync à la fermeture
-// (closeAllModals standard — le clic ici rouvre la vue si déjà fermée).
+// Vue Doublons (EPIC-028 P2) : vraie 3e page via le routeur goPage.
 (document.getElementById('page-dups') as HTMLElement | null)?.addEventListener('click', () => {
-  openDupsMode();
+  if (state.page !== 'dups') openDupsMode();
 });
 
 // ── Panel click ───────────────────────────────────────────────────────────

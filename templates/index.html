@@ -160,67 +160,76 @@
     </div>
     <div id="legend-grid">
       <div class="legend-section">
-        <h4>Légende</h4>
-        <div class="legend-row"><span class="led-demo led-demo-nouveau"></span> Nouveau — pas dans la source</div>
-        <div class="legend-row"><span class="led-demo led-demo-doublon"></span> Doublon — déjà présent</div>
-        <div class="legend-row"><span class="led-demo led-demo-traite"></span> Traité — copié</div>
-        <div class="legend-row"><span class="led-demo led-demo-playing"></span> En lecture</div>
+        <h4>États — page Sync</h4>
+        <div class="legend-row"><span class="led-demo led-demo-nouveau"></span> Nouveau — pas dans la Source Data</div>
+        <div class="legend-row"><span class="led-demo led-demo-doublon"></span> Doublon — déjà présent (nom de fichier exact)</div>
+        <div class="legend-row"><span class="led-demo led-demo-dup-fuzzy"></span> Homonyme probable — matche un rangé (durée + nom, ↔)</div>
+        <div class="legend-row"><span class="led-demo led-demo-traite"></span> Traité — copié vers la Source Data</div>
+        <div class="legend-row"><span class="led-demo led-demo-playing"></span> En lecture (audio)</div>
+        <div class="legend-row"><span class="led-demo led-demo-selected"></span> Sélectionné (multi-copie, Espace)</div>
+        <div class="legend-row"><span class="twin-demo"></span> Halo ambre pulsé (colonne droite) — jumeau du doublon focusé</div>
+        <div class="legend-row"><span class="badge-demo">87</span> Note personnelle (0-100, touche N)</div>
         <div class="legend-row"><span class="badge-demo">✅</span> Dans la playlist active</div>
         <div class="legend-row"><span class="badge-demo">✓ NML</span> Matché dans la collection Traktor</div>
         <div class="legend-row"><span class="badge-demo">≈ homonymes</span> Plusieurs entrées NML</div>
         <div class="legend-row"><span class="badge-demo">✕ non importé</span> Absent du NML</div>
       </div>
       <div class="legend-section">
-        <h4>Raccourcis (Sync)</h4>
-        <div class="legend-row"><kbd>↑↓</kbd> Naviguer fichiers/dossiers</div>
+        <h4>Raccourcis — page Sync</h4>
+        <div class="legend-row"><kbd>↑↓</kbd> Naviguer fichiers / dossiers</div>
         <div class="legend-row"><kbd>←→</kbd> Navigation colonnes (Source Data)</div>
-        <div class="legend-row"><kbd>Shift</kbd> + <kbd>←→</kbd> Seek audio ±20s</div>
-        <div class="legend-row"><kbd>Tab</kbd> Basculer panneau</div>
-        <div class="legend-row"><kbd>Entrée</kbd> Jouer / Déplier dossier</div>
-        <div class="legend-row"><kbd>Espace</kbd> Sélectionner fichier</div>
-        <div class="legend-row"><kbd>F5</kbd> Copier → dossier</div>
-        <div class="legend-row"><kbd>F7</kbd> / <kbd>/</kbd> Filtrer dossiers</div>
+        <div class="legend-row"><kbd>Tab</kbd> Basculer panneau gauche ↔ droite</div>
+        <div class="legend-row"><kbd>Entrée</kbd> Jouer / déplier dossier</div>
+        <div class="legend-row"><kbd>Espace</kbd> Sélectionner fichier (multi-copie)</div>
+        <div class="legend-row"><kbd>F5</kbd> Copier → dossier focusé</div>
+        <div class="legend-row"><kbd>R</kbd> / double-clic Remplacer l'homonyme (l'ancien rangé → _trash)</div>
         <div class="legend-row"><kbd>N</kbd> Noter le fichier (0-100)</div>
-        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / Annuler filtre / Stopper audio</div>
+        <div class="legend-row"><kbd>F7</kbd> / <kbd>/</kbd> Filtrer dossiers</div>
+        <div class="legend-row"><kbd>Shift</kbd> + <kbd>←→</kbd> Seek audio ±20 s</div>
+        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / annuler filtre / stopper audio</div>
       </div>
       <div class="legend-section">
-        <h4>Raccourcis (Playlist)</h4>
+        <h4>Raccourcis — page Playlist</h4>
         <div class="legend-row"><kbd>↑↓</kbd> Naviguer source / pistes</div>
         <div class="legend-row"><kbd>Tab</kbd> Basculer source ↔ sidebar</div>
         <div class="legend-row"><kbd>Entrée</kbd> Jouer le fichier</div>
-        <div class="legend-row"><kbd>Espace</kbd> Ajouter/retirer morceau</div>
+        <div class="legend-row"><kbd>Espace</kbd> Ajouter / retirer morceau</div>
         <div class="legend-row"><kbd>N</kbd> Noter le morceau (0-100)</div>
         <div class="legend-row"><kbd>F7</kbd> / <kbd>/</kbd> Filtrer les fichiers</div>
         <div class="legend-row"><kbd>Suppr</kbd> / <kbd>←</kbd> Retirer du sidebar</div>
         <div class="legend-row"><kbd>Ctrl</kbd> + <kbd>S</kbd> Sauvegarder la playlist</div>
         <div class="legend-row"><kbd>Ctrl</kbd> + <kbd>E</kbd> Exporter la playlist</div>
         <div class="legend-row"><kbd>Ctrl</kbd> + <kbd>↑↓</kbd> Réorganiser les pistes</div>
-        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / Annuler filtre / Stopper audio</div>
+        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / stopper audio</div>
       </div>
       <div class="legend-section">
-        <h4>Raccourcis (Doublons)</h4>
-        <div class="legend-row"><kbd>↔ Doublons</kbd> Ouvrir la vue (nav)</div>
-        <div class="legend-row"><kbd>↑↓</kbd> Naviguer les paires</div>
-        <div class="legend-row"><kbd>R</kbd> Remplacer (l'ancien rangé → _trash)</div>
+        <h4>Raccourcis — page ↔ Doublons</h4>
+        <div class="legend-row"><kbd>↔ Doublons</kbd> Ouvrir la vue (bouton de nav, en haut)</div>
+        <div class="legend-row"><kbd>↑↓</kbd> Naviguer les groupes de versions</div>
+        <div class="legend-row">Clic sur un exemplaire Le désigner gagnant (override de l'arbitrage qualité)</div>
+        <div class="legend-row"><kbd>R</kbd> / <kbd>✓ Appliquer</kbd> Plan du groupe : gagnant conservé, rangés perdants → _trash</div>
         <div class="legend-row"><kbd>Échap</kbd> / <kbd>📦 Sync</kbd> Revenir à la page Sync</div>
-        <div class="legend-section">
-        <h4>Raccourcis (Cue editor)</h4>
-        <div class="legend-row"><kbd>←→</kbd> Seek ±5s</div>
+      </div>
+      <div class="legend-section">
+        <h4>Raccourcis — Cue editor</h4>
+        <div class="legend-row"><kbd>←→</kbd> Seek ±5 s</div>
         <div class="legend-row"><kbd>+</kbd> / <kbd>−</kbd> Zoom (molette aussi)</div>
         <div class="legend-row"><kbd>1–8</kbd> Poser un cue (slots A–H)</div>
         <div class="legend-row"><kbd>C</kbd> Poser un cue au curseur</div>
         <div class="legend-row"><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> Annuler / rétablir</div>
-        <div class="legend-row"><kbd>⟳</kbd> <kbd>Loop</kbd> / <kbd>🔁</kbd> <kbd>Play</kbd> Dessiner / lire une boucle</div>
+        <div class="legend-row"><kbd>⟳ Loop</kbd> / <kbd>🔁 Play</kbd> Dessiner / lire une boucle</div>
         <div class="legend-row"><kbd>← 1/4</kbd> / <kbd>→ 1/4</kbd> Calage grille (phase)</div>
         <div class="legend-row"><kbd>◎ Beat 1</kbd> Poser le premier beat</div>
         <div class="legend-row"><kbd>🔍 Analyser</kbd> Analyse serveur (BPM + phase)</div>
         <div class="legend-row"><kbd>💾 Grille</kbd> Écrire dans le collection.nml</div>
         <div class="legend-row"><kbd>Suppr</kbd> / clic droit Retirer / supprimer un cue</div>
         <div class="legend-row">Double-clic Renommer / recolorer le cue</div>
+        <div class="legend-row"><kbd>Échap</kbd> Fermer l'éditeur (ou quitter le plein écran)</div>
       </div>
     </div>
     <div id="legend-footer">
       <span><kbd>Échap</kbd> ne quitte plus la page Playlist — cliquer <kbd>📦 Sync</kbd> pour revenir</span>
+      <span>Vue <kbd>↔ Doublons</kbd> : le remplacement demande toujours une confirmation, l'ancien fichier part dans <code>_trash/&lt;date&gt;/</code> (jamais effacé)</span>
       <span>Seek : <kbd>Shift + ←→</kbd> ±20s (Sync) · <kbd>←→</kbd> ±5s (cue editor)</span>
     </div>
   </div>

@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
 import { detectDuplicates } from './dupDetect.js';
+import type { VersionGroup } from './dupGroups.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
 import { loadRatings } from './ratings.js';
 import { getBatchCopy } from './render.js';
@@ -473,6 +474,70 @@ export async function createSourceFolder(): Promise<void> {
     },
     'Créer',
   );
+}
+
+// ── Groupe de versions (EPIC-028 v2) : appliquer le plan d'arbitrage ─────
+
+/** Applique le plan d'un groupe : gagnant épars → copié vers le dossier du
+ *  meilleur rangé, PUIS tous les rangés perdants → _trash/<date>. Jamais
+ *  d'effacement : si une copie échoue, aucun move n'a lieu (garde globale).
+ *  Les épars perdants restent en place (décision utilisateur). overridePath
+ *  désigne un autre survivant choisi par l'utilisateur. */
+export async function applyGroupPlan(group: VersionGroup, overridePath: string | null): Promise<void> {
+  const statusText = document.getElementById('status-text');
+  let finalWinner = group.winner;
+  if (overridePath) {
+    const alt = group.members.find(m => m.fullPath === overridePath);
+    if (alt) finalWinner = alt;
+  }
+  const losers = group.members.filter(m => m.fullPath !== finalWinner.fullPath && m.side === 'source');
+  if (losers.length === 0) {
+    if (statusText) statusText.textContent = 'Rien à déplacer : le gagnant choisi est déjà le seul exemplaire rangé.';
+    return;
+  }
+  const sourceRoot = Object.keys(state.sourceFiles).find(d => losers[0].fullPath.startsWith(`${d}/`));
+  if (!sourceRoot) {
+    showError('Dossier source introuvable pour le plan de groupe.');
+    return;
+  }
+  const trashDir = `${sourceRoot}/_trash/${new Date().toISOString().slice(0, 10)}`;
+
+  state.replaceBusy = true;
+  try {
+    // 1. Gagnant épars → copier vers la cible (dossier du meilleur rangé)
+    if (finalWinner.side === 'epars') {
+      await api('/copy', {
+        method: 'POST',
+        body: JSON.stringify({
+          source_path: finalWinner.fullPath,
+          dest_dir: group.copyTargetDir ?? sourceRoot,
+          filename: finalWinner.filename,
+        }),
+      });
+    }
+    // 2. Rangés perdants → trash (collisions suffixées côté serveur)
+    for (const loser of losers) {
+      await api('/move', {
+        method: 'POST',
+        body: JSON.stringify({ source_path: loser.fullPath, dest_dir: trashDir }),
+      });
+    }
+    // 3. State : retirer les perdants de sourceFiles
+    for (const loser of losers) {
+      const root = Object.keys(state.sourceFiles).find(d => loser.fullPath.startsWith(`${d}/`));
+      if (root) delete state.sourceFiles[root][loser.filename];
+    }
+    state.sourceFiles = { ...state.sourceFiles }; // EventEmitter → re-render
+    refreshDupMatches();
+    if (statusText) {
+      statusText.textContent = `✓ ${finalWinner.filename} conservé — ${losers.length} exemplaire(s) → _trash`;
+    }
+  } catch (err) {
+    showError(`Échec du plan de groupe : ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    state.replaceBusy = false;
+    requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────

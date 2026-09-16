@@ -321,6 +321,36 @@ tr.file-row.twin-hint > td {
 .dup-verdict.right-better { color: var(--led-amber); }
 .dup-meta { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 
+/* v2 : cartes de groupes (morceau = N versions, gagnant ✓) */
+.dup-card {
+  border: 1px solid var(--border-panel);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.dup-card.focused {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+}
+.dup-card-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.dup-member {
+  font-family: monospace; font-size: 12px;
+  padding: 2px 6px; border-radius: 4px; margin: 2px 0;
+}
+.dup-member:hover { background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.dup-member.winner { color: var(--led-green); }
+.dup-member.epars .dup-side { color: var(--text-dim); }
+.dup-side { font-size: 11px; }
+.dup-card-actions { margin-top: 6px; }
+.dup-apply {
+  font-size: 12px; padding: 3px 10px; cursor: pointer;
+  border: 1px solid var(--border-panel); border-radius: 4px;
+  background: transparent; color: var(--text);
+}
+.dup-apply:hover { border-color: var(--amber); color: var(--amber); }
+
 /* Ligne d'état épars : segment homonymes (ambre) */
 .s-dupfuzzy { color: var(--amber); }
 .led-playing::before { background: var(--led-cyan);  box-shadow: 0 0 8px var(--led-cyan); }
@@ -640,7 +670,19 @@ tr.file-row.twin-hint > td {
 .led-demo-nouveau { background: var(--led-blue); box-shadow: 0 0 6px var(--led-blue); }
 .led-demo-doublon { background: var(--led-grey); }
 .led-demo-traite  { background: var(--led-green); box-shadow: 0 0 6px var(--led-green); }
+.led-demo-dup-fuzzy { background: var(--led-amber); }
 .led-demo-playing { background: var(--led-cyan);  box-shadow: 0 0 8px var(--led-cyan); }
+/* Démo « Sélectionné » : carré bleu (état = fond + contour sur la cellule, pas une LED) */
+.led-demo-selected { background: var(--led-blue); box-shadow: 0 0 6px var(--led-blue); border-radius: 2px; }
+/* Démo « Halo jumeau » : mini contour ambre animé, même pulsation que .twin-hint */
+.twin-demo {
+  display: inline-block;
+  width: 10px; height: 10px; border-radius: 2px;
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+  align-self: center;
+  animation: twinPulse 2.4s ease-in-out infinite;
+}
 /* Chips badges NML (✓ / ≈ / ✕) et ✅ — cohérents avec matchStatus.ts */
 .badge-demo {
   font-family: var(--font-mono, monospace);

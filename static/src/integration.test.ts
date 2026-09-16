@@ -157,6 +157,7 @@ function setupTestState(): void {
   state.navIndex = -1;
   state.ratings = {};
   state.focusListId = 'epars';
+  state.page = 'sync';
 }
 
 function dispatchKey(key: string, opts: Record<string, unknown> = {}): KeyboardEvent {

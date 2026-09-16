@@ -1,55 +1,40 @@
-// ─── Doublons mode (EPIC-028 P2) : vue dédiée des paires épars ↔ rangés ───
-// Pattern : modal interactive façon cueEditor — ouverte depuis la nav
-// (« ↔ Doublons »), ↑↓ pour naviguer, R pour remplacer (executeReplace
-// réutilisé tel quel), Échap pour fermer. Le focus sync est restauré à la
-// fermeture via revalidateFocus().
+// ─── Vue Doublons (EPIC-028 P2/v2) : 3e page du routeur goPage ────────────
+// Ni modal, ni overlay : une page comme Sync et Playlist. Le clavier est
+// scopé page via le registry (bindings page:'dups' de commands/dups.ts) —
+// le confirmDialog reste une vraie modal AU-DESSUS de la page, sans conflit.
+//
+// v2 — groupes de versions (dupGroups.ts) : chaque carte = un morceau avec
+// N exemplaires ; gagnant ✓ arbitré par qualité, override au clic sur un
+// membre, application du plan (gagnant épars → copié, rangés perdants → trash).
 
-import { executeReplace, refreshDupMatches } from '../actions.js';
-import type { DupMatch } from '../dupDetect.js';
+import { applyGroupPlan, refreshDupMatches } from '../actions.js';
+import { buildVersionGroups, type VersionGroup } from '../dupGroups.js';
 import { revalidateFocus } from '../focus.js';
+import { goPage } from '../router.js';
 import { on, state } from '../state.js';
-import { closeAllModals, openModal } from '../ui.js';
+import { confirmDialog } from '../ui.js';
 
 let focusIndex = -1;
+/** Override par groupe : groupKey → fullPath du membre que l'utilisateur désigne. */
+const overrides = new Map<string, string>();
+let groups: VersionGroup[] = [];
 
-// ── Helpers qualité (mêmes paliers que dupDetect, affichage fr) ──────────
-
-/** Codec du fichier épars, résolu depuis state.eparsFiles (pas stocké dans
- *  DupMatch — la Map ne porte que ce que le matching utilise). */
-function eparsCodec(fullPath: string, filename: string): string | null {
-  for (const [dir, files] of Object.entries(state.eparsFiles)) {
-    if (fullPath.startsWith(`${dir}/`)) return files[filename]?.codec ?? null;
-  }
-  return null;
+function esc(s: string): string {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
-function sourceCodec(fullPath: string, filename: string): string | null {
-  for (const [dir, files] of Object.entries(state.sourceFiles)) {
-    if (fullPath.startsWith(`${dir}/`)) return files[filename]?.codec ?? null;
-  }
-  return null;
+// ── Helpers qualité (affichage fr) ────────────────────────────────────────
+
+function memberLabel(m: VersionGroup['members'][number]): string {
+  const side = m.side === 'epars' ? 'épars' : 'rangé';
+  return `${esc(m.filename)} <span class="dup-side">(${side} · ${esc(m.codec ?? 'codec ?')})</span>`;
 }
 
-function qualityLabel(m: DupMatch): string {
-  const lc = eparsCodec(m.eparsFullPath, m.eparsFilename);
-  const rc = sourceCodec(m.sourceFullPath, m.sourceFilename);
-  if (m.verdict === 'left-better') return `✅ épars gagne (${lc ?? '?'} vs ${rc ?? '?'})`;
-  if (m.verdict === 'equal') return `≈ qualité équivalente (${lc ?? '?'})`;
-  return `⚠️ rangé meilleur (${rc ?? '?'} vs ${lc ?? '?'})`;
-}
-
-function rowContent(m: DupMatch): string {
-  const esc = (s: string): string => {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
-  };
-  return (
-    `<td class="dup-left" title="${esc(m.eparsFullPath)}">${esc(m.eparsFilename)}</td>` +
-    `<td class="dup-verdict ${m.verdict}">${esc(qualityLabel(m))}</td>` +
-    `<td class="dup-right" title="${esc(m.sourceFullPath)}">${esc(m.sourceFilename)}</td>` +
-    `<td class="dup-meta">sim ${Math.round(m.sim * 100)} % · Δ${m.delta.toFixed(1)} s</td>`
-  );
+function groupTitle(g: VersionGroup): string {
+  const base = g.winner.filename.replace(/\.[^.]+$/, '');
+  return `${base} (${g.members.length} versions)`;
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -58,97 +43,136 @@ export function renderDups(): void {
   const list = document.getElementById('dups-list');
   if (!list) return;
   list.innerHTML = '';
-  // Le focus module-level peut être hors bornes après un changement de la Map
-  // (re-render suite à un remplacement) — on le ramène dans le tableau.
-  if (focusIndex >= state.dupMatches.size) focusIndex = state.dupMatches.size - 1;
 
-  const matches = [...state.dupMatches.values()];
+  groups = buildVersionGroups(state.eparsFiles, state.sourceFiles);
   const count = document.getElementById('dups-count');
   if (count) {
-    count.textContent = matches.length > 0 ? `(${matches.length.toLocaleString('fr')} paires)` : '';
+    count.textContent =
+      groups.length > 0
+        ? `(${groups.length.toLocaleString('fr')} groupes · ${groups.reduce((n, g) => n + g.members.length, 0).toLocaleString('fr')} fichiers)`
+        : '';
   }
-  if (matches.length === 0) {
+  if (groups.length === 0) {
     list.innerHTML = '<p class="dups-empty">Aucun doublon potentiel — lance un scan si ce n\'est pas attendu.</p>';
     return;
   }
+  if (focusIndex >= groups.length) focusIndex = groups.length - 1;
 
-  const table = document.createElement('table');
-  table.className = 'dups-table';
-  table.innerHTML = '<thead><tr><th>Fichier épars</th><th>Verdict</th><th>Jumeau rangé</th><th>Score</th></tr></thead>';
-  const tbody = document.createElement('tbody');
-  matches.forEach((m, i) => {
-    const tr = document.createElement('tr');
-    tr.className = `dup-row${i === focusIndex ? ' focused' : ''}`;
-    tr.dataset.index = String(i);
-    tr.innerHTML = rowContent(m);
-    tr.onclick = (): void => {
-      focusIndex = i;
+  groups.forEach((g, gi) => {
+    const winner = overrides.get(g.key);
+    const effectiveWinner = winner ? (g.members.find(m => m.fullPath === winner) ?? g.winner) : g.winner;
+
+    const card = document.createElement('div');
+    card.className = 'dup-card' + (gi === focusIndex ? ' focused' : '');
+    card.dataset.index = String(gi);
+
+    const h = document.createElement('div');
+    h.className = 'dup-card-title';
+    h.innerHTML = `↔ ${esc(groupTitle(g))}`;
+    card.appendChild(h);
+
+    const ul = document.createElement('div');
+    ul.className = 'dup-members';
+    for (const m of g.members) {
+      const row = document.createElement('div');
+      const isWinner = m.fullPath === effectiveWinner.fullPath;
+      row.className = `dup-member ${m.side}${isWinner ? ' winner' : ''}`;
+      row.title = `${m.fullPath} — ${isWinner ? 'gagnant (cliquer un autre pour override)' : 'clic = désigner gagnant'}`;
+      row.innerHTML = `${isWinner ? '✓ ' : '&nbsp;&nbsp;'}${memberLabel(m)}`;
+      row.onclick = (): void => {
+        overrides.set(g.key, m.fullPath);
+        renderDups();
+      };
+      ul.appendChild(row);
+    }
+    card.appendChild(ul);
+
+    const actions = document.createElement('div');
+    actions.className = 'dup-card-actions';
+    const apply = document.createElement('button');
+    apply.className = 'dup-apply';
+    apply.textContent = '✓ Appliquer (perdants → _trash)';
+    apply.onclick = (e: MouseEvent): void => {
+      e.stopPropagation();
+      focusIndex = gi;
       paintFocus();
-      void executeReplace(m.eparsFullPath);
+      // Override réel = désignation utilisateur dans la Map (sinon null = gagnant arbitré)
+      applyGroup(overrides.get(g.key) ?? null);
     };
-    tbody.appendChild(tr);
+    actions.appendChild(apply);
+    card.appendChild(actions);
+
+    card.onclick = (): void => {
+      focusIndex = gi;
+      paintFocus();
+    };
+    list.appendChild(card);
   });
-  table.appendChild(tbody);
-  list.appendChild(table);
 }
 
 function paintFocus(): void {
   const list = document.getElementById('dups-list');
   if (!list) return;
-  list.querySelectorAll('.dup-row.focused').forEach(el => {
+  list.querySelectorAll('.dup-card.focused').forEach(el => {
     el.classList.remove('focused');
   });
-  const target = list.querySelector(`.dup-row[data-index="${focusIndex}"]`);
+  const target = list.querySelector(`.dup-card[data-index="${focusIndex}"]`);
   if (target) {
     target.classList.add('focused');
     target.scrollIntoView({ block: 'nearest' });
   }
 }
 
-// ── Open / close (pattern Playlist : layout page, PAS une modal-overlay) ──
-// openModal('dups') ne sert qu'à poser state.activeModal='dups' → isolation
-// clavier par le routeur (bindings ↑↓/R/Échap de commands/dups.ts). Aucun
-// élément #modal-dups n'existe : openModal ne trouve rien à afficher, la
-// visibilité du layout est gérée ici comme enterPlaylistMode le fait.
+/** Confirmation + application du plan pour le groupe focusé. */
+function applyGroup(overridePath: string | null): void {
+  const g = groups[focusIndex];
+  if (!g) return;
+  confirmDialog(
+    `Groupe « ${groupTitle(g)} » :\n` +
+      `le gagnant désigné est conservé, les autres exemplaires RANGÉS vont dans _trash (jamais effacés). Continuer ?`,
+    () => {
+      void applyGroupPlan(g, overridePath);
+    },
+    'Appliquer',
+  );
+}
+
+// ── Open / close : pages du routeur, pas de modal ─────────────────────────
 
 export function openDupsMode(): void {
-  refreshDupMatches(); // fraîcheur : recalcule depuis l'état courant
+  refreshDupMatches(); // garde le badge ambre de la page sync cohérent
   focusIndex = -1;
+  overrides.clear();
   renderDups();
-  document.getElementById('main-panels')?.classList.add('hidden');
-  document.getElementById('dups-layout')?.classList.remove('hidden');
-  openModal('dups');
+  goPage('dups');
   const statusText = document.getElementById('status-text');
   if (statusText) {
-    statusText.textContent = '↔ Vue Doublons — ↑↓ naviguer, R remplacer, Échap pour revenir.';
+    statusText.textContent = '↔ Vue Doublons — ↑↓ groupes · clic membre = override · R appliquer · Échap revenir.';
   }
 }
 
 export function closeDupsMode(): void {
-  if (state.activeModal === 'dups') closeAllModals();
-  document.getElementById('dups-layout')?.classList.add('hidden');
-  document.getElementById('main-panels')?.classList.remove('hidden');
+  goPage('sync');
   requestAnimationFrame(() => revalidateFocus());
 }
 
 export function dupsMoveFocus(delta: number): void {
-  const total = state.dupMatches.size;
-  if (total === 0) return;
-  focusIndex = Math.min(Math.max(focusIndex + delta, 0), total - 1);
+  if (groups.length === 0) return;
+  focusIndex = Math.min(Math.max(focusIndex + delta, 0), groups.length - 1);
   paintFocus();
 }
 
-export function dupsReplaceFocused(): void {
-  if (focusIndex < 0) return;
-  const matches = [...state.dupMatches.values()];
-  const m = matches[focusIndex];
-  if (!m) return;
-  void executeReplace(m.eparsFullPath);
+/** R : applique le plan du groupe focusé (override pris en compte). */
+export function dupsApplyFocused(): void {
+  if (focusIndex < 0 || !groups[focusIndex]) return;
+  const g = groups[focusIndex];
+  const override = overrides.get(g.key) ?? null;
+  applyGroup(override);
 }
 
 // ── Events ───────────────────────────────────────────────────────────────
 
 // Remplacement fait depuis la vue → re-render pour refléter le nouveau verdict.
 on('sourceFiles:changed', () => {
-  if (state.activeModal === 'dups') renderDups();
+  if (state.page === 'dups') renderDups();
 });

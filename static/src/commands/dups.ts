@@ -1,35 +1,39 @@
-// ─── Doublons mode commands (EPIC-028 P2) ──────────────────────────────────
-// Modal interactive : ↑↓ naviguent les paires, R remplace, Échap ferme
-// (bindings conditionnés à activeModal:'dups' — le routeur bloque le reste,
-// pattern cueEditor ; la fermeture passe par closeAllModals standard).
+// ─── Doublons page commands (EPIC-028 P2) ──────────────────────────────────
+// Page scopée : ↑↓ naviguent les paires, R remplace, Échap revient en Sync.
+// Bindings conditionnés à page:'dups' + activeModal:null — le confirmDialog
+// (modal 'dialog') bloque tout le reste, pattern standard du routeur.
 
-import { closeDupsMode, dupsMoveFocus, dupsReplaceFocused } from '../render/dupsUI.js';
-import { closeAllModals } from '../ui.js';
+import { closeDupsMode, dupsApplyFocused, dupsMoveFocus } from '../render/dupsUI.js';
 import { registry } from './registry.js';
 
 registry.bind({
   key: 'ArrowDown',
-  activeModal: 'dups',
+  page: 'dups',
+  activeModal: null,
+  isInput: false,
   handler: () => dupsMoveFocus(1),
 });
 
 registry.bind({
   key: 'ArrowUp',
-  activeModal: 'dups',
+  page: 'dups',
+  activeModal: null,
+  isInput: false,
   handler: () => dupsMoveFocus(-1),
 });
 
 registry.bind({
   key: 'r',
-  activeModal: 'dups',
-  handler: () => dupsReplaceFocused(),
+  page: 'dups',
+  activeModal: null,
+  isInput: false,
+  handler: () => dupsApplyFocused(),
 });
 
 registry.bind({
   key: 'Escape',
-  activeModal: 'dups',
-  handler: () => {
-    closeAllModals();
-    closeDupsMode(); // restaure le focus sync (revalidateFocus différé)
-  },
+  page: 'dups',
+  activeModal: null,
+  isInput: false,
+  handler: () => closeDupsMode(),
 });

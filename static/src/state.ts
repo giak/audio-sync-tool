@@ -90,7 +90,7 @@ interface SourceNodeInfo {
   baseDir: string;
 }
 
-type ActiveModal = 'config' | 'legend' | 'journal' | 'dialog' | 'playlists' | 'cueEditor' | 'dups' | null;
+type ActiveModal = 'config' | 'legend' | 'journal' | 'dialog' | 'playlists' | 'cueEditor' | null;
 type ActivePanel = 'epars' | 'source';
 type PlaylistFocusZone = 'source' | 'sidebar';
 
@@ -127,6 +127,9 @@ interface AppState {
   ratings: Record<string, number>;
   /** EPIC-028 : verrou anti double-exécution de l'action Remplacer. */
   replaceBusy: boolean;
+  /** Page visible (routeur goPage) — source de vérité de la navigation.
+   *  playlistMode est dérivé : playlistMode === (page === 'playlist'). */
+  page: 'sync' | 'playlist' | 'dups';
   focusListId: 'epars' | 'source' | 'playlist-source' | 'playlist-tracks';
   lastCueTrack: PlaylistTrackLite | null;
 }
@@ -143,7 +146,7 @@ interface NavHistoryEntry {
 }
 
 const VALID_PANELS = new Set<ActivePanel>(['epars', 'source']);
-const VALID_MODALS = new Set<ActiveModal>([null, 'config', 'legend', 'journal', 'dialog', 'playlists', 'cueEditor', 'dups']);
+const VALID_MODALS = new Set<ActiveModal>([null, 'config', 'legend', 'journal', 'dialog', 'playlists', 'cueEditor']);
 const VALID_PLAYLIST_FOCUS = new Set<PlaylistFocusZone>(['source', 'sidebar']);
 
 const _state: AppState = {
@@ -174,6 +177,7 @@ const _state: AppState = {
   navIndex: -1,
   ratings: {},
   replaceBusy: false,
+  page: 'sync',
   focusListId: 'epars',
   lastCueTrack: null,
 };

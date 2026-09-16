@@ -11,6 +11,7 @@ export interface CommandContext {
   ctrlKey: boolean;
   altKey: boolean;
   isInput: boolean;
+  page: 'sync' | 'playlist' | 'dups';
   playlistMode: boolean;
   playlistFocus: 'source' | 'sidebar';
   activePanel: 'epars' | 'source';
@@ -27,6 +28,7 @@ export interface CommandBinding {
   ctrlKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
+  page?: 'sync' | 'playlist' | 'dups';
   playlistMode?: boolean;
   playlistFocus?: 'source' | 'sidebar';
   activePanel?: 'epars' | 'source';
@@ -51,6 +53,7 @@ class CommandRegistry {
       if (b.ctrlKey !== undefined && b.ctrlKey !== ctx.ctrlKey) continue;
       if (b.shiftKey !== undefined && b.shiftKey !== ctx.shiftKey) continue;
       if (b.altKey !== undefined && b.altKey !== ctx.altKey) continue;
+      if (b.page !== undefined && b.page !== ctx.page) continue;
       if (b.playlistMode !== undefined && b.playlistMode !== ctx.playlistMode) continue;
       if (b.playlistFocus !== undefined && b.playlistFocus !== ctx.playlistFocus) continue;
       if (b.activePanel !== undefined && b.activePanel !== ctx.activePanel) continue;
@@ -77,6 +80,7 @@ export function buildContext(e: KeyboardEvent): CommandContext {
     ctrlKey: e.ctrlKey,
     altKey: e.altKey,
     isInput: target ? ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) : false,
+    page: state.page,
     playlistMode: state.playlistMode,
     playlistFocus: state.playlistFocus,
     activePanel: state.activePanel,
