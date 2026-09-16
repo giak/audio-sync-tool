@@ -5,7 +5,7 @@ import { focusItemByElement, revalidateFocus, setActivePanel } from '../focus.js
 import { type EparsSelection, state } from '../state.js';
 import { computeStatus, countAllEparsFiles, type FileStatus } from '../utils.js';
 import { makeFileEl, makeFileTable } from './fileRow.js';
-import { createFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
+import { ensureFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
 
 // ── File selection logic ─────────────────────────────────────────────────
@@ -89,8 +89,9 @@ export function renderEpars(): void {
   const savedScrollTop = container.scrollTop;
   container.innerHTML = '';
 
-  // EPIC-030 : chip de filtre intégré (mémorisé scope 'sync-epars')
-  createFilterChip(container, {
+  // EPIC-030 : chip de filtre persistant (slot dédié hors du DOM effacé,
+  // mémorisé scope 'sync-epars') — la saisie survit aux re-renders.
+  ensureFilterChip(container, {
     scope: 'sync-epars',
     placeholder: 'Filtrer nom, année, codec…',
     onChange: renderEpars,

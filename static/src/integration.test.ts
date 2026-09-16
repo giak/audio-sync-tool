@@ -1357,25 +1357,32 @@ describe('Playlist mode', () => {
     expect(tracks[1].classList.contains('focused')).toBe(false);
   });
 
-  it('F7 is intercepted but no-op in playlist mode (chips livrés en P1)', async () => {
+  it('F7 focuses the playlist-source filter chip (P1 livré)', async () => {
     await enterPlaylist();
 
     const ev = dispatchKey('F7');
     await flush();
 
     expect(ev.defaultPrevented).toBe(true);
-    // P0 : seuls les chips Sync existent — pas encore de chip playlist-source
-    expect(document.querySelector('.filter-chip[data-scope="playlist-source"]')).toBeNull();
+    // P1 : le chip playlist-source existe et reçoit le focus
+    const input = document.querySelector<HTMLInputElement>(
+      '.filter-chip[data-scope="playlist-source"] .filter-input',
+    );
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(input);
   });
 
-  it('/ is intercepted but no-op in playlist mode (chips livrés en P1)', async () => {
+  it('/ focuses the playlist-source filter chip (P1 livré)', async () => {
     await enterPlaylist();
 
     const ev = dispatchKey('/');
     await flush();
 
     expect(ev.defaultPrevented).toBe(true);
-    expect(document.querySelector('.filter-chip[data-scope="playlist-source"]')).toBeNull();
+    const input = document.querySelector<HTMLInputElement>(
+      '.filter-chip[data-scope="playlist-source"] .filter-input',
+    );
+    expect(document.activeElement).toBe(input);
   });
 
   it('Delete removes in-playlist class from source panel', async () => {

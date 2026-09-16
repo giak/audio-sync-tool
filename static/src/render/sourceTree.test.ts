@@ -69,7 +69,7 @@ vi.mock('./cueEditor.js', () => ({ openCueEditor: vi.fn() }));
 
 // ── Import the module under test ──────────────────────────────────────────
 
-import { createFilterChip, setFilterTerm } from './filterChip.js';
+import { ensureFilterChip, setFilterTerm } from './filterChip.js';
 import { renderDirTree, renderSource, togglePlaylistSourceDir, toggleSourceDir } from './sourceTree.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -525,7 +525,9 @@ describe('render/sourceTree', () => {
       };
       setFilterTerm('sync-source', 'Music');
       // Chip présent (scope 'sync-source') pour que updateFilterCount ait une cible
-      createFilterChip(document.body, { scope: 'sync-source', onChange: () => {} });
+      const list = document.createElement('div');
+      document.body.appendChild(list);
+      ensureFilterChip(list, { scope: 'sync-source', onChange: () => {} });
 
       // Make dirHasMatchingDescendant return true for the Music node
       (dirHasMatchingDescendant as ReturnType<typeof vi.fn>).mockReturnValue(true);
@@ -548,7 +550,9 @@ describe('render/sourceTree', () => {
         },
       };
       setFilterTerm('sync-source', 'ZZZ');
-      createFilterChip(document.body, { scope: 'sync-source', onChange: () => {} });
+      const list = document.createElement('div');
+      document.body.appendChild(list);
+      ensureFilterChip(list, { scope: 'sync-source', onChange: () => {} });
       // dirHasMatchingDescendant returns false by default
 
       renderSource();

@@ -10,7 +10,7 @@ import { setBatchCopy } from './batchCopy.js';
 import { openCueEditor } from './cueEditor.js';
 import { doDragCopy } from './dragDrop.js';
 import { makeFileEl, makeFileTable } from './fileRow.js';
-import { createFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
+import { ensureFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
 
 // ── Internal types ────────────────────────────────────────────────────────
@@ -242,7 +242,7 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
         info.node as TreeNode,
         dirPath,
         info.baseDir,
-        getFilterTerm('sync-source').length > 0,
+        getFilterTerm('sync-source').length > 0 || getFilterTerm('playlist-source').length > 0,
       );
       dirEl.appendChild(childrenEl);
       requestAnimationFrame(() => {
@@ -340,11 +340,13 @@ export function renderDirTree(node: TreeNode, container: HTMLElement, basePath: 
   }
 }
 
-// ── Filtered source ───────────────────────────────────────────────────────
+// ── Filtered source ─────────────────────────────────────────────────────────
 
-function renderFilteredSource(container: HTMLElement, allTrees: TreeAndDir[]): number {
+/** Rendu filtré de l'arbre, paramétré par scope (sync-source, playlist-source).
+ *  Renvoie le nombre de dossiers racine visibles. */
+export function renderFilteredSource(container: HTMLElement, allTrees: TreeAndDir[], scope: string): number {
   let visibleCount = 0;
-  const term = getFilterTerm('sync-source').toLowerCase();
+  const term = getFilterTerm(scope).toLowerCase();
   for (const { tree, dirPath } of allTrees) {
     const dirNames = Object.keys(tree)
       .filter(k => k !== '__files__')
@@ -352,14 +354,20 @@ function renderFilteredSource(container: HTMLElement, allTrees: TreeAndDir[]): n
     for (const name of dirNames) {
       if (!name.toLowerCase().includes(term) && !dirHasMatchingDescendant(tree[name] as TreeNode, term)) continue;
       visibleCount++;
-      renderFilteredDirNode(tree[name] as TreeNode, container, dirPath, name);
+      renderFilteredDirNode(tree[name] as TreeNode, container, dirPath, name, scope);
     }
   }
   return visibleCount;
 }
 
-function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath: string, name: string): void {
-  const term = getFilterTerm('sync-source').toLowerCase();
+function renderFilteredDirNode(
+  node: TreeNode,
+  container: HTMLElement,
+  basePath: string,
+  name: string,
+  scope: string,
+): void {
+  const term = getFilterTerm(scope).toLowerCase();
   const fullPath = `${basePath}/${name}`;
   if (!name.toLowerCase().includes(term) && !dirHasMatchingDescendant(node, term)) return;
 
@@ -420,7 +428,7 @@ function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath:
   }
 }
 
-// ── Dossiers racine créés via ➕ ─────────────────────────────────────
+// ── Dossiers racine créés via ➕ ─────────────────────────────────────────────
 
 /** Les dossiers créés via le bouton ➕ sont vides : absents de l'arbre dérivé
  *  des fichiers scannés, ils seraient invisibles. Rendus ici, au même niveau
@@ -487,8 +495,9 @@ export function renderSource(): void {
   container.innerHTML = '';
   state.sourceNodeMap = new Map();
 
-  // EPIC-030 : chip de filtre intégré (mémorisé scope 'sync-source')
-  createFilterChip(container, {
+  // EPIC-030 : chip de filtre persistant (slot dédié hors du DOM effacé,
+  // mémorisé scope 'sync-source') — la saisie survit aux re-renders.
+  ensureFilterChip(container, {
     scope: 'sync-source',
     placeholder: 'Filtrer dossiers / fichiers…',
     onChange: renderSource,
@@ -538,7 +547,7 @@ export function renderSource(): void {
   const headerCount = document.getElementById('source-header-count');
   const sourceFilterActive = getFilterTerm('sync-source').length > 0;
   if (sourceFilterActive) {
-    const filteredCount = renderFilteredSource(container, allTrees);
+    const filteredCount = renderFilteredSource(container, allTrees, 'sync-source');
     if (headerCount)
       headerCount.textContent = `(${filteredCount.toLocaleString('fr')} / ${totalCount.toLocaleString('fr')})`;
     updateFilterCount('sync-source', filteredCount, totalCount);

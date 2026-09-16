@@ -1,6 +1,7 @@
 // ─── Playlist mode rendering: tabs, tracks, source tree, manager ──────────
 
 import { togglePlay } from '../audio.js';
+import { revalidateFocus } from '../focus.js';
 import { getMatchStatus, matchBadgeParts } from '../matchStatus.js';
 import {
   createNewPlaylist,
@@ -18,8 +19,9 @@ import { getRating } from '../ratings.js';
 import { state } from '../state.js';
 import { closeAllModals, confirmDialog, promptDialog, showContextMenu } from '../ui.js';
 import { openCueEditor } from './cueEditor.js';
+import { ensureFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
 import { _ratingClickHandler } from './ratingEdit.js';
-import { renderDirTree, togglePlaylistSourceDir } from './sourceTree.js';
+import { renderDirTree, renderFilteredSource, togglePlaylistSourceDir } from './sourceTree.js';
 
 // ── Internal types ──────────────────────────────────────────────────────
 
@@ -373,6 +375,15 @@ export function renderPlaylistSource(): void {
   if (!container) return;
   container.innerHTML = '';
 
+  // EPIC-030 P1 : chip de filtre persistant (slot dédié hors du DOM effacé,
+  // mémorisé scope 'playlist-source') — la saisie survit aux re-renders.
+  ensureFilterChip(container, {
+    scope: 'playlist-source',
+    placeholder: 'Filtrer dossiers / fichiers…',
+    onChange: renderPlaylistSource,
+    onBlur: revalidateFocus,
+  });
+
   const allTrees: TreeAndDir[] = [];
   let totalCount = 0;
 
@@ -402,12 +413,25 @@ export function renderPlaylistSource(): void {
     allTrees.push({ tree, dirPath });
   }
 
-  for (const { tree, dirPath } of allTrees) {
-    renderDirTree(tree, container, dirPath, togglePlaylistSourceDir);
+  const headerCount = document.getElementById('playlist-source-count');
+  const filterActive = getFilterTerm('playlist-source').length > 0;
+  if (filterActive) {
+    const filteredCount = renderFilteredSource(container, allTrees, 'playlist-source');
+    if (headerCount)
+      headerCount.textContent = `(${filteredCount.toLocaleString('fr')} / ${totalCount.toLocaleString('fr')})`;
+    updateFilterCount('playlist-source', filteredCount, totalCount);
+    if (filteredCount === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'panel-empty';
+      empty.textContent = 'Aucun dossier trouvé pour ce filtre.';
+      container.appendChild(empty);
+    }
+  } else {
+    for (const { tree, dirPath } of allTrees) {
+      renderDirTree(tree, container, dirPath, togglePlaylistSourceDir);
+    }
+    if (headerCount) headerCount.textContent = totalCount > 0 ? `(${totalCount.toLocaleString('fr')})` : '';
   }
-
-  const countEl = document.getElementById('playlist-source-count');
-  if (countEl) countEl.textContent = totalCount > 0 ? `(${totalCount.toLocaleString('fr')})` : '';
 }
 
 // ── Manager ──────────────────────────────────────────────────────────────

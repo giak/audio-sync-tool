@@ -1,61 +1,66 @@
 // ─── FilterChip (EPIC-030) : barre de filtre intégrée par liste ───────────
-// Toujours présente au-dessus de sa liste (compacte si filtre vide) — la
-// visibilité du terme EST l'état du filtre. F7// focus l'input (routing
-// commands/filter.ts) ; ✕ vide ; Backspace sur champ vide sort du mode filtre.
-// Le terme est mémorisé par scope dans state.filters (décision session).
+// PERSISTANT : le chip vit dans un slot dédié (#filter-slot-<scope>) inséré
+// AVANT le container de liste — jamais dans le DOM que les renders effacent
+// (container.innerHTML = ''). ensureFilterChip est idempotent : les renders
+// répétés ne détruisent plus l'input focusé, le focus et le caret survivent
+// donc à la saisie (bug signalé : F7 → 2 caractères → focus perdu).
+// La visibilité du terme EST l'état du filtre ; mémorisé par scope dans
+// state.filters. F7// focus l'input (commands/filter.ts) ; ✕ efface ;
+// Backspace sur champ vide sort du mode filtre.
 
 import { type FilterSubject, foldTerm, matchesTokens } from '../filterEngine.js';
 import { state } from '../state.js';
 
 export interface FilterChipOptions {
-  /** Clé de mémorisation (ex. 'sync-epars'). */
+  /** Clé de mémorisation (ex. 'sync-epars'). Unique par liste. */
   scope: string;
   placeholder?: string;
   /** Appelé (debouncé) quand le terme change — la liste se re-render. */
   onChange: () => void;
-  /** Appelé quand l'input perd le focus sans bouton (blur naturel). */
+  /** Appelé quand l'input perd le focus volontairement (Backspace vide). */
   onBlur?: () => void;
 }
 
 const DEBOUNCE_MS = 150;
 
-/** Scope dont l'input a le focus — les renders détruisent/recréent le chip
- *  (container.innerHTML = ''), ce qui tue l'élément focusé sans blur. On
- *  mémorise avant destruction pour restaurer focus + caret à la recréation. */
-let focusedScope: string | null = null;
-let focusedCaret: number | null = null;
-
-function trackFocus(input: HTMLInputElement, scope: string): void {
-  input.addEventListener('focus', () => {
-    focusedScope = scope;
-  });
-  input.addEventListener('blur', () => {
-    if (focusedScope === scope) {
-      focusedScope = null;
-      focusedCaret = null;
-    }
-  });
-  input.addEventListener('input', () => {
-    if (focusedScope === scope) focusedCaret = input.selectionStart;
-  });
+function slotId(scope: string): string {
+  return `filter-slot-${scope}`;
 }
 
-/** Restaure le focus du chip si son scope était focusé avant un re-render. */
-function restoreFocus(input: HTMLInputElement, scope: string): void {
-  if (focusedScope !== scope) return;
-  focusedScope = null;
-  input.focus({ preventScroll: true });
-  const pos = focusedCaret ?? input.value.length;
-  try {
-    input.setSelectionRange(pos, pos);
-  } catch (_) {
-    /* type=text : toujours settable */
+/** Slot dédié du chip : voisin précédent du container de liste (hors du
+ *  DOM effacé). Créé au besoin, replacé si le layout l'a déplacé. */
+function ensureSlot(listContainer: HTMLElement, scope: string): HTMLElement {
+  const id = slotId(scope);
+  let slot = document.getElementById(id);
+  if (!slot) {
+    slot = document.createElement('div');
+    slot.id = id;
   }
-  focusedCaret = null;
+  const parent = listContainer.parentElement;
+  if (slot.parentElement !== parent || slot.nextElementSibling !== listContainer) {
+    parent?.insertBefore(slot, listContainer);
+  }
+  return slot;
 }
 
-/** Crée le chip et l'attache à parent (premier enfant). Renvoie l'élément. */
-export function createFilterChip(parent: HTMLElement, opts: FilterChipOptions): HTMLElement {
+/** Crée le chip UNE fois dans son slot dédié ; no-op s'il existe déjà.
+ *  Les opts (closures stables : renderX, revalidateFocus) sont capturés à
+ *  la création — les appels suivants ne font que garantir la présence. */
+export function ensureFilterChip(listContainer: HTMLElement, opts: FilterChipOptions): HTMLElement {
+  const existing = document.querySelector(`.filter-chip[data-scope="${opts.scope}"]`);
+  if (existing instanceof HTMLElement) {
+    // Re-synchronise la valeur si le state a changé hors de l'input
+    // (jamais pendant la saisie : l'input focusé fait autorité).
+    const input = existing.querySelector('.filter-input');
+    const term = state.filters[opts.scope] ?? '';
+    if (input instanceof HTMLInputElement && document.activeElement !== input && input.value !== term) {
+      input.value = term;
+      existing.classList.toggle('active', term.length > 0);
+    }
+    return existing;
+  }
+
+  const slot = ensureSlot(listContainer, opts.scope);
   const chip = document.createElement('div');
   chip.className = 'filter-chip';
   chip.dataset.scope = opts.scope;
@@ -71,7 +76,6 @@ export function createFilterChip(parent: HTMLElement, opts: FilterChipOptions): 
 
   input.value = state.filters[opts.scope] ?? '';
   chip.classList.toggle('active', input.value.length > 0);
-  trackFocus(input, opts.scope);
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   input.addEventListener('input', () => {
@@ -97,13 +101,11 @@ export function createFilterChip(parent: HTMLElement, opts: FilterChipOptions): 
     chip.classList.remove('active');
     countEl.textContent = '';
     opts.onChange();
-    input.blur();
-    opts.onBlur?.();
+    // Le chip est persistant : PAS de blur — l'utilisateur enchaîne une
+    // nouvelle saisie sans re-cliquer dans l'input.
   });
 
-  parent.prepend(chip);
-  // Après insertion : focus() sur un élément hors du DOM est ignoré
-  restoreFocus(input, opts.scope);
+  slot.appendChild(chip);
   return chip;
 }
 
