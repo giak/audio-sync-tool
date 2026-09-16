@@ -78,12 +78,21 @@ Ajouter un raccourci = `bind({..., label, group})` — un seul endroit, comme pr
 
 ## Critères d'acceptation
 
-- [ ] Matrice verte sur le comportement ACTUEL avant toute modification prod
-- [ ] Binding mort ou shadowé = rouge CI (testé : le cas playlist-F7 rejoué dans la matrice est rouge sans le fix)
+- [x] Matrice verte sur le comportement ACTUEL avant toute modification prod — **livré** : `static/src/commands/keyboardMatrix.test.ts`, 64 cellules + 3 invariants, tout vert
+- [x] Binding mort ou shadowé = rouge CI (invariants 1 & 2 : tout binding doit gagner dans ≥ 1 monde ; l'ensemble des toujours-shadowés est figé exactement)
 - [ ] Légende affichée = dérivation exacte des bindings labellisés (test bijection)
-- [ ] Échap : ordre de la pile vérifié cellule par cellule dans la matrice (le comportement « par chance d'import » devient un comportement testé)
-- [ ] Aucune régression : vitest/pytest au vert à chaque commit
+- [x] Échap : ordre de la pile vérifié cellule par cellule dans la matrice (le comportement « par chance d'import » devient un comportement testé) — cellules Échap : filtre, audio, modale ×6, fallback, dups
+- [x] Aucune régression : vitest 883/883, pytest 190/190, typecheck/lint/build ✓
 - [ ] Sur sync : Space ×n → flèches → M déplace les sélectionnés sans souris (P2)
+
+### Findings figés par la matrice (exécution du 2026-09-16, candidats fix P1)
+
+1. **FINDING 1** — modale ouverte + filtre focusé : Échap ferme le **filtre**, pas la modale (binding #14 sans garde `activeModal`, enregistré avant les ferme-modales #40-45)
+2. **FINDING 2** — Échap dans un input ordinaire → `closeContextMenu` (fallback #46 sans garde `isInput`)
+3. **FINDING 3** — **Alt+←/→ (historique, #12-13) sont MORTS en page sync** : shadowés par ←/→ épars (#6-7) sans garde `altKey` — confirmé à l'exécution (l'inverse de la dérivation manuelle initiale : la matrice a tranché)
+4. **SUSPECT confirmé** — les 4 bindings dups (#48-51) ne gagnent **jamais** (shadowés par les bindings sync sans garde `page`) : clavier page Doublons inopérant via le registry
+
+> Méthode harnais (leçons) : contexte capturé **au vol** dans le dispatch (le handler gagnant mute le DOM — blur — avant toute ré-identification a posteriori) ; events dispatchés sur l'élément focusé (e.target véridique → `isInput`) ; sweep des invariants **non bouillonnant** (sinon le routeur exécute les handlers et corrompt le monde).
 
 ## Fichiers impactés (prévision)
 
@@ -92,3 +101,4 @@ Ajouter un raccourci = `bind({..., label, group})` — un seul endroit, comme pr
 ## Traçabilité
 
 - Commits : à compléter à chaque phase (convention dépôt : hash réel dans l'EPIC)
+- **P0 matrice** : commit `b66d091` (keyboardMatrix.test.ts 64/64 + registry.bindingMatches extraction)
