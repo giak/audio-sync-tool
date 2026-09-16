@@ -69,7 +69,11 @@ export function makeFileEl(
   const dupMatch = state.dupMatches.get(fullpath);
   if (dupMatch) {
     row.classList.add('dup-fuzzy');
-    label.title = `↔ ${dupMatch.sourceFilename} — ${dupMatch.verdict === 'left-better' ? 'CE fichier gagne (qualité)' : dupMatch.verdict === 'equal' ? 'qualité équivalente' : 'le fichier rangé est de meilleure qualité'} · sim ${Math.round(dupMatch.sim * 100)} % · Δ${dupMatch.delta.toFixed(1)} s`;
+    label.title = `↔ ${dupMatch.sourceFilename} — ${dupMatch.verdict === 'left-better' ? 'CE fichier gagne (qualité)' : dupMatch.verdict === 'equal' ? 'qualité équivalente' : 'le fichier rangé est de meilleure qualité'} · sim ${Math.round(dupMatch.sim * 100)} % · Δ${dupMatch.delta.toFixed(1)} s\nR ou double-clic = remplacer (l'ancien → _trash)`;
+    row.ondblclick = (e: MouseEvent) => {
+      e.preventDefault();
+      void import('../actions.js').then(m => m.executeReplace(fullpath));
+    };
   }
 
   const ratingVal = getRating(fullpath);

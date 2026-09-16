@@ -15,6 +15,7 @@ const {
   openModal,
   promptDialog,
   showError,
+  confirmDialog,
   // Références aux éléments config CRÉÉS AVANT l'import d'actions.ts : les
   // constantes module-level de actions.ts (cfgSelect…) y sont liées à l'import.
   // Le describe « actions » vide document.body à chaque test ; pour que ces
@@ -48,6 +49,10 @@ const {
     promptDialog: vi.fn((_msg: string, _default: string, onOk: (v: string) => void) => {
       onOk('Ambient');
     }),
+    // confirmDialog mocké : exécute onConfirm immédiatement (chemin nominal testé)
+    confirmDialog: vi.fn((_msg: string, onConfirm: () => void, _label?: string) => {
+      onConfirm();
+    }),
     showError: vi.fn(),
     cfgElements: Array.from(
       document.querySelectorAll(
@@ -60,13 +65,18 @@ const {
 vi.mock('./api.js', () => ({ api }));
 vi.mock('./focus.js', () => ({ revalidateFocus, setActivePanel }));
 vi.mock('./render.js', () => ({ getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderSource }));
+// domPatches est mocké : en jsdom CSS.escape n'existe pas (utilisé par les
+// querySelector de patchEparsFileAfterCopy) → le flux executeReplace serait
+// interrompu pour une raison d'environnement de test, pas de produit.
+vi.mock('./domPatches.js', () => ({ patchEparsFileAfterCopy, patchSourceFileAfterCopy }));
 vi.mock('./ratings.js', () => ({ loadRatings }));
-vi.mock('./ui.js', () => ({ closeAllModals, openModal, promptDialog, showError }));
+vi.mock('./ui.js', () => ({ closeAllModals, openModal, promptDialog, showError, confirmDialog }));
 
 import {
   configData,
   createSourceFolder,
   executeCopy,
+  executeReplace,
   initApp,
   initConfigUI,
   renderConfigSelect,
@@ -493,10 +503,106 @@ describe('actions', () => {
     });
 
     it('handles init error gracefully', async () => {
+      api.mockResolvedValueOnce({});
       api.mockRejectedValueOnce(new Error('Connection failed'));
 
       await initApp();
       // Should not throw
+    });
+  });
+
+  // ── EPIC-028 P1bis : executeReplace (copy puis move trash) ─────────────
+  describe('executeReplace', () => {
+    const DUP_MATCH = {
+      eparsFullPath: '/epars/song.flac',
+      sourceFullPath: '/source/music/song.mp3',
+      eparsFilename: 'song.flac',
+      sourceFilename: 'song.mp3',
+      sim: 0.97,
+      delta: 0,
+      verdict: 'left-better' as const,
+    };
+
+    function setupDom(): void {
+      const status = document.createElement('div');
+      status.id = 'status-text';
+      document.body.appendChild(status);
+      const file = document.createElement('span');
+      file.className = 'file';
+      file.dataset.filename = 'song.flac';
+      document.body.appendChild(file);
+    }
+
+    it('no-op with status message when path not in dupMatches', async () => {
+      setupDom();
+      state.dupMatches = new Map();
+
+      await executeReplace('/epars/unknown.flac');
+
+      expect(api).not.toHaveBeenCalled();
+      expect(document.getElementById('status-text')!.textContent).toContain('Aucun jumeau');
+    });
+
+    it('copies epars into twin dir then moves old file to _trash/<date>', async () => {
+      setupDom();
+      state.dupMatches = new Map([['/epars/song.flac', DUP_MATCH]]);
+      state.eparsFiles = { '/epars': { 'song.flac': { path: 'song.flac', year: null, duration: 200, codec: 'FLAC' } } };
+      state.sourceFiles = { '/source/music': {} };
+      api.mockResolvedValue({ ok: true });
+
+      await executeReplace('/epars/song.flac');
+
+      expect(api).toHaveBeenCalledTimes(2);
+      const [copyUrl, copyOpts] = api.mock.calls[0];
+      expect(copyUrl).toBe('/copy');
+      expect(JSON.parse(String(copyOpts.body))).toEqual({
+        source_path: '/epars/song.flac',
+        dest_dir: '/source/music',
+        filename: 'song.flac',
+      });
+      const [moveUrl, moveOpts] = api.mock.calls[1];
+      expect(moveUrl).toBe('/move');
+      const moveBody = JSON.parse(String(moveOpts.body));
+      expect(moveBody.source_path).toBe('/source/music/song.mp3');
+      expect(moveBody.dest_dir).toMatch(/^\/source\/music\/_trash\/\d{4}-\d{2}-\d{2}$/);
+      expect(showError).not.toHaveBeenCalled();
+      expect(document.getElementById('status-text')!.textContent).toContain('remplacé');
+      expect(state.replaceBusy).toBe(false);
+    });
+
+    it("does NOT move to trash when copy fails (rien n'est perdu)", async () => {
+      setupDom();
+      state.dupMatches = new Map([['/epars/song.flac', DUP_MATCH]]);
+      state.eparsFiles = { '/epars': { 'song.flac': { path: 'song.flac', year: null, duration: 200, codec: 'FLAC' } } };
+      state.sourceFiles = { '/source/music': {} };
+      api.mockRejectedValueOnce(new Error('disk full'));
+
+      await executeReplace('/epars/song.flac');
+
+      expect(api).toHaveBeenCalledTimes(1); // le move n'a pas eu lieu
+      expect(showError).toHaveBeenCalledWith(expect.stringContaining('disk full'));
+      expect(state.replaceBusy).toBe(false);
+    });
+
+    it('updates sourceFiles: old removed, epars meta carried over, dupMatches refreshed', async () => {
+      setupDom();
+      state.dupMatches = new Map([['/epars/song.flac', DUP_MATCH]]);
+      state.eparsFiles = {
+        '/epars': { 'song.flac': { path: 'song.flac', year: '2011', duration: 200, codec: 'FLAC 1000kbps' } },
+      };
+      state.sourceFiles = {
+        '/source/music': { 'song.mp3': { path: 'song.mp3', year: null, duration: 199, codec: 'MP3 320kbps' } },
+      };
+      api.mockResolvedValue({ ok: true });
+
+      await executeReplace('/epars/song.flac');
+
+      const idx = state.sourceFiles['/source/music'];
+      expect(idx['song.mp3']).toBeUndefined(); // l'ancien est parti
+      expect(idx['song.flac']).toEqual({ path: 'song.flac', year: '2011', duration: 200, codec: 'FLAC 1000kbps' });
+      // NB : la paire reste référencée (le nouveau song.flac matche l'épars
+      // original, normalisés identiques) — inoffensif : le verdict passe à
+      // « equal », et seul le scan consolidera l'état réel. Testé tel quel.
     });
   });
 });

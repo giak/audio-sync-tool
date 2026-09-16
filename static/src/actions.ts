@@ -7,7 +7,7 @@ import { revalidateFocus, setActivePanel } from './focus.js';
 import { loadRatings } from './ratings.js';
 import { getBatchCopy } from './render.js';
 import { type FileIndex, state } from './state.js';
-import { closeAllModals, openModal, promptDialog, showError } from './ui.js';
+import { closeAllModals, confirmDialog, openModal, promptDialog, showError } from './ui.js';
 
 // ── Config types ───────────────────────────────────────────────────────────
 
@@ -350,6 +350,91 @@ export function executeCopy(): void {
     };
   }
   if (cancelBtn) cancelBtn.onclick = () => closeAllModals();
+}
+
+// ── Replace (EPIC-028 P1bis) : FLAC gagne, l'ancien part au _trash ────────
+
+/** Remplace le fichier rangé par son jumeau épars : copie du gauche vers le
+ *  dossier du jumeau droit, puis déplacement de l'ancien droit vers
+ *  `<source_root>/_trash/<date>/`. Jamais d'effacement physique. Le move n'a
+ *  lieu QUE si la copie a réussi — rien n'est perdu en cas d'échec. */
+export async function executeReplace(eparsFullPath: string): Promise<void> {
+  const statusText = document.getElementById('status-text');
+  const match = state.dupMatches.get(eparsFullPath);
+  if (!match) {
+    if (statusText) statusText.textContent = 'Aucun jumeau rangé à remplacer pour ce fichier.';
+    return;
+  }
+
+  // Découpage : dupMatches ne stocke que le path complet.
+  const eparDir = Object.keys(state.eparsFiles).find(d => eparsFullPath.startsWith(`${d}/`));
+  const sourceRoot = Object.keys(state.sourceFiles).find(d => match.sourceFullPath.startsWith(`${d}/`));
+  if (!eparDir || !sourceRoot) {
+    if (statusText) statusText.textContent = 'Chemin introuvable dans les données scannées.';
+    return;
+  }
+  const eparsFilename = match.eparsFilename;
+  const sourceDir = match.sourceFullPath.substring(0, match.sourceFullPath.lastIndexOf('/'));
+  const sourceFilename = match.sourceFilename;
+  const trashDir = `${sourceRoot}/_trash/${new Date().toISOString().slice(0, 10)}`;
+
+  // La confirmation est à callback : la promesse du flux réel est capturée ici
+  // pour que executeReplace() reste awaitable (tests, enchaînements clavier).
+  let inflight: Promise<void> = Promise.resolve();
+
+  confirmDialog(
+    `Remplacer "${sourceFilename}" (rangé) par "${eparsFilename}" (épars) ?\n` +
+      `L'ancien fichier sera déplacé vers _trash (jamais effacé).`,
+    () => {
+      state.replaceBusy = true; // anti double-exécution (double-clic sur confirmer)
+      inflight = (async () => {
+        try {
+          // 1. Copier le nouveau fichier dans le dossier du jumeau
+          await api('/copy', {
+            method: 'POST',
+            body: JSON.stringify({
+              source_path: eparsFullPath,
+              dest_dir: sourceDir,
+              filename: eparsFilename,
+            }),
+          });
+          // 2. Déplacer l'ancien rangé vers le trash — seulement si la copie a réussi
+          await api('/move', {
+            method: 'POST',
+            body: JSON.stringify({ source_path: match.sourceFullPath, dest_dir: trashDir }),
+          });
+
+          // 3. State : retrait de l'ancien, ajout du nouveau dans sourceFiles
+          const rel = sourceDir === sourceRoot ? '' : `${sourceDir.substring(sourceRoot.length + 1)}/`;
+          delete state.sourceFiles[sourceRoot][sourceFilename];
+          state.sourceFiles[sourceRoot][eparsFilename] = {
+            ...(state.eparsFiles[eparDir]?.[eparsFilename] ?? {
+              path: `${rel}${eparsFilename}`,
+              year: null,
+              duration: null,
+              codec: null,
+            }),
+          };
+          state.sourceFiles = { ...state.sourceFiles }; // EventEmitter → renderSource
+          // 4. Épars : marquer traité (même sémantique qu'après copie)
+          patchEparsFileAfterCopy(eparsFilename, eparDir);
+          state.selectedEparsFiles = new Map();
+          refreshDupMatches(); // l'ancien jumeau n'existe plus → la Map change
+          if (statusText) {
+            statusText.textContent = `✓ ${sourceFilename} remplacé par ${eparsFilename} (ancien → _trash)`;
+          }
+        } catch (err) {
+          showError(`Échec du remplacement : ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+          state.replaceBusy = false;
+          requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
+        }
+      })();
+    },
+    'Remplacer',
+  );
+
+  await inflight;
 }
 
 // ── Create folder (bouton ➕ du panneau Source Data) ──────────────────────

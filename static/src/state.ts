@@ -125,6 +125,8 @@ interface AppState {
   navHistory: Array<NavHistoryEntry>;
   navIndex: number;
   ratings: Record<string, number>;
+  /** EPIC-028 : verrou anti double-exécution de l'action Remplacer. */
+  replaceBusy: boolean;
   focusListId: 'epars' | 'source' | 'playlist-source' | 'playlist-tracks';
   lastCueTrack: PlaylistTrackLite | null;
 }
@@ -171,6 +173,7 @@ const _state: AppState = {
   navHistory: [],
   navIndex: -1,
   ratings: {},
+  replaceBusy: false,
   focusListId: 'epars',
   lastCueTrack: null,
 };

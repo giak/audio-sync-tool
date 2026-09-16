@@ -374,6 +374,154 @@ def test_copy_no_json_body(client):
     assert rv.json['error'] == 'Request body must be JSON'
 
 
+# --- EPIC-028 P1bis : /move (trash — déplacer, jamais effacer) ---
+
+def test_move_file_and_journal(client):
+    """Déplacement basique : fichier absent de la source, présent à destination,
+    entrée journal status=moved."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        src_dir = os.path.join(tmp, 'src')
+        dst_dir = os.path.join(tmp, 'dst')
+        os.makedirs(src_dir)
+        src_file = os.path.join(src_dir, 'song.mp3')
+        open(src_file, 'w').close()
+
+        rv = client.post('/move', json={'source_path': src_file, 'dest_dir': dst_dir})
+        assert rv.status_code == 200
+        assert rv.json['ok'] is True
+        assert rv.json['filename'] == 'song.mp3'
+        assert not os.path.exists(src_file)          # déplacé — la source est vide
+        assert os.path.exists(os.path.join(dst_dir, 'song.mp3'))
+
+        rv = client.get('/journal')
+        assert rv.json[-1]['status'] == 'moved'
+        assert rv.json[-1]['filename'] == 'song.mp3'
+
+
+def test_move_into_trash_dir_status(client):
+    """Destination sous un dossier _trash → journal status=moved-to-trash."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        trash = os.path.join(tmp, '_trash', '2026-09-15')
+        src_file = os.path.join(tmp, 'song.mp3')
+        open(src_file, 'w').close()
+
+        rv = client.post('/move', json={'source_path': src_file, 'dest_dir': trash})
+        assert rv.status_code == 200
+        assert os.path.exists(os.path.join(trash, 'song.mp3'))
+
+        rv = client.get('/journal')
+        assert rv.json[-1]['status'] == 'moved-to-trash'
+
+
+def test_move_never_overwrites_existing(client):
+    """Collision : le fichier existant est préservé, le nouveau porte -2."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        src_dir = os.path.join(tmp, 'src')
+        os.makedirs(src_dir)
+        src_file = os.path.join(src_dir, 'song.mp3')
+        with open(src_file, 'w') as f:
+            f.write('nouveau')
+        existing = os.path.join(tmp, 'song.mp3')
+        with open(existing, 'w') as f:
+            f.write('existant')
+
+        rv = client.post('/move', json={'source_path': src_file, 'dest_dir': tmp})
+        assert rv.status_code == 200
+        with open(existing) as f:
+            assert f.read() == 'existant'             # l'ancien est intact
+        with open(os.path.join(tmp, 'song-2.mp3')) as f:
+            assert f.read() == 'nouveau'              # le nouveau porte le suffixe
+        assert not os.path.exists(src_file)
+
+
+def test_move_allowed_both_sides(client):
+    """is_path_allowed() sur la source ET la destination (CWE-22)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src_file = os.path.join(tmp, 'song.mp3')
+        open(src_file, 'w').close()
+
+        # Destination hors des dossiers autorisés (config vide → rien n'est autorisé)
+        rv = client.post('/move', json={'source_path': src_file, 'dest_dir': '/tmp'})
+        assert rv.status_code == 403
+        assert 'allowed' in rv.json['error']
+
+
+def test_move_missing_source_and_keys(client):
+    rv = client.post('/move', json={'dest_dir': '/tmp'})
+    assert rv.status_code == 400
+    assert 'source_path' in rv.json['error']
+
+    rv = client.post('/move', json={'source_path': '/nonexistent/x.mp3', 'dest_dir': '/tmp'})
+    assert rv.status_code == 404
+
+    rv = client.post('/move', data='null', content_type='application/json')
+    assert rv.status_code == 400
+
+
+def test_move_updates_cache(client):
+    """/move reflète l'effet dans le cache /load (retrait source, ajout dest)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src_dir = os.path.join(tmp, 'epars')
+        dst_dir = os.path.join(tmp, 'source')
+        os.makedirs(src_dir)
+        src_file = os.path.join(src_dir, 'song.mp3')
+        open(src_file, 'w').close()
+
+        client.post('/config', json=make_cfg(source_data=dst_dir, epars_dirs=[src_dir]))
+        client.get('/scan')
+        import app as app_module
+        cache = app_module.load_json(app_module.CACHE_PATH)
+        assert 'song.mp3' in cache['epars'][src_dir]
+
+        rv = client.post('/move', json={'source_path': src_file, 'dest_dir': dst_dir})
+        assert rv.status_code == 200
+
+        cache = app_module.load_json(app_module.CACHE_PATH)
+        assert 'song.mp3' not in cache['epars'][src_dir]   # retiré de l'épars
+        assert 'song.mp3' in cache['source'][dst_dir]      # ajouté à la source
+
+
+def test_scan_excludes_trash_dir(client):
+    """L'élagage _trash du os.walk : le trash n'est pas ré-indexé (EPIC-028)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, 'source')
+        trash = os.path.join(src, '_trash', '2026-09-15')
+        os.makedirs(trash)
+        open(os.path.join(src, 'kept.mp3'), 'w').close()
+        open(os.path.join(trash, 'buried.mp3'), 'w').close()
+
+        client.post('/config', json=make_cfg(source_data=src))
+        rv = client.get('/scan')
+        files = rv.json['source'][src]
+        assert 'kept.mp3' in files
+        assert 'buried.mp3' not in files
+
+
+def test_copy_collision_suffix_preserves_existing(client):
+    """EPIC-028 : /copy ne doit plus écraser — le nouveau fichier porte -2."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src_dir = os.path.join(tmp, 'src')
+        os.makedirs(src_dir)
+        src_file = os.path.join(src_dir, 'song.mp3')
+        with open(src_file, 'w') as f:
+            f.write('nouveau')
+        existing = os.path.join(tmp, 'song.mp3')
+        with open(existing, 'w') as f:
+            f.write('existant')
+
+        rv = client.post('/copy', json={
+            'source_path': src_file, 'dest_dir': tmp, 'filename': 'song.mp3'
+        })
+        assert rv.status_code == 200
+        with open(existing) as f:
+            assert f.read() == 'existant'             # l'ancien est intact
+        with open(os.path.join(tmp, 'song-2.mp3')) as f:
+            assert f.read() == 'nouveau'              # le nouveau porte le suffixe
+
+
 def test_copy_same_file(client):
     """Copying a file onto itself returns 500 (SameFileError)."""
     with tempfile.TemporaryDirectory() as tmp:

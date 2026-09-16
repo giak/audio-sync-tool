@@ -72,6 +72,10 @@ def save_json(path, data):
 
 MUSIC_EXTENSIONS = ('.mp3', '.flac', '.wav', '.ogg', '.m4a', '.wma')
 
+# EPIC-028 : nom du dossier trash (fichiers déplacés, jamais effacés).
+# Sous-dossier de la racine source (décision utilisateur), élagué du scan.
+TRASH_DIRNAME = '_trash'
+
 
 def load_extra_dirs():
     """Dossiers racine vides créés via l'UI (➕) — hors cache de scan."""
@@ -258,6 +262,9 @@ def index_files(directory, phase_label='source'):
     # Collect file list
     tasks = []
     for root, dirs, files in os.walk(directory):
+        # Élagage _trash (EPIC-028) : les fichiers déplacés au trash ne doivent
+        # pas être ré-indexés — le trash se remplirait lui-même à chaque scan.
+        dirs[:] = [d for d in dirs if d != TRASH_DIRNAME]
         for f in files:
             if f.lower().endswith(MUSIC_EXTENSIONS):
                 full_path = os.path.join(root, f)
@@ -568,7 +575,7 @@ def copy_file():
     if not os.path.exists(src):
         return _resp(False, _src=src, error='Source file not found'), 404
 
-    dst = os.path.join(dst_dir, filename)
+    dst = _collision_dst(os.path.join(dst_dir, filename), src)
     os.makedirs(dst_dir, exist_ok=True)
     try:
         shutil.copy2(src, dst)
@@ -598,6 +605,54 @@ def copy_file():
                 break
 
     return _resp(True, _src=dst)
+
+
+@app.route('/move', methods=['POST'])
+def move_file():
+    """Move a file to a destination dir — EPIC-028 trash: move, never erase.
+
+    Symétrique de /copy : shutil.move, is_path_allowed() sur source ET
+    destination, collision → suffixe -2/-3 (fichier existant préservé).
+    """
+    data = request.json
+    if data is None:
+        return jsonify({'ok': False, 'error': 'Request body must be JSON'}), 400
+    for key in ('source_path', 'dest_dir'):
+        if key not in data:
+            return jsonify({'ok': False, 'error': f'Missing required key: {key}'}), 400
+    src = data['source_path']
+    dst_dir = data['dest_dir']
+    filename = os.path.basename(data.get('filename') or src)
+
+    if not os.path.exists(src):
+        return jsonify({'ok': False, 'error': 'Source file not found'}), 404
+    if not is_path_allowed(src) or not is_path_allowed(os.path.join(dst_dir, filename)):
+        return jsonify({'ok': False, 'error': 'Path not within allowed directories'}), 403
+
+    dst = os.path.join(dst_dir, filename)
+    if os.path.abspath(dst) == os.path.abspath(src):
+        return jsonify({'ok': False, 'error': 'Source and destination are identical'}), 400
+    os.makedirs(dst_dir, exist_ok=True)
+    try:
+        final_dst = _collision_dst(dst, src)
+        shutil.move(src, final_dst)
+    except (OSError, shutil.Error) as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+    log_journal({
+        'timestamp': datetime.now().isoformat(),
+        'source': src,
+        'destination': final_dst,
+        'filename': os.path.basename(final_dst),
+        'status': 'moved-to-trash' if TRASH_DIRNAME in os.path.realpath(final_dst).split(os.sep) else 'moved'
+    })
+
+    # Remove from cache (source side) + add (dest side) if applicable
+    cache = load_json(CACHE_PATH)
+    if cache:
+        _move_cache_update(cache, src, filename, final_dst)
+
+    return jsonify({'ok': True, 'filename': os.path.basename(final_dst), 'destination': final_dst})
 
 
 @app.route('/delete', methods=['POST'])
@@ -695,6 +750,52 @@ def is_path_allowed(path):
         if real == base or real.startswith(base + os.sep):
             return True
     return False
+
+
+def _collision_dst(dst, src):
+    """Suffix -2/-3… if dst exists — never overwrite (EPIC-028).
+
+    Le fichier existant est préservé ; le NOUVEAU fichier porte le suffixe.
+    Calculé AVANT copy2/move (une suffixation post-hoc ne peut pas restaurer
+    le contenu écrasé). samefile : src/dst identiques → pas de suffixe.
+    """
+    if not os.path.exists(dst) or os.path.samefile(src, dst):
+        return dst
+    base, ext = os.path.splitext(dst)
+    n = 2
+    while os.path.exists(f"{base}-{n}{ext}"):
+        n += 1
+    return f"{base}-{n}{ext}"
+
+
+def _move_cache_update(cache, src, filename, final_dst):
+    """Mirror the /move effect into the /load cache: remove source entry, add dest entry."""
+    src_dir = os.path.dirname(src)
+    removed = False
+    # Remove from the source side (epars) — key is the filename at that level
+    for epars_dir in list(cache.get('epars', {}).keys()):
+        if src_dir == epars_dir or src_dir.startswith(epars_dir.rstrip('/') + '/'):
+            cache['epars'][epars_dir].pop(filename, None)
+            removed = True
+            break
+    if not removed:
+        for source_dir in list(cache.get('source', {}).keys()):
+            if src_dir == source_dir or src_dir.startswith(source_dir.rstrip('/') + '/'):
+                cache['source'][source_dir].pop(filename, None)
+                break
+    # Add to the dest side if dest is under a scanned root
+    year, duration, codec = get_audio_meta(final_dst)
+    dest_dir = os.path.dirname(final_dst)
+    base = os.path.basename(final_dst)
+    for source_dir in list(cache.get('source', {}).keys()):
+        if dest_dir == source_dir or dest_dir.startswith(source_dir.rstrip('/') + '/'):
+            rel = os.path.relpath(dest_dir, source_dir) if dest_dir != source_dir else '.'
+            rel_path = os.path.join(rel, base) if rel != '.' else base
+            cache['source'][source_dir][base] = {
+                'path': rel_path, 'year': year, 'duration': duration, 'codec': codec
+            }
+            break
+    save_json(CACHE_PATH, cache)
 
 
 @app.route('/audio')

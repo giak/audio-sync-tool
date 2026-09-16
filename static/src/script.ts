@@ -8,6 +8,7 @@ import './commands/filter.js';
 import './commands/rating.js';
 import './commands/playlist.js';
 import './commands/modals.js';
+import './commands/replace.js';
 import { createSourceFolder, initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
 import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
