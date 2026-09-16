@@ -44,6 +44,7 @@ import { stopPlayer, togglePlay } from '../audio.js';
 import { focusItemByElement, setActivePanel } from '../focus.js';
 import { getRating } from '../ratings.js';
 import { showContextMenu } from '../ui.js';
+import { state } from '../state.js';
 import { makeFileEl } from './fileRow.js';
 
 function makeRow(
@@ -89,6 +90,105 @@ function makeRow(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  state.dupMatches = new Map(); // EPIC-028 : isoler chaque test de la Map globale
+});
+
+// ── Doublon fuzzy (EPIC-028 P1) : marqueur ambre ─────────────────────────
+
+describe('doublon fuzzy (dup-fuzzy)', () => {
+  it("n'ajoute PAS dup-fuzzy quand le fichier n'est pas dans dupMatches", () => {
+    const row = makeRow({ fullpath: '/media/usb/song.mp3' });
+    expect(row.classList.contains('dup-fuzzy')).toBe(false);
+    const label = row.querySelector('.file') as HTMLElement;
+    expect(label.title).toBe('');
+  });
+
+  it('ajoute dup-fuzzy + tooltip verdict left-better (FLAC épars vs MP3 rangé)', () => {
+    state.dupMatches = new Map([
+      [
+        '/media/usb/song.mp3',
+        {
+          eparsFullPath: '/media/usb/song.mp3',
+          sourceFullPath: '/src/Rock/song.mp3',
+          eparsFilename: 'song.mp3',
+          sourceFilename: 'song.mp3',
+          sim: 0.93,
+          delta: 0,
+          verdict: 'left-better',
+        },
+      ],
+    ]);
+    const row = makeRow({ fullpath: '/media/usb/song.mp3', status: 'nouveau' });
+    expect(row.classList.contains('dup-fuzzy')).toBe(true);
+    const label = row.querySelector('.file') as HTMLElement;
+    expect(label.title).toContain('↔');
+    expect(label.title).toContain('CE fichier gagne');
+    expect(label.title).toContain('sim 93 %');
+    expect(label.title).toContain('Δ0.0 s');
+  });
+
+  it('tooltip « qualité équivalente » pour verdict equal', () => {
+    state.dupMatches = new Map([
+      [
+        '/media/usb/song.mp3',
+        {
+          eparsFullPath: '/media/usb/song.mp3',
+          sourceFullPath: '/src/Rock/song.mp3',
+          eparsFilename: 'song.mp3',
+          sourceFilename: 'song.mp3',
+          sim: 1,
+          delta: 1.2,
+          verdict: 'equal',
+        },
+      ],
+    ]);
+    const row = makeRow({ fullpath: '/media/usb/song.mp3' });
+    const label = row.querySelector('.file') as HTMLElement;
+    expect(label.title).toContain('qualité équivalente');
+    expect(label.title).toContain('Δ1.2 s');
+  });
+
+  it('tooltip « le fichier rangé est de meilleure qualité » pour verdict right-better', () => {
+    state.dupMatches = new Map([
+      [
+        '/media/usb/song.mp3',
+        {
+          eparsFullPath: '/media/usb/song.mp3',
+          sourceFullPath: '/src/Rock/song.flac',
+          eparsFilename: 'song.mp3',
+          sourceFilename: 'song.flac',
+          sim: 0.9,
+          delta: 0.4,
+          verdict: 'right-better',
+        },
+      ],
+    ]);
+    const row = makeRow({ fullpath: '/media/usb/song.mp3' });
+    const label = row.querySelector('.file') as HTMLElement;
+    expect(label.title).toContain('le fichier rangé est de meilleure qualité');
+  });
+
+  it("la ligne épars matchée garde son statut LED d'origine (nouveau, pas de conflit)", () => {
+    state.dupMatches = new Map([
+      [
+        '/media/usb/song.mp3',
+        {
+          eparsFullPath: '/media/usb/song.mp3',
+          sourceFullPath: '/src/Rock/song.mp3',
+          eparsFilename: 'song.mp3',
+          sourceFilename: 'song.mp3',
+          sim: 0.9,
+          delta: 0,
+          verdict: 'left-better',
+        },
+      ],
+    ]);
+    const row = makeRow({ fullpath: '/media/usb/song.mp3', status: 'nouveau' });
+    const label = row.querySelector('.file') as HTMLElement;
+    expect(label.classList.contains('nouveau')).toBe(true);
+    expect(label.classList.contains('led-nouveau')).toBe(true);
+    expect(row.classList.contains('dup-fuzzy')).toBe(true);
+  });
 });
 
 // ── DOM structure ─────────────────────────────────────────────────────────

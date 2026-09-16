@@ -88,8 +88,13 @@ export function renderEpars(): void {
   container.innerHTML = '';
 
   const totalFiles = countAllEparsFiles(state.eparsFiles);
+  const dupCount = state.dupMatches.size;
   const headerCount = document.getElementById('epars-header-count');
-  if (headerCount) headerCount.textContent = totalFiles > 0 ? `(${totalFiles.toLocaleString('fr')})` : '';
+  if (headerCount) {
+    const base = totalFiles > 0 ? totalFiles.toLocaleString('fr') : '';
+    const dupPart = dupCount > 0 ? ` · ${dupCount.toLocaleString('fr')} ↔` : '';
+    headerCount.textContent = base ? `(${base}${dupPart})` : '';
+  }
 
   let countNouveau = 0,
     countDoublon = 0,
@@ -154,10 +159,14 @@ export function renderEpars(): void {
 
   const statusLine = document.getElementById('epars-status-line');
   if (statusLine) {
+    const dupPart =
+      dupCount > 0
+        ? `\n      <span class="s-dupfuzzy">↔ ${dupCount.toLocaleString('fr')} homonyme${dupCount > 1 ? 's' : ''}</span>`
+        : '';
     statusLine.innerHTML = `
       <span class="s-traite">✓ ${countTraite.toLocaleString('fr')} traité</span>
       <span class="s-reste">● ${countNouveau.toLocaleString('fr')} reste</span>
-      <span class="s-doublon">○ ${countDoublon.toLocaleString('fr')} doublon</span>
+      <span class="s-doublon">○ ${countDoublon.toLocaleString('fr')} doublon</span>${dupPart}
     `;
   }
 

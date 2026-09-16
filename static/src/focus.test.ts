@@ -7,6 +7,7 @@ import {
   getItems,
   navigateColumn,
   navigateFocus,
+  initTwinHint,
   revalidateFocus,
   setActivePanel,
 } from './focus.js';
@@ -280,5 +281,112 @@ describe('revalidateFocus', () => {
     revalidateFocus();
     const focused = getFocusedItem(document.getElementById('epars-container') as HTMLElement) as HTMLElement;
     expect(focused.dataset.focuspath).toBe('/media/usb/track.flac');
+  });
+});
+
+// ── Twin-hint (EPIC-028 P1) ───────────────────────────────────────────────
+
+describe('twin-hint', () => {
+  function resetDup(): void {
+    state.dupMatches = new Map();
+  }
+
+  beforeEach(() => resetDup());
+
+  it("focus épars matché → .twin-hint sur le jumeau rendu à droite", () => {
+    state.dupMatches = new Map([
+      [
+        '/media/usb/song.mp3',
+        {
+          eparsFullPath: '/media/usb/song.mp3',
+          sourceFullPath: '/src/Techno/beat.mp3',
+          eparsFilename: 'song.mp3',
+          sourceFilename: 'beat.mp3',
+          sim: 0.9,
+          delta: 0,
+          verdict: 'left-better',
+        },
+      ],
+    ]);
+    const container = document.getElementById('epars-container') as HTMLElement;
+    const row = container.querySelector('[data-focuspath="/media/usb/song.mp3"]') as HTMLElement;
+
+    focusItemByElement(container, row);
+
+    const twin = document.querySelector('#source-container .twin-hint') as HTMLElement;
+    expect(twin).not.toBeNull();
+    expect(twin.dataset.focuspath).toBe('/src/Techno/beat.mp3');
+    // Le focus reste à gauche — le hint ne vole pas le focus
+    expect(getFocusedItem(container)?.getAttribute('data-focuspath')).toBe('/media/usb/song.mp3');
+  });
+
+  it("focus épars non matché → pas de .twin-hint (et cleanup de l'ancien)", () => {
+    const container = document.getElementById('epars-container') as HTMLElement;
+    const matched = container.querySelector('[data-focuspath="/media/usb/song.mp3"]') as HTMLElement;
+    const unmatched = container.querySelector('[data-focuspath="/media/usb/track.flac"]') as HTMLElement;
+
+    // Simuler un hint résiduel puis naviguer vers un non-matché
+    const twinRow = document.querySelector('#source-container [data-focuspath="/src/Techno/beat.mp3"]') as HTMLElement;
+    twinRow.classList.add('twin-hint');
+
+    focusItemByElement(container, unmatched);
+
+    expect(document.querySelector('#source-container .twin-hint')).toBeNull();
+    void matched;
+  });
+
+  it("jumeau non rendu (dossier replié) → pas de .twin-hint, pas d'erreur", () => {
+    state.dupMatches = new Map([
+      [
+        '/media/usb/song.mp3',
+        {
+          eparsFullPath: '/media/usb/song.mp3',
+          sourceFullPath: '/src/House/hidden.mp3',
+          eparsFilename: 'song.mp3',
+          sourceFilename: 'hidden.mp3',
+          sim: 0.9,
+          delta: 0,
+          verdict: 'equal',
+        },
+      ],
+    ]);
+    const container = document.getElementById('epars-container') as HTMLElement;
+    const row = container.querySelector('[data-focuspath="/media/usb/song.mp3"]') as HTMLElement;
+
+    expect(() => focusItemByElement(container, row)).not.toThrow();
+    expect(document.querySelector('#source-container .twin-hint')).toBeNull();
+  });
+
+  it('Tab vers la source → cleanup du .twin-hint', () => {
+    const twinRow = document.querySelector('#source-container [data-focuspath="/src/Techno/beat.mp3"]') as HTMLElement;
+    twinRow.classList.add('twin-hint');
+
+    setActivePanel('source');
+
+    expect(document.querySelector('#source-container .twin-hint')).toBeNull();
+  });
+
+  it('initTwinHint : event eparsFocusPath:changed → hint sur le jumeau', async () => {
+    state.dupMatches = new Map([
+      [
+        '/media/usb/lost.wav',
+        {
+          eparsFullPath: '/media/usb/lost.wav',
+          sourceFullPath: '/src/Techno/beat.mp3',
+          eparsFilename: 'lost.wav',
+          sourceFilename: 'beat.mp3',
+          sim: 0.88,
+          delta: 1,
+          verdict: 'right-better',
+        },
+      ],
+    ]);
+    initTwinHint();
+
+    state.eparsFocusPath = '/media/usb/lost.wav'; // Proxy → emit eparsFocusPath:changed
+    // emit est batché via requestAnimationFrame (jsdom : setTimeout ~16 ms)
+    await new Promise(res => setTimeout(res, 30));
+
+    expect(document.querySelector('#source-container .twin-hint')).not.toBeNull();
   });
 });

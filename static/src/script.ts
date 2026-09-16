@@ -11,7 +11,7 @@ import './commands/modals.js';
 import { createSourceFolder, initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
 import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
-import { setActivePanel } from './focus.js';
+import { initTwinHint, setActivePanel } from './focus.js';
 import { createNewPlaylist, loadPlaylists, savePlaylist, setPendingTracks } from './playlist.js';
 import { openCueEditor } from './render/cueEditor.js';
 import {
@@ -164,4 +164,5 @@ setInterval(updateServerIndicator, 10000);
 initAudioUI();
 initConfigUI();
 setupRenderSubscriptions();
+initTwinHint(); // EPIC-028 P1 : halo ambre sur le jumeau rangé au focus épars
 initApp();

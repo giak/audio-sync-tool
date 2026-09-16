@@ -8,6 +8,7 @@
 // dernière colonne et reste collée au bord droit.
 
 import { stopPlayer, togglePlay } from '../audio.js';
+import { state } from '../state.js';
 import { focusItemByElement, setActivePanel } from '../focus.js';
 import { getRating } from '../ratings.js';
 import { showContextMenu } from '../ui.js';
@@ -61,6 +62,16 @@ export function makeFileEl(
   label.dataset.filename = filename;
   label.dataset.fullpath = fullpath;
   row.appendChild(label);
+
+  // Doublon fuzzy (EPIC-028 P1) : 4e état visuel — la ligne épars matche
+  // (seuils stricts) à un jumeau rangé. Le gris (doublon) reste réservé au
+  // nom EXACT. Le verdict qualifie le match pour juger d'un coup d'œil.
+  const dupMatch = state.dupMatches.get(fullpath);
+  if (dupMatch) {
+    row.classList.add('dup-fuzzy');
+    label.title =
+      `↔ ${dupMatch.sourceFilename} — ${dupMatch.verdict === 'left-better' ? 'CE fichier gagne (qualité)' : dupMatch.verdict === 'equal' ? 'qualité équivalente' : 'le fichier rangé est de meilleure qualité'} · sim ${Math.round(dupMatch.sim * 100)} % · Δ${dupMatch.delta.toFixed(1)} s`;
+  }
 
   const ratingVal = getRating(fullpath);
   const ratingTd = document.createElement('td');

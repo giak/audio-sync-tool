@@ -1,5 +1,51 @@
 // ─── DOM-based spatial navigation (↑↓←→ Tab) ────────────────────────────
-import { state } from './state.js';
+import { on, state } from './state.js';
+
+// ── Twin-hint (EPIC-028 P1) : auto-highlight du jumeau rangé ────────────
+// Quand le focus arrive sur une ligne épars matchée (Map dupMatches), la
+// ligne source correspondante reçoit .twin-hint (halo ambre pulsé) et se
+// scrolle dans le champ — SANS voler le focus. Se désactive si le jumeau
+// n'est pas rendu (dossier replié, filtre actif).
+
+function clearTwinHint(): void {
+  for (const el of document.querySelectorAll('#source-container .twin-hint')) {
+    el.classList.remove('twin-hint');
+  }
+}
+
+function updateTwinHint(focusedEparsPath: string | null | undefined): void {
+  clearTwinHint();
+  if (!focusedEparsPath) return;
+  const match = state.dupMatches.get(focusedEparsPath);
+  if (!match) return;
+  // Comparaison dataset (pas de sélecteur d'attribut : les chemins contiennent
+  // des caractères à échapper, et CSS.escape manque dans certains jsdom).
+  for (const row of document.querySelectorAll('#source-container .file-row')) {
+    if ((row as HTMLElement).dataset.focuspath === match.sourceFullPath) {
+      row.classList.add('twin-hint');
+      row.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+  }
+  // jumeau non rendu (replié / filtré) → pas de hint
+}
+
+function onEparsFocusChanged(): void {
+  updateTwinHint(state.eparsFocusPath);
+}
+
+/** Point d'entrée unique pour les trois chemins de focus (élément, path,
+ *  event) : epars → hint sur le jumeau, tout autre container → cleanup. */
+function syncTwinHint(container: HTMLElement, path: string | null | undefined): void {
+  if (container.id === 'epars-container') updateTwinHint(path);
+  else clearTwinHint();
+}
+
+export function initTwinHint(): void {
+  on('eparsFocusPath:changed', onEparsFocusChanged);
+  on('dupMatches:changed', onEparsFocusChanged);
+  on('sourceFiles:changed', clearTwinHint);
+}
 
 function getActivePanelEl(): HTMLElement | null {
   return state.activePanel === 'source'
@@ -40,6 +86,7 @@ export function focusItemByPath(container: HTMLElement, path: string | null): vo
     if (items.length > 0) {
       items[0].classList.add('focused');
       items[0].scrollIntoView({ block: 'nearest' });
+      syncTwinHint(container, (items[0] as HTMLElement).dataset.focuspath);
     }
     return;
   }
@@ -47,12 +94,14 @@ export function focusItemByPath(container: HTMLElement, path: string | null): vo
     if ((el as HTMLElement).dataset.focuspath === path) {
       el.classList.add('focused');
       el.scrollIntoView({ block: 'nearest' });
+      syncTwinHint(container, path);
       return;
     }
   }
   if (items.length > 0) {
     items[0].classList.add('focused');
     items[0].scrollIntoView({ block: 'nearest' });
+    syncTwinHint(container, (items[0] as HTMLElement).dataset.focuspath);
   }
 }
 
@@ -66,6 +115,11 @@ export function focusItemByElement(container: HTMLElement, el: Element, opts?: {
   el.classList.add('focused');
   el.scrollIntoView({ block: 'nearest' });
   setFocusPath(container, focusPath);
+
+  // Twin-hint : mis à jour directement pour les navigations intra-container
+  // (le event `eparsFocusPath:changed` n'est émis que si la valeur change).
+  // Idempotent et bon marché.
+  syncTwinHint(container, focusPath);
 
   // Push to nav history (A12) — skip when restoring from history
   if (!opts?.noHistory && focusPath) {

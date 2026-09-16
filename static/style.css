@@ -26,12 +26,14 @@
   --led-green:     #00ff88;
   --led-blue:      #00aeff;
   --led-grey:      #334060;
+  --led-amber:     #ffaa00;
   --led-amber:     #ffcc00;
   --led-red:       #ff4466;
   --led-cyan:      #00ddff;
 
   /* Accent */
   --accent:        #00d4ff;
+  --amber:         #ffaa00;
   --accent-green:  #00ff88;
 }
 
@@ -245,6 +247,37 @@ td.file.focused     { background: var(--bg-focus);  outline: 1px solid var(--bor
 .led-nouveau::before { background: var(--led-blue); box-shadow: 0 0 6px var(--led-blue); }
 .led-doublon::before { background: var(--led-grey); }
 .led-traite::before  { background: var(--led-green); box-shadow: 0 0 6px var(--led-green); }
+
+/* ===== EPIC-028 P1 : doublons fuzzy (homonymes probables) ============
+   4e état visuel : ambre = matché fuzzy à un jumeau rangé (le GRIS reste
+   réservé au doublon EXACT — nom de fichier identique). Barre gauche ambre
+   sur la ligne (même mécanique inset que le focus, zéro décalage layout),
+   glyph ↔, halo pulsé sur le jumeau à droite (.twin-hint). */
+
+.file-row.dup-fuzzy > td {
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+.file-row.dup-fuzzy td.file::before {
+  background: var(--led-amber);
+  box-shadow: 0 0 6px var(--led-amber);
+}
+.file-row.dup-fuzzy td.file { outline: 1px solid color-mix(in srgb, var(--amber) 55%, transparent); }
+
+.twin-hint > td {
+  outline: 1px solid var(--amber);
+  animation: twinPulse 1.6s ease-in-out infinite;
+}
+.twin-hint td.file::before {
+  background: var(--led-amber);
+  box-shadow: 0 0 6px var(--led-amber);
+}
+@keyframes twinPulse {
+  0%, 100% { outline-color: color-mix(in srgb, var(--amber) 90%, transparent); }
+  50%      { outline-color: color-mix(in srgb, var(--amber) 30%, transparent); }
+}
+
+/* Ligne d'état épars : segment homonymes (ambre) */
+.s-dupfuzzy { color: var(--amber); }
 .led-playing::before { background: var(--led-cyan);  box-shadow: 0 0 8px var(--led-cyan); }
 
 /* ===== File Metadata (year / codec / duration) ======================= */
