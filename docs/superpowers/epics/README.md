@@ -48,7 +48,7 @@
 | [EPIC-026](EPIC-026-liste-fichiers-tableau-contraste.md) | Liste fichiers en vrai tableau (colgroup `table-layout: fixed`) + « Cues » hors épars + textes éclaircis | 🟢 Livré | Haute | mesures headless `/tmp/opencode/measure-*.html` |
 | [EPIC-027](EPIC-027-mkdir-dossier-racine-source.md) | Créer un dossier racine Source Data via bouton ➕ (`/mkdir` + `extra_dirs.json`, retrait index-only) | 🟢 Livré | Moyenne | session 2026-09-15 |
 | [EPIC-028](EPIC-028-doublons-remplacement-qualite.md) | Doublons épars ↔ source : détection (durée ±2 s + nom fuzzy) + remplacement qualité (FLAC vs MP3) via trash `_trash/` — jamais d'effacement | 🟢 Presque livrée (P0+P1+P1bis+P2, reste validation visuelle P2) | Haute | spec `2026-09-15-doublons-detection-design.md` (as-built inclus) |
-| [EPIC-029](EPIC-029-router-doublons-v2-legende.md) | Routeur de pages (`state.page` — répare la nav télescopée) + vue Doublons v2 (groupes de versions, arbitrage qualité + override) + légende refaite (5 sections, états complets) | 🔵 En cours (code livré, tests verts) | Haute | EPIC-028 (suite UX) |
+| [EPIC-029](EPIC-029-router-doublons-v2-legende.md) | Routeur de pages (`state.page` — répare la nav télescopée) + vue Doublons v2 (groupes de versions, arbitrage qualité + override) + légende refaite (5 sections, états complets) | 🟢 Livrée (`bb4c7d8`) | Haute | EPIC-028 (suite UX) |
 
 ## État actuel du projet (2026-09-16)
 
@@ -61,8 +61,8 @@
 - Session 2026-09-15 hors EPIC (fixes directs, tests inclus) : F5 copie avec focus sur
   ligne fichier d'un dossier déplié (`04d93e1`), Tab focus retenu + visibilité focus
   colonne gauche (`0f572df`), lint 0 erreur sur 63 fichiers (`1194c51`).
-- Prochains chantiers : **EPIC-029** (routeur pages + Doublons v2 groupes — en cours,
-  commit à venir) et **EPIC-022** (backlog, priorité Haute) — a11y + responsive cue editor.
+- Prochains chantiers : **EPIC-022** (backlog, priorité Haute — a11y + responsive
+  cue editor) ; EPIC-028/029 : validation visuelle des vues Doublons sur données réelles.
 - Historique antérieur : voir ci-dessous (2026-08-08).
 
 ## Historique projet (2026-08-08)

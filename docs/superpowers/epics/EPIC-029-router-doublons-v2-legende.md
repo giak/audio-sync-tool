@@ -1,6 +1,6 @@
 # EPIC-029 — Routeur de pages + vue Doublons v2 (groupes de versions) + légende à jour
 
-> **Statut** : 🔵 En cours (code livré, tests verts, commit à venir)
+> **Statut** : 🟢 Livrée (code + tests + docs) — reste validation visuelle utilisateur
 > **Créée** : 2026-09-16 · **Priorité** : Haute (bug de navigation bloquant + évolution métier)
 > **Docs liées** : EPIC-028 (détection/action — cette EPIC en est la suite UX), spec `2026-09-15-doublons-detection-design.md`
 
@@ -93,7 +93,8 @@
 
 | Commit | Message |
 |---|---|
-| _(à compléter au commit)_ | |
+| `bb4c7d8` | feat(dup): routeur de pages + vue Doublons v2 (groupes, arbitrage qualité + override) + légende refaite |
+| `15b02a9` | docs: EPIC-029 + README/AGENT à jour (compteurs vérifiés, 3 pages, routes /move /mkdir) |
 
 ## Notes / Risques
 
