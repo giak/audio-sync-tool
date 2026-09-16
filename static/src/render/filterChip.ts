@@ -19,6 +19,41 @@ export interface FilterChipOptions {
 
 const DEBOUNCE_MS = 150;
 
+/** Scope dont l'input a le focus — les renders détruisent/recréent le chip
+ *  (container.innerHTML = ''), ce qui tue l'élément focusé sans blur. On
+ *  mémorise avant destruction pour restaurer focus + caret à la recréation. */
+let focusedScope: string | null = null;
+let focusedCaret: number | null = null;
+
+function trackFocus(input: HTMLInputElement, scope: string): void {
+  input.addEventListener('focus', () => {
+    focusedScope = scope;
+  });
+  input.addEventListener('blur', () => {
+    if (focusedScope === scope) {
+      focusedScope = null;
+      focusedCaret = null;
+    }
+  });
+  input.addEventListener('input', () => {
+    if (focusedScope === scope) focusedCaret = input.selectionStart;
+  });
+}
+
+/** Restaure le focus du chip si son scope était focusé avant un re-render. */
+function restoreFocus(input: HTMLInputElement, scope: string): void {
+  if (focusedScope !== scope) return;
+  focusedScope = null;
+  input.focus({ preventScroll: true });
+  const pos = focusedCaret ?? input.value.length;
+  try {
+    input.setSelectionRange(pos, pos);
+  } catch (_) {
+    /* type=text : toujours settable */
+  }
+  focusedCaret = null;
+}
+
 /** Crée le chip et l'attache à parent (premier enfant). Renvoie l'élément. */
 export function createFilterChip(parent: HTMLElement, opts: FilterChipOptions): HTMLElement {
   const chip = document.createElement('div');
@@ -36,6 +71,7 @@ export function createFilterChip(parent: HTMLElement, opts: FilterChipOptions): 
 
   input.value = state.filters[opts.scope] ?? '';
   chip.classList.toggle('active', input.value.length > 0);
+  trackFocus(input, opts.scope);
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   input.addEventListener('input', () => {
@@ -66,6 +102,8 @@ export function createFilterChip(parent: HTMLElement, opts: FilterChipOptions): 
   });
 
   parent.prepend(chip);
+  // Après insertion : focus() sur un élément hors du DOM est ignoré
+  restoreFocus(input, opts.scope);
   return chip;
 }
 
