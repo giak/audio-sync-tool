@@ -2,6 +2,7 @@
 
 import { api } from './api.js';
 import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
+import { detectDuplicates } from './dupDetect.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
 import { loadRatings } from './ratings.js';
 import { getBatchCopy } from './render.js';
@@ -158,6 +159,7 @@ export async function runScan(): Promise<void> {
     state.eparsFiles = (data.epars || {}) as typeof state.eparsFiles;
     state.sourceExtraDirs = new Set(data.extra_dirs || []);
     state.journal = await api<typeof state.journal>('/journal');
+    refreshDupMatches();
     // EventEmitter auto-renders panels via subscriptions
     // Double-RAF restores focus after EventEmitter's deferred render
     requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
@@ -179,6 +181,13 @@ export async function runScan(): Promise<void> {
       if (statusText) statusText.textContent = `Scan terminé — ${totalFiles.toLocaleString('fr')} fichiers`;
     }
   }
+}
+
+// ── DupMatches (EPIC-028 P0) ──────────────────────────────────────────────
+/** Recalcule la Map doublons depuis l'index courant. Appelé après scan et
+ *  après copy (mutation de l'index DOM-patch). */
+export function refreshDupMatches(): void {
+  state.dupMatches = detectDuplicates(state.eparsFiles, state.sourceFiles).byEparsPath;
 }
 
 // ── Copy (F5) ─────────────────────────────────────────────────────────────
@@ -331,6 +340,7 @@ export function executeCopy(): void {
         });
         // Trigger EventEmitter for nested sourceFiles mutations
         state.sourceFiles = { ...state.sourceFiles };
+        refreshDupMatches(); // l'index droit vient de muter → la Map peut être périmée
         state.selectedEparsFiles = new Map();
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
         if (statusText) statusText.textContent = `✓ ${filename} copié vers ${destDir}`;

@@ -3,6 +3,7 @@
 // Invalid values are silently rejected (console.warn) to prevent corruption.
 // Emits `${prop}:changed` events automatically on write, batched via RAF.
 
+import type { DupMatch } from './dupDetect.js';
 import type { PlaylistTrackLite } from './render/cueEditor.js';
 
 // ── EventEmitter (Phase 3) ─────────────────────────────────────────────────
@@ -98,6 +99,9 @@ interface AppState {
   /** Dossiers racine vides créés via l'UI (➕) — le scan n'indexe que les fichiers
    *  audio, ils seraient invisibles sans ce suivi. Chemins absolus. */
   sourceExtraDirs: Set<string>;
+  /** Doublons épars ↔ source (EPIC-028) : fullPath épars → match. Calculé après
+   *  scan/init ; peut être brièvement périmé après copy (recalcul au scan suivant). */
+  dupMatches: Map<string, DupMatch>;
   eparsFiles: Record<string, FileIndex>;
   journal: JournalEntry[];
   activeModal: ActiveModal;
@@ -143,6 +147,7 @@ const VALID_PLAYLIST_FOCUS = new Set<PlaylistFocusZone>(['source', 'sidebar']);
 const _state: AppState = {
   sourceFiles: {},
   sourceExtraDirs: new Set(),
+  dupMatches: new Map(),
   eparsFiles: {},
   journal: [],
   activeModal: null,

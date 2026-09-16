@@ -232,6 +232,26 @@ describe('actions', () => {
       expect(showError).toHaveBeenCalledWith(expect.stringContaining('Network error'));
     });
 
+    it('recalcule la Map doublons (EPIC-028 P0) après un scan réussi', async () => {
+      setupScanUI();
+      api.mockResolvedValueOnce({
+        source: { '/src': { 'song.mp3': { path: 'song.mp3', duration: 200, codec: 'MP3 320kbps' } } },
+        epars: {
+          '/epars': {
+            '01 - song (Radio Edit).flac': { path: '01 - song (Radio Edit).flac', duration: 200, codec: 'FLAC' },
+          },
+        },
+      });
+      api.mockResolvedValueOnce([]);
+
+      await runScan();
+
+      expect(state.dupMatches.size).toBe(1);
+      const m = state.dupMatches.get('/epars/01 - song (Radio Edit).flac');
+      expect(m?.sourceFilename).toBe('song.mp3');
+      expect(m?.verdict).toBe('left-better'); // FLAC vs MP3
+    });
+
     it('shows scan progress', async () => {
       setupScanUI();
       api.mockResolvedValueOnce({ running: false });
