@@ -8,8 +8,13 @@ manquants, les copie en un clic vers le bon sous-dossier, et intègre un
 
 ## Fonctionnalités
 
-- **Sync** : scan des dossiers éparpillés, détection manquant/doublon, copie
-  en un clic (F5) vers la bonne source.
+- **Sync** : scan des dossiers éparpillés, détection manquant/doublon (nom
+  exact **et** homonymes probables — durée ±2 s + nom, LED ambre), copie en un
+  clic (F5) vers la bonne source, remplacement d'homonyme de moindre qualité
+  (R — l'ancien part dans `_trash/<date>/`, jamais effacé).
+- **Doublons** : vue dédiée des groupes de versions d'un même morceau (épars
+  et/ou rangés) — arbitrage automatique par qualité (FLAC > 320 > 128), override
+  au clic, application du plan (gagnant rangé à droite, perdants rangés → trash).
 - **Playlist** : création/édition de playlists, notation (0–100), export par
   hard links, badge d'importation NML (`✓ NML` / `≈ homonymes` / `✕ non importé`).
 - **Éditeur cues / loops (waveform)** : cues A–H (touches `1–8`), loops, zoom
@@ -47,7 +52,7 @@ npm install                            # pour le frontend (vitest, biome, esbuil
 # → http://localhost:8765
 ```
 
-L'outil a **deux pages** accessibles depuis la toolbar, plus un **éditeur de
+L'outil a **trois pages** accessibles depuis la toolbar, plus un **éditeur de
 cues** ouvert depuis la page Playlist (bouton « Cues » sur une ligne, ou menu
 clic droit) :
 
@@ -55,10 +60,11 @@ clic droit) :
 |------|--------|----------|
 | **Sync** | 📦 Sync | Copier des fichiers éparpillés vers la source data (F5) |
 | **Playlist** | 🎵 Playlist | Créer des playlists, noter les morceaux, exporter |
+| **Doublons** | ↔ Doublons | Groupes de versions d'un même morceau, arbitrage qualité, perdants rangés → `_trash/` |
 | **Cue editor** | « Cues » (ligne playlist) | Éditer cues/loops, zoom waveform, beatgrid, grille NML |
 
 Les **outils** (⚙️ Config, 🔄 Scan, 📋 Journal, ❓ Raccourcis) sont
-disponibles dans les deux pages.
+disponibles dans les pages.
 
 > **Config** — renseigne aussi le chemin du `collection.nml` Traktor (champ
 > *Traktor NML path*), nécessaire pour le match NML et l'écriture de la grille.
@@ -85,6 +91,21 @@ disponibles dans les deux pages.
 | **F7** / **/** | — | Focus le filtre de dossiers |
 | **Échap** | Fermer modale / annuler le filtre / stopper l'audio | |
 | **N** | Noter le fichier focusé (0-100, clic sur la zone de note aussi possible) | |
+| **R** / double-clic | Remplacer l'homonyme (l'ancien rangé → `_trash/<date>/`) — seulement sur les lignes à LED ambre | |
+
+### Raccourcis clavier (page Doublons)
+
+| Touche | Action |
+|--------|--------|
+| **↑ ↓** | Naviguer les groupes de versions |
+| **Clic sur un exemplaire** | Le désigner gagnant (override de l'arbitrage qualité) |
+| **R** / bouton **✓ Appliquer** | Plan du groupe (confirmation) : gagnant rangé à droite, rangés perdants → `_trash/<date>/` |
+| **Échap** / **📦 Sync** | Revenir à la page Sync |
+
+> **Arbitrage qualité** : score par paliers — lossless (FLAC/WAV/AIFF/ALAC) =
+> 100, ≥ 256 kbps = 80, 128-255 = 60, < 128 = 40 ; tie-breaks durée puis chemin.
+> Le tooltip et la colonne « codec » permettent de juger ; la détection est une
+> heuristique (revue humaine = confirmation obligatoire).
 
 ### Raccourcis clavier (page Playlist)
 
@@ -205,12 +226,15 @@ audio-sync-tool/
 ├── templates/index.html   # Interface utilisateur
 ├── static/
 │   ├── style.css          # Thème SCADA (JetBrains Mono, LED glow)
-│   ├── src/               # Sources TypeScript (36 modules)
-│   │   ├── commands/      # Command Pattern (8 modules)
-│   │   ├── render/        # Component factories (10 modules — fileRow, cueEditor, playlistUI…)
+│   ├── src/               # Sources TypeScript (40 modules)
+│   │   ├── commands/      # Command Pattern (10 modules)
+│   │   ├── render/        # Component factories (11 modules — fileRow, cueEditor, playlistUI, dupsUI…)
+│   │   ├── router.ts      # Routeur de pages (sync | playlist | dups)
+│   │   ├── dupDetect.ts   # Détection doublons (durée ±2 s + nom fuzzy)
+│   │   ├── dupGroups.ts   # Groupes de versions + arbitrage qualité
 │   │   ├── script.ts      # Orchestrateur (~160 lignes)
 │   │   ├── state.ts       # Proxy + EventEmitter + RAF batcher
-│   │   └── *.test.ts      # 29 fichiers de test (vitest)
+│   │   └── *.test.ts      # 33 fichiers de test (vitest)
 │   └── dist/              # Compilés par esbuild (gitignored)
 ├── data/                  # Config, journal, cache, playlists, ratings, beatgrids (gitignored)
 ├── docs/superpowers/      # Specs + plans d'implémentation
@@ -227,8 +251,8 @@ audio-sync-tool/
 └── README.md
 ```
 
-Routes REST principales : `/scan`, `/copy`, `/config`, `/journal`,
-`/ratings`, `/playlists[/<name>]`, `/api/nml/status`, `/api/track/match`,
+Routes REST principales : `/scan`, `/copy`, `/move`, `/config`, `/journal`,
+`/ratings`, `/playlists[/<name>]`, `/mkdir`, `/api/nml/status`, `/api/track/match`,
 `/api/track/add`, `/api/track/cues`, `/api/track/grid`, `/api/beatgrid`,
 `/api/track/analyze`.
 
@@ -244,7 +268,7 @@ npm run typecheck          # Vérification des types (tsc)
 npm run lint               # Vérification Biome (0 erreurs — vérifié)
 npm run lint:write         # Correction auto des problèmes
 npm run format             # Formatage Biome
-npm test                   # 730 tests, 29 fichiers
+npm test                   # 814 tests, 33 fichiers
 npm run test:shuffle       # Même suite en --sequence.shuffle (stabilité)
 ```
 
@@ -262,7 +286,7 @@ npm run test:shuffle       # Même suite en --sequence.shuffle (stabilité)
 #### Frontend (vitest)
 
 ```bash
-npm test                   # 730 tests, 29 fichiers
+npm test                   # 814 tests, 33 fichiers
 npm run coverage           # Clean → test → rapport (~91% lignes)
 ```
 
@@ -270,8 +294,8 @@ npm run coverage           # Clean → test → rapport (~91% lignes)
 
 | Suite | Tests | Couverture |
 |-------|-------|------------|
-| Pytest | 173 | — |
-| Vitest | 730 | 90.98% lignes/statements, 81.87% branches, 87.43% fonctions |
+| Pytest | 190 | — |
+| Vitest | 814 | 90.98% lignes/statements, 81.87% branches, 87.43% fonctions (mesure EPIC-021 — à rafraîchir) |
 
 ### Évolutions & traçabilité
 
@@ -285,8 +309,10 @@ Statuts : ⚪ Backlog → 🔵 En cours → 🟢 Livré | 🟠 Bloqué | 🔴 Ab
 
 Le frontend utilise le **Command Pattern** pour router les entrées clavier.
 Un `CommandRegistry` déclaratif remplace l'ancien handler monolithique
-de 593 lignes. Les touches sont dispatchées vers 8 modules de commandes
-(`registry`, `navigation`, `audio`, `copy`, `filter`, `rating`, `playlist`, `modals`).
+de 593 lignes. Les touches sont dispatchées vers 10 modules de commandes
+(`registry`, `navigation`, `audio`, `copy`, `filter`, `rating`, `playlist`,
+`modals`, `replace`, `dups`), scopés par page via `router.ts`
+(`state.page` = sync | playlist | dups).
 
 ```
 script.ts (~160 lignes, orchestrateur)

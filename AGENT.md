@@ -20,6 +20,8 @@ $  → scope/périmètre (était ⟐ dans source)
   ├── stack: Python3.12 + Flask3.x + VanillaJS + Vitest + pytest + mutagen
   ├── port: 8765
   ├── storage: JSON in data/ (config, journal, cache, playlists, beatgrids, extra_dirs)
+  ├── pages: sync | playlist | dups (routeur goPage)
+  ├── trash: <source>/_trash/<date>/ — déplacer, JAMAIS effacer (EPIC-028)
   └── user: Christophe/Giak (music collection)
 
 %DATA-SAFETY [priorité: ABSOLUE]
@@ -63,19 +65,22 @@ $  → scope/périmètre (était ⟐ dans source)
 
 %STRUCTURE [arbre: 22 entrées racine (hors venv/node_modules/cache), 20 lignes documentées ici]
   app.py ← Flask (8765)
-  test_app.py ← pytest (138 tests)
+  test_app.py ← pytest (146 tests)
   test_nml.py ← pytest (29 tests)
   test_analysis.py ← pytest (15 tests)
-  templates/index.html ← 2-panel + Playlist UI
-  static/ ← 34 modules ES (src/ + render/ + commands/) + *.test.ts (750 tests)
-    script.js ← routage clavier + toolbar
+  templates/index.html ← pages Sync/Playlist/Doublons + modales
+  static/ ← 40 modules ES (src/ + render/ + commands/) + 33 *.test.ts (814 tests)
+    script.js ← orchestrateur (nav handlers, toolbar)
+    router.js ← goPage('sync'|'playlist'|'dups') — source de vérité nav
     state.js ← état global mutable (EventEmitter, Proxy)
     api.js ← fetch wrapper (retry réseau)
     audio.js ← togglePlay, seek, stop
-    focus.js ← navigation spatiale ↑↓←→Tab
+    focus.js ← navigation spatiale ↑↓←→Tab + twin-hint jumeau
     ui.js ← modales, filtre palette, toasts
     render.js ← assembler (re-export render/)
-    actions.js ← config, scan, copy, mkdir
+    actions.js ← config, scan, copy, move, replace, mkdir, groupes
+    dupDetect.js ← matching doublons (durée ±2 s + nom fuzzy ≥ 0,88)
+    dupGroups.js ← groupes de versions (union-find) + arbitrage qualité
     playlist.js ← CRUD + drag-drop
     utils.js ← formatTime, formatDuration, computeStatus
   data/ ← NE PAS TOUCHER
@@ -86,16 +91,22 @@ $  → scope/périmètre (était ⟐ dans source)
   AGENT.md ← ce fichier
 
 %ARCHITECTURE
-  $routes: /config, /scan, /load, /copy, /delete, /mkdir, /journal, /audio, /playlists
+  $routes: /config, /scan, /load, /copy, /move, /delete, /mkdir, /journal, /audio, /playlists
   $storage_logic: load_json()/save_json() ← data/
   $metadata: mutagen ← année, durée, codec
   $export: os.link ← fallback shutil.copy2 (EXDEV)
-  $journal: append-only, horodaté
+  $journal: append-only, horodaté (statuses: copied, moved, moved-to-trash, deleted, scan)
+
+  %ARCHITECTURE.pages
+    $router: state.page ('sync'|'playlist'|'dups') ← router.js goPage()
+    #layouts et boutons nav mutuellement exclusifs (source de vérité unique)
+    !playlistMode dérivé: playlistMode === (page === 'playlist')
 
   %ARCHITECTURE.keyboard
-    ~normal: Tab↔panels, ↑↓nav, ←→columns, Enter play, Space select, F5 copy, F7 filter, Escape close
-    ~playlist: Tab↔source/sidebar, ↑↓nav, Space toggle, Enter play, F7 filter, Delete remove, Ctrl+S save, Ctrl+E export, Ctrl+↑↓ reorder, Escape exit+save
-    !playlist intercepté avant normal — return explicite après chaque touche
+    ~normal: Tab↔panels, ↑↓nav, ←→columns, Enter play, Space select, F5 copy, R replace-homonyme, F7 filter, Escape close
+    ~playlist: Tab↔source/sidebar, ↑↓nav, Space toggle, Enter play, F7 filter, Delete remove, Ctrl+S save, Ctrl+E export, Ctrl+↑↓ reorder
+    ~dups: ↑↓ groupes, clic membre = override gagnant, R applique plan (perdants rangés → _trash), Échap → sync
+    !clavier scopé page via registry (ctx.page) + activeModal:null — modal dialogue bloque tout
 
 %SURGERY [12 règles numérotées S1-S12]
   !S1: NE JAMAIS modifier signature fonction
