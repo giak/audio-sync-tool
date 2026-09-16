@@ -1,6 +1,6 @@
 # EPIC-030 — Filtre rapide universel par liste (chips intégralement intégrés)
 
-> **Statut** : 🔵 En cours — **P0 livré** (commit `850584a`), P1/P2 à venir
+> **Statut** : ⏸️ En pause sur décision utilisateur (2026-09-16) — **P0 livré** (`850584a`), **partie de P1 livrée** (`playlist-source` est fonctionnel, livré avec la correction chip persistant `56431a9`), **P1 Playlist-tracks/Doublons et P2 en attente** — EPIC-031 (clavier) prioritaire
 > **Priorité** : Haute (recherche transversale, friction quotidienne)
 > **Découle de** : usage quotidien des pages Sync/Playlist/Doublons (sessions 2026-09)
 
@@ -102,8 +102,9 @@ par le matcher : les chiffres matchent aussi l'année).
       `isFilterInputFocused` détecte désormais la classe `.filter-input`
       (l'id `source-filter` n'existe plus)
 
-### P1 — Playlist + Doublons
-- [ ] `playlist-source` + `playlist-tracks` (mêmes chips)
+### P1 — Playlist + Doublons ⏸️ EN PAUSE (EPIC-031 prioritaire)
+- [x] `playlist-source` (livré avec `56431a9` — chip persistant)
+- [ ] `playlist-tracks` (mêmes chips)
 - [ ] `dups` : filtre sur titre du groupe + noms des membres
 - [ ] F7// fonctionnels sur les 3 pages
 - [ ] Tests

@@ -49,7 +49,7 @@
 | [EPIC-027](EPIC-027-mkdir-dossier-racine-source.md) | Créer un dossier racine Source Data via bouton ➕ (`/mkdir` + `extra_dirs.json`, retrait index-only) | 🟢 Livré | Moyenne | session 2026-09-15 |
 | [EPIC-028](EPIC-028-doublons-remplacement-qualite.md) | Doublons épars ↔ source : détection (durée ±2 s + nom fuzzy) + remplacement qualité (FLAC vs MP3) via trash `_trash/` — jamais d'effacement | 🟢 Presque livrée (P0+P1+P1bis+P2, reste validation visuelle P2) | Haute | spec `2026-09-15-doublons-detection-design.md` (as-built inclus) |
 | [EPIC-029](EPIC-029-router-doublons-v2-legende.md) | Routeur de pages (`state.page` — répare la nav télescopée) + vue Doublons v2 (groupes de versions, arbitrage qualité + override) + légende refaite (5 sections, états complets) | 🟢 Livrée (`bb4c7d8`) | Haute | EPIC-028 (suite UX) |
-| [EPIC-030](EPIC-030-filtre-rapide-universel.md) | Filtre rapide universel par liste : chips persistants au-dessus de chaque colonne (5 scopes mémorisés session), moteur partagé nom+année+codec, F7 toggle / `/` ouvre, Échap ferme — garde `isInput` structurelle | 🔵 En cours — P0 Sync + chip playlist-source livrés (`850584a`, `b109c12`, `56431a9`), chips playlist-tracks/dups à venir | Haute | brainstorm session 2026-09-16 (design dans l'EPIC) |
+| [EPIC-030](EPIC-030-filtre-rapide-universel.md) | Filtre rapide universel par liste : chips persistants au-dessus de chaque colonne (5 scopes mémorisés session), moteur partagé nom+année+codec, F7 toggle / `/` ouvre, Échap ferme — garde `isInput` structurelle | ⏸️ En pause (décision 2026-09-16, EPIC-031 prioritaire) — P0 Sync + chip playlist-source livrés (`850584a`, `b109c12`, `56431a9`), chips playlist-tracks/dups en attente | Haute | brainstorm session 2026-09-16 (design dans l'EPIC) |
 | [EPIC-031](EPIC-031-clavier-centralise-grammaire-catalogue.md) | Clavier : matrice de caractérisation (touches × contextes — bindings morts/shadowés = rouge CI), légende **générée** depuis les bindings labellisés (test bijection), grammaire des touches (Échap = pile de fermeture explicite), ergonomie sync (Space→M déplacer, écoute en chaîne, `?` aide). KISS : pas de nouveau sous-système — visibilité plutôt qu'architecture | 🟡 Backlog — brainstorm validé, révisé KISS/YAGNI | Haute | bugs clavier 2026-09-16 (bindings morts, touches volées) |
 
 ## État actuel du projet (2026-09-16)
@@ -66,7 +66,7 @@
 - **EPIC-030 P0 livré** (2026-09-16) : filtre rapide côté Sync — chips intégrés
   `sync-epars`/`sync-source`, moteur partagé nom+année+codec, palette flottante
   retirée, focus/caret conservés à travers les re-renders (`850584a` + `b109c12`).
-- Prochains chantiers : **EPIC-031 P0** (caractérisation clavier + refactor registry), **EPIC-030 P1** (chips playlist-tracks + dups), **EPIC-022**
+- Prochains chantiers : **EPIC-031 P0** (caractérisation clavier + refactor registry, PRIORITAIRE), puis reprise **EPIC-030 P1** (chips playlist-tracks + dups), **EPIC-022**
   (backlog, priorité Haute — a11y + responsive cue editor) ; EPIC-028/029 :
   validation visuelle des vues Doublons sur données réelles.
 - Historique antérieur : voir ci-dessous (2026-08-08).
