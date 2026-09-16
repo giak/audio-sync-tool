@@ -1,9 +1,9 @@
 # EPIC-028 — Doublons épars ↔ source : détection + remplacement qualité
 
-> **Statut** : ⚪ Backlog
-> **Créée** : 2026-09-15 · **Dernière mise à jour** : 2026-09-15
+> **Statut** : 🟡 En cours — P0 + P1bis livrés, P2 en backlog
+> **Créée** : 2026-09-15 · **Dernière mise à jour** : 2026-09-16 (as-built P0/P1bis)
 > **Priorité** : Haute (doublons = espace disque + incohérence de bibliothèque)
-> **Docs liées** : spec `2026-09-15-doublons-detection-design.md` (brainstorm session)
+> **Docs liées** : spec `2026-09-15-doublons-detection-design.md` (section « Carnet de mise en œuvre » pour l'as-built)
 
 ## Objectif
 
@@ -30,37 +30,55 @@ version rangée de moindre qualité par la copie épars supérieure (FLAC vs MP3
 
 ## Tâches
 
-### P0 — Détection (lecture seule)
-- [ ] `static/src/dupDetect.ts` : normalisation de noms (accents, bruit,
-      séparateurs), Levenshtein ratio + token-set
-- [ ] Bucketing par durée (±2 s) — index O(n), pas de comparaison croisée
-- [ ] Score qualité par paliers (lossless 100 / ≥256k 80 / 128-255 60 /
-      <128 40) + tie-breakers (durée, taille optionnelle)
-- [ ] Verdict par paire : `left-better` / `equal` / `right-better`
-- [ ] `dupDetect.test.ts` : cas limites (radio edit, token-set, accents,
-      reprise homonyme)
+### P0 — Détection (lecture seule) — ✅ Livré (`c3959ed`)
+- [x] `static/src/dupDetect.ts` (~250 lignes, pur, zéro DOM) : normalisation
+      de noms (accents, bruit, séparateurs), Levenshtein ratio + token-set
+- [x] Bucketing par durée (±2 s) — index O(n). **Bug corrigé en testant** :
+      offsets de lookup ±2 (pas ±1) pour couvrir Δ=2,0 s exact
+- [x] Score qualité par paliers (lossless 100 / ≥256k 80 / 128-255 60 /
+      <128 40) + tie-breakers (durée, bitrate) ; taille de fichier non ajoutée
+      au scan (pas nécessaire avec bitrate+durée — décision d'implémentation)
+- [x] Verdict par paire : `left-better` / `equal` / `right-better` ;
+      1 épars matche au plus 1 jumeau (meilleur sim, puis Δ min)
+- [x] `dupDetect.test.ts` : 27 tests — radio edit, token-set, accents,
+      reprise homonyme (`Hurt - Johnny Cash` vs `NIN` rejeté : 1 token/6).
+      Branchement : `state.dupMatches` + `refreshDupMatches()` après scan et
+      après copy (+ initApp, corrigé en `26e73ab`)
 
-### P1 — Action Remplacer (un par un)
-- [ ] Endpoint `POST /move` : `shutil.move`, `is_path_allowed()` src+dst,
-      collision → suffixe, journal `moved-to-trash`
-- [ ] Élaguer `_trash/` du `os.walk` du scan + de `renderExtraDirs`
-- [ ] Badge sur les lignes épars matchées (`↔ rangé (MP3 320) — FLAC gagne`)
-- [ ] Touche `R` / bouton : confirmDialog → `POST /copy` puis `POST /move`
-      (copie KO ⇒ pas de move), patch state + re-render
-- [ ] pytest `/move` : déplacement OK, fichier **toujours présent** dans le
-      trash, 403 hors zone, collision, journal
+### P1 — Action Remplacer (un par un) — ✅ Livré (`d70a0d9`)
+- [x] Endpoint `POST /move` : `shutil.move`, `is_path_allowed()` src+dst,
+      collision → suffixe `-2/-3` du **nouveau** fichier (`_collision_dst`,
+      calculé avant copy/move), journal `moved-to-trash`/`moved`
+- [x] Élaguer `_trash/` du `os.walk` du scan (`TRASH_DIRNAME` ; pas de
+      `renderExtraDirs` à modifier — les extra dirs n'indexent pas de fichiers)
+- [x] Badge sur les lignes épars matchées : tooltip
+      `↔ <jumeau> — <verdict> · sim NN % · ΔN.N s` (+ hint R/double-clic)
+- [x] Touche `R` / double-clic : confirmDialog (les deux noms affichés) →
+      `POST /copy` puis `POST /move` (copie KO ⇒ pas de move — testé),
+      patch state + re-render, verrou `replaceBusy`
+- [x] pytest `/move` : déplacement OK, 403 hors zone, collision préservée,
+      journal, cache. **Découverte** : `/copy` écrasait silencieusement un
+      fichier existant → corrigé avec le même helper de collision
 
-### P1bis — UX visuelle « voir le doublon et où il est » (validée 2026-09-15)
-- [ ] 4ᵉ état ambre « homonyme » (LED + glyphe `↔`), distinct du gris
-      « doublon exact » + barre gauche ambre (box-shadow inset, pattern barre
-      de focus)
-- [ ] Compteur header gauche : `📂 Éparpillé (N) · X ↔`
-- [ ] Auto-highlight `.twin-hint` : la ligne droite jumelle s'illumine
-      (pulsé doux) + `scrollIntoView({block:'nearest'})` sans vol de focus,
-      quand le focus gauche arrive sur une ligne matchée ; nettoyage au quit
-- [ ] Désactivation si jumeau non rendu (filtre F7, modal)
-- [ ] Tooltip/barre d'état : deux chemins + score (`sim 0,93 · Δ0 s`)
-- [ ] Tests : badge/barre rendus, twin-hint appliqué/retiré, compteur
+### P1bis — UX visuelle « voir le doublon et où il est » — ✅ Livré (`f383485` + `26e73ab`)
+- [x] 4ᵉ état ambre « homonyme » (LED + barre gauche sur `td:first-child`,
+      `:not(.focused)` pour laisser la barre cyan du focus gagner — les barres
+      parasites de colonne ont été corrigées en smoke test)
+- [x] Compteur header gauche : `📂 Éparpillé (N · X ↔)` + ligne d'état
+      `↔ X homonymes`
+- [x] Auto-highlight `.twin-hint` : 3 chemins de focus (clic, ↑↓, Tab/restauration)
+      + events `eparsFocusPath:changed`/`dupMatches:changed` ;
+      `scrollIntoView({block:'nearest'})` sans vol de focus ; nettoyage au quit
+- [x] Jumeau non rendu → **fallback sur le dossier conteneur le plus profond
+      rendu** (le smoke test a montré que l'arbre source démarre replié :
+      sans ça, le « où » était muet dans l'état par défaut)
+- [x] Tooltip : les deux noms + verdict + score (`sim 0,93 · Δ0 s`)
+- [x] Tests : marqueur/barre/tooltip (5), twin-hint appliqué/retiré/fallback (5)
+- [x] Intensités validées dans Chrome réel via CDP (`getComputedStyle`) :
+      marqueur discret (barre 2px 75 %, contour 30 %, LED sans glow),
+      hint marqué (contour 2px, fond 12 %, glow, pulsé 2,4 s 85↔45 %)
+- [x] Smoke test données réelles (5 092 épars / 1 430 source) : 550 lignes
+      ambre, tooltip OK, twin-hint visible, cleanup au ↑
 
 ### P2 — Vue « Doublons »
 - [ ] Mode dédié façon playlist : liste de paires, badges qualité, tri par
@@ -76,28 +94,40 @@ version rangée de moindre qualité par la copie épars supérieure (FLAC vs MP3
 | `static/src/dupDetect.test.ts` (nouveau) | Tests détection |
 | `app.py` | `POST /move` + exclusion `_trash/` du scan |
 | `test_app.py` | Tests `/move` (fichier présent après move !) |
-| `static/src/actions.ts` | Action remplacer (séquence copy+move) |
-| `static/src/render/eparsUI.ts` | Badge doublon/rangé sur les lignes |
-| `static/src/commands/*.ts` | Touche `R` (registry) |
+| `static/src/actions.ts` | `executeReplace` (séquence copy+move) + `refreshDupMatches` |
+| `static/src/commands/replace.ts` (nouveau) | Touche `R` (registry) |
+| `static/src/render/eparsUI.ts` | Compteurs header + ligne d'état |
+| `static/src/render/fileRow.ts` | Classe `dup-fuzzy`, tooltip, double-clic |
+| `static/src/focus.ts` | Hook twin-hint (3 chemins de focus + events) |
 | `static/src/utils.ts` | Éventuel enrichissement `computeStatus` |
 | `static/style.css` | 4ᵉ état ambre (LED + barre gauche) + `.twin-hint` |
 | `static/src/focus.ts` (ou subscription) | Hook auto-highlight du jumeau au changement de focus |
 
 ## Validation
 
-- [ ] Typecheck (`npm run typecheck`)
-- [ ] Tests frontend (`npm test`) — verts
-- [ ] Tests backend (`./venv/bin/python -m pytest -q`) — verts
-- [ ] Lint (`npm run lint`)
-- [ ] **Règle d'or** : aucun test ne peut passer avec un fichier effacé —
-      le remplacement se vérifie par la présence du fichier dans le trash
-- [ ] Vérification navigateur sur la collection réelle
+- [x] Typecheck (`npm run typecheck`) — ✓
+- [x] Tests frontend — **798/798 vitest** ✓ (dont 27 dupDetect, 4
+      executeReplace, 4 binding R, 10 marqueur/twin-hint)
+- [x] Tests backend — **190/190 pytest** ✓ (8 nouveaux : /move ×5, trash-scan,
+      collision-copy ×2)
+- [x] Lint (`npm run lint`) — ✓ · Build — ✓
+- [x] **Règle d'or** : le test `does NOT move to trash when copy fails`
+      garantit copy-KO ⇒ pas de move ; `test_move_never_overwrites_existing`
+      et `test_copy_collision_suffix_preserves_existing` garantissent zéro
+      écrasement (l'ancien contenu est relu dans le test)
+- [ ] **Vérification navigateur de l'action Remplacer** : l'UX visuelle est
+      validée sur données réelles (smoke CDP), mais `R` sur une vraie paire →
+      fichier vérifié dans `_trash/<date>/` reste **à faire par l'utilisateur**
+      (déplacement réel de fichiers — pas à ma charge)
 
 ## Traçabilité (commits)
 
 | Commit | Message |
 |---|---|
-| _(backlog — à compléter)_ | |
+| `c3959ed` | feat(dup): P0 — module dupDetect (matching durée±2s + nom fuzzy, verdict qualité) branché dans le state |
+| `f383485` | feat(dup): P1bis — marqueur ambre (4e état LED) + twin-hint sur le jumeau rangé |
+| `26e73ab` | fix(dup): correctifs smoke test — initApp peuple dupMatches au reload, twin-hint fallback dossier replié, intensités distinctes |
+| `d70a0d9` | feat(dup): P1bis action — POST /move vers _trash + executeReplace (copy-puis-move, touche R/double-clic, collisions jamais écrasées) |
 
 ## Décisions
 
@@ -125,5 +155,16 @@ version rangée de moindre qualité par la copie épars supérieure (FLAC vs MP3
 - Le déplacement cross-device (source et trash sur le même volume par
   construction) évite le piège EXDEV — `shutil.move` gère le cas natif
   de toute façon.
-- Collision de noms dans le trash : suffixe incrémental ou
-  `from_<dossier>` (à trancher à l'implémentation).
+- Collision de noms : **tranché à l'implémentation** — suffixe incrémental
+  `-2/-3…` porté par le NOUVEAU fichier (jamais d'écrasement), et non
+  `from_<dossier>`.
+- **As-built 2026-09-16** :
+  - Après un remplacement, la paire reste référencée dans `dupMatches`
+    (le nouveau fichier rangé matche l'épars original, noms normalisés
+    identiques) — inoffensif : verdict `equal`, la revue reste manuelle,
+    le scan consolide l'état réel.
+  - jsdom n'a pas `CSS.escape` → `domPatches` est mocké dans les tests
+    `executeReplace` (limitation d'environnement de test, pas un bug produit).
+  - Le statut `moved-to-trash` du journal est calculé sur
+    `os.path.realpath(destination)` — robuste même si le frontend passe
+    directement le dossier trash comme `dest_dir`.

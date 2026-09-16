@@ -1,7 +1,8 @@
 # Design — Doublons épars ↔ source : détection + remplacement qualité
 
-> **Date** : 2026-09-15 · **Statut** : design validé (brainstorm session), implémentation à venir
-> **EPIC liée** : EPIC-028 (backlog)
+> **Date** : 2026-09-15 · **Statut** : implémenté (P0 + P1bis + action Remplacer, 2026-09-16) — P2 en backlog
+> **EPIC liée** : EPIC-028 (🟡 en cours)
+> **As-built** : voir « Carnet de mise en œuvre » en fin de document
 
 ## Problème
 
@@ -39,7 +40,8 @@ colonnes.
 
 ```
 for file gauche:
-  candidats = index_droite[round(duration)] ± 1 s   ← bucketing O(n)
+  candidats = index_droite[round(duration)] ± 2 clés  ← bucketing O(n)
+              (±2 car round() côté droit : Δ=2,0 s exact peut tomber sur 2 clés)
   pour chaque candidat:
     sim = similarité(normalize(basename_g), normalize(basename_d))
     si sim ≥ 0,88 → paire confirmée
@@ -58,8 +60,8 @@ fichier (ajouter `size` au scan, convention Ko EPIC-015 — optionnel).
 ### Action « Remplacer » — endpoint `POST /move`
 
 - Symétrique de `/copy` : `shutil.move(src, dst)`, `is_path_allowed()` source
-  **et** destination, collision → suffixe `-1`, journal
-  `status: 'moved-to-trash'` (source → destination).
+  **et** destination, collision → suffixe incrémental `-2/-3…` (as-built,
+  cf. carnet), journal `status: 'moved-to-trash'` (source → destination).
 - Destination : `<source_root>/_trash/YYYY-MM-DD/` (créée à la volée).
 - Séquence d'un remplacement : `POST /copy` (gauche → droite) **puis**
   `POST /move` (ancien droit → trash). Si la copie échoue → pas de move,
@@ -128,7 +130,46 @@ est la couche présentation du P1.
 ## Validation (cible)
 
 - Tests unitaires `dupDetect.test.ts` : normalisation, bucketing, seuils,
-  verdicts qualité, cas limites (radio edit, token-set, accents).
+  verdicts qualité, cas limites (radio edit, token-set, accents). → **27/27**
 - Tests pytest `/move` : déplacement OK, fichier présent dans le trash,
-  403 hors zone, collision, journal.
+  403 hors zone, collision, journal. → **190/190** (8 nouveaux)
 - Règle d'or : **aucun test ne doit pouvoir passer avec un fichier effacé**.
+  → garanti par copy-KO ⇒ pas de move + tests de collision relisant l'ancien
+  contenu
+- Frontend : **798/798 vitest**, typecheck/lint/build ✓
+- UX validée sur données réelles (smoke CDP, 550 lignes ambre) ; l'action
+  Remplacer sur une vraie paire reste à valider par l'utilisateur
+
+## Carnet de mise en œuvre (as-built 2026-09-16)
+
+**Commits** : `c3959ed` (P0 détection) · `f383485` (P1bis UX) · `26e73ab`
+(correctifs smoke) · `d70a0d9` (action Remplacer : `/move` + `_trash` +
+`executeReplace`, 2026-09-16).
+
+**Écarts design → implémentation (et pourquoi)** :
+
+1. **Suffixe de collision** : le design disait « suffixe `-1` » sans préciser
+   quel fichier le porte. Implémentation : `-2/-3…` porté par le **NOUVEAU**
+   fichier, suffixe calculé **avant** `copy2`/`move` (une suffixation
+   post-hoc ne peut pas restaurer un contenu écrasé — première tentative
+   rejétée en relisant mon propre code). Même helper `_collision_dst` pour
+   `/copy` et `/move` — `/copy` écrasait silencieusement avant (bug
+   préexistant découvert à cette occasion).
+2. **Taille de fichier (tie-breaker « optionnel »)** : non ajoutée au scan —
+   bitrate + durée suffisent à arbitrer ; éviter un re-scan complet pour un
+   gain marginal.
+3. **`renderExtraDirs` (élagage trash)** : non modifié — les extra dirs de
+   l'EPIC-027 n'indexent pas de fichiers, l'élagage du `os.walk` suffit.
+4. **Filtre « doublons » style F7** et enrichissement fuzzy de
+   `computeStatus` : non faits — restés au P2.
+
+**Bugs réels trouvés en testant** (tous corrigés) : arithmétique du bucketing
+(offsets ±1 → ±2), un test au verdict inversé (le module avait raison),
+`initApp` ne peuplait pas `dupMatches` au reload (cache `/load`), barres
+ambres parasites aux frontières de colonnes (`> td` → `td:first-child`),
+arbre source replié rendant le twin-hint muet (→ fallback dossier conteneur),
+race de `await executeReplace()` sur le confirmDialog (promesse capturée).
+
+**Comportement à connaître** : après un remplacement, la paire reste dans
+`dupMatches` (le nouveau rangé matche l'épars original, noms normalisés
+identiques, verdict `equal`) — inoffensif, le scan consolide.
