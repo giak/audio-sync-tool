@@ -1,7 +1,7 @@
 # EPIC-028 — Doublons épars ↔ source : détection + remplacement qualité
 
-> **Statut** : 🟡 En cours — P0 + P1bis livrés, P2 en backlog
-> **Créée** : 2026-09-15 · **Dernière mise à jour** : 2026-09-16 (as-built P0/P1bis)
+> **Statut** : 🟢 Presque livrée — P0 + P1bis + P1 action + P2 livrés, reste validation visuelle P2
+> **Créée** : 2026-09-15 · **Dernière mise à jour** : 2026-09-16 (as-built P0/P1bis + P2)
 > **Priorité** : Haute (doublons = espace disque + incohérence de bibliothèque)
 > **Docs liées** : spec `2026-09-15-doublons-detection-design.md` (section « Carnet de mise en œuvre » pour l'as-built)
 
@@ -80,11 +80,19 @@ version rangée de moindre qualité par la copie épars supérieure (FLAC vs MP3
 - [x] Smoke test données réelles (5 092 épars / 1 430 source) : 550 lignes
       ambre, tooltip OK, twin-hint visible, cleanup au ↑
 
-### P2 — Vue « Doublons »
-- [ ] Mode dédié façon playlist : liste de paires, badges qualité, tri par
-      verdict, navigation clavier
-- [ ] Option : enrichir le badge « doublon » de `computeStatus` avec le
-      matching fuzzy (derrière un seuil identique)
+### P2 — Vue « Doublons » — 🔶 Livré (`731cc24`, validation navigateur à faire)
+- [x] Vue dédiée « ↔ Doublons » (nav) : modal-page pattern cueEditor/Playlist
+      (`dupsUI.ts` + `commands/dups.ts`), liste des paires épars ↔ rangé,
+      verdicts qualité (`✅ épars gagne` / `≈ équivalente` / `⚠️ rangé meilleur`
+      avec codecs), score sim/Δ, tooltips chemins complets, échappement HTML
+- [x] Navigation clavier ↑↓ (clamp 0..n-1), `R` remplace la paire focusée
+      (réutilise `executeReplace` tel quel), Échap ferme + restaure le focus sync,
+      clic ligne = focus + remplacement, re-render auto après remplacement
+      (event `sourceFiles:changed`)
+- [x] 10 tests vitest (render/échappement/navigation/remplacement/open-close)
+- [ ] Validation visuelle utilisateur (intensité ambre, lisibilité de la table)
+- [ ] Option non faite : enrichir le badge « doublon » de `computeStatus` avec
+      le matching fuzzy (le marqueur ambre P1bis couvre déjà ce besoin en sync)
 
 ## Fichiers impactés (anticipés)
 
@@ -106,8 +114,8 @@ version rangée de moindre qualité par la copie épars supérieure (FLAC vs MP3
 ## Validation
 
 - [x] Typecheck (`npm run typecheck`) — ✓
-- [x] Tests frontend — **798/798 vitest** ✓ (dont 27 dupDetect, 4
-      executeReplace, 4 binding R, 10 marqueur/twin-hint)
+- [x] Tests frontend — **808/808 vitest** ✓ (dont 27 dupDetect, 4
+      executeReplace, 4 binding R, 10 marqueur/twin-hint, 10 vue P2)
 - [x] Tests backend — **190/190 pytest** ✓ (8 nouveaux : /move ×5, trash-scan,
       collision-copy ×2)
 - [x] Lint (`npm run lint`) — ✓ · Build — ✓
@@ -115,10 +123,10 @@ version rangée de moindre qualité par la copie épars supérieure (FLAC vs MP3
       garantit copy-KO ⇒ pas de move ; `test_move_never_overwrites_existing`
       et `test_copy_collision_suffix_preserves_existing` garantissent zéro
       écrasement (l'ancien contenu est relu dans le test)
-- [ ] **Vérification navigateur de l'action Remplacer** : l'UX visuelle est
-      validée sur données réelles (smoke CDP), mais `R` sur une vraie paire →
-      fichier vérifié dans `_trash/<date>/` reste **à faire par l'utilisateur**
-      (déplacement réel de fichiers — pas à ma charge)
+- [x] **Vérification navigateur de l'action Remplacer** : validée par
+      l'utilisateur sur sa collection réelle (2026-09-16 — « ça fonctionne
+      plutôt pas mal ») : `R` sur une vraie paire, ancien fichier vérifié
+      dans `_trash/<date>/`
 
 ## Traçabilité (commits)
 
@@ -128,6 +136,7 @@ version rangée de moindre qualité par la copie épars supérieure (FLAC vs MP3
 | `f383485` | feat(dup): P1bis — marqueur ambre (4e état LED) + twin-hint sur le jumeau rangé |
 | `26e73ab` | fix(dup): correctifs smoke test — initApp peuple dupMatches au reload, twin-hint fallback dossier replié, intensités distinctes |
 | `d70a0d9` | feat(dup): P1bis action — POST /move vers _trash + executeReplace (copy-puis-move, touche R/double-clic, collisions jamais écrasées) |
+| `731cc24` | feat(dup): P2 — vue dédiée « ↔ Doublons » (table des paires, verdicts qualité, ↑↓/R/Échap) |
 
 ## Décisions
 
