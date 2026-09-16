@@ -10,9 +10,10 @@ import {
   reorderTrack,
   savePlaylist,
 } from '../playlist.js';
-import { patchPlaylistSourceFile, renderPlaylistSource } from '../render/index.js';
+import { focusFilterChip } from '../render/filterChip.js';
+import { patchPlaylistSourceFile } from '../render/index.js';
 import { state } from '../state.js';
-import { closeAllModals, openFilterPalette, openModal, showError, showToast } from '../ui.js';
+import { closeAllModals, openModal, showError, showToast } from '../ui.js';
 import { registry } from './registry.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -136,18 +137,22 @@ registry.bind({
   handler: () => toggleTrackInPlaylist(),
 });
 
-// F7 / / — filter in playlist mode
+// F7 / / — focus le chip de filtre (page Playlist, EPIC-030)
 registry.bind({
   key: 'F7',
   playlistMode: true,
-  handler: () => openFilterPalette(() => {}, renderPlaylistSource),
+  handler: () => {
+    focusFilterChip(state.playlistFocus === 'sidebar' ? 'playlist-tracks' : 'playlist-source');
+  },
 });
 
 registry.bind({
   key: '/',
   playlistMode: true,
   isInput: false,
-  handler: () => openFilterPalette(() => {}, renderPlaylistSource),
+  handler: () => {
+    focusFilterChip(state.playlistFocus === 'sidebar' ? 'playlist-tracks' : 'playlist-source');
+  },
 });
 
 // Delete/Backspace — remove track from playlist sidebar

@@ -7,11 +7,10 @@ import {
   navigateColumn,
   navigateFocus,
   navigateHistory,
+  revalidateFocus,
   setActivePanel,
 } from '../focus.js';
-import { renderSource } from '../render/index.js';
 import { state } from '../state.js';
-import { closeFilterPalette } from '../ui.js';
 import { registry } from './registry.js';
 
 // Tab — switch panels (Sync mode)
@@ -194,17 +193,21 @@ registry.bind({
   handler: () => navigateHistory(1),
 });
 
-// Filter palette — Échap, Tab, ↓ dans l'input filtre
+// Filter chip (EPIC-030) — Échap, Tab, ↓ dans l'input filtre : blur → la
+// liste reprend le focus (le terme est conservé, mémorisé par scope)
 registry.bind({
   key: 'Escape',
   isFilterInputFocused: true,
-  handler: () => closeFilterPalette(renderSource),
+  handler: () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    revalidateFocus();
+  },
 });
 registry.bind({
   key: 'ArrowDown',
   isFilterInputFocused: true,
   handler: () => {
-    closeFilterPalette(renderSource);
+    (document.activeElement as HTMLElement | null)?.blur();
     setActivePanel('source');
   },
 });
@@ -212,7 +215,7 @@ registry.bind({
   key: 'Tab',
   isFilterInputFocused: true,
   handler: () => {
-    closeFilterPalette(renderSource);
+    (document.activeElement as HTMLElement | null)?.blur();
     setActivePanel('epars');
   },
 });

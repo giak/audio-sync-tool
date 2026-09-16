@@ -18,7 +18,7 @@ const { bind, navigateFocus, navigateColumn, navigateHistory, focusItemByElement
 }));
 
 const { renderSource } = vi.hoisted(() => ({ renderSource: vi.fn() }));
-const { closeFilterPalette } = vi.hoisted(() => ({ closeFilterPalette: vi.fn() }));
+const { revalidateFocus } = vi.hoisted(() => ({ revalidateFocus: vi.fn() }));
 
 // ── Module mocks ──────────────────────────────────────────────────────────
 
@@ -35,6 +35,7 @@ vi.mock('../focus.js', async importOriginal => {
     navigateHistory,
     focusItemByElement,
     setActivePanel,
+    revalidateFocus,
     // getItems and getFocusedItem kept REAL — handlers depend on DOM queries
   };
 });
@@ -43,9 +44,7 @@ vi.mock('../render/index.js', () => ({
   renderSource,
 }));
 
-vi.mock('../ui.js', () => ({
-  closeFilterPalette,
-}));
+vi.mock('../ui.js', () => ({}));
 
 // JSDOM doesn't implement scrollIntoView — mock it on the prototype
 Element.prototype.scrollIntoView = vi.fn();
@@ -428,21 +427,35 @@ describe('commands/navigation', () => {
 
   // ── Filter palette bindings ─────────────────────────────────────────────
 
-  describe('Filter palette — Échap, ↓, Tab in filter input', () => {
-    it('Échap in filter input calls closeFilterPalette(renderSource)', () => {
+  describe('Filter chip (EPIC-030) — Échap, ↓, Tab in filter input', () => {
+    it('Échap in filter input blurs and revalidates focus (terme conservé)', () => {
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.focus();
+      vi.spyOn(input, 'blur');
+      document.body.appendChild(Object.assign(document.createElement('div'), { id: 'source-container' }));
       B['Filter Échap'].handler();
-      expect(closeFilterPalette).toHaveBeenCalledWith(renderSource);
+      expect(input.blur).toHaveBeenCalled();
+      expect(revalidateFocus).toHaveBeenCalled();
     });
 
-    it('↓ in filter input calls closeFilterPalette then setActivePanel("source")', () => {
+    it('↓ in filter input blurs then setActivePanel("source")', () => {
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.focus();
+      vi.spyOn(input, 'blur');
       B['Filter ↓'].handler();
-      expect(closeFilterPalette).toHaveBeenCalledWith(renderSource);
+      expect(input.blur).toHaveBeenCalled();
       expect(setActivePanel).toHaveBeenCalledWith('source');
     });
 
-    it('Tab in filter input calls closeFilterPalette then setActivePanel("epars")', () => {
+    it('Tab in filter input blurs then setActivePanel("epars")', () => {
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.focus();
+      vi.spyOn(input, 'blur');
       B['Filter Tab'].handler();
-      expect(closeFilterPalette).toHaveBeenCalledWith(renderSource);
+      expect(input.blur).toHaveBeenCalled();
       expect(setActivePanel).toHaveBeenCalledWith('epars');
     });
   });

@@ -96,10 +96,9 @@ describe('commands/modals', () => {
 
   // ── Context menu Escape binding ─────────────────────────────────────
 
-  it('Escape with activeModal=null, filterActive=false, isAudioPlaying=false calls closeContextMenu()', () => {
+  it('Escape with activeModal=null, isAudioPlaying=false calls closeContextMenu()', () => {
     expect(ctxMenuBinding.key).toBe('Escape');
     expect(ctxMenuBinding.activeModal).toBeNull();
-    expect(ctxMenuBinding.filterActive).toBe(false);
     expect(ctxMenuBinding.isAudioPlaying).toBe(false);
 
     (ctxMenuBinding.handler as () => void)();

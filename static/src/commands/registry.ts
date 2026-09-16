@@ -16,7 +16,6 @@ export interface CommandContext {
   playlistFocus: 'source' | 'sidebar';
   activePanel: 'epars' | 'source';
   activeModal: string | null;
-  filterActive: boolean;
   isFilterInputFocused: boolean;
   isAudioPlaying: boolean;
 }
@@ -36,7 +35,6 @@ export interface CommandBinding {
   isInput?: boolean;
   isFilterInputFocused?: boolean;
   isAudioPlaying?: boolean;
-  filterActive?: boolean;
   handler: CommandHandler;
 }
 
@@ -61,7 +59,6 @@ class CommandRegistry {
       if (b.activeModal !== undefined && b.activeModal !== ctx.activeModal) continue;
       if (b.isFilterInputFocused !== undefined && b.isFilterInputFocused !== ctx.isFilterInputFocused) continue;
       if (b.isAudioPlaying !== undefined && b.isAudioPlaying !== ctx.isAudioPlaying) continue;
-      if (b.filterActive !== undefined && b.filterActive !== ctx.filterActive) continue;
       e.preventDefault();
       b.handler(ctx);
       return true;
@@ -85,8 +82,8 @@ export function buildContext(e: KeyboardEvent): CommandContext {
     playlistFocus: state.playlistFocus,
     activePanel: state.activePanel,
     activeModal: state.activeModal,
-    filterActive: state.filterActive,
-    isFilterInputFocused: document.activeElement?.id === 'source-filter',
+    isFilterInputFocused:
+      document.activeElement instanceof HTMLInputElement && document.activeElement.classList.contains('filter-input'),
     isAudioPlaying: isAudioPlaying() ?? false,
   };
 }

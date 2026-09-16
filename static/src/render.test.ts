@@ -51,6 +51,7 @@ vi.mock('./state.js', async importOriginal => {
   return { ...mod, on: vi.fn() };
 });
 
+import { setFilterTerm } from './render/filterChip.js';
 import {
   patchEparsFileAfterCopy,
   patchSourceFileAfterCopy,
@@ -106,8 +107,7 @@ function resetState(): void {
   state.sourceFiles = { '/home/Music': { 'old.mp3': { path: 'Rock/old.mp3' } } };
   state.eparsFiles = {};
   state.journal = [];
-  state.filterActive = false;
-  state.sourceFilter = '';
+  state.filters = {};
   state.sourceExpanded.clear();
   state.sourceNodeMap.clear();
   state.selectedEparsFiles = new Map();
@@ -431,8 +431,7 @@ describe('patchSourceFileAfterCopy', () => {
         node: { __files__: [] },
         baseDir: '/home/Music',
       });
-      state.filterActive = true;
-      state.sourceFilter = 'rock';
+      setFilterTerm('sync-source', 'rock');
       document.getElementById('source-header-count')!.textContent = '(1 / 1)';
 
       patchSourceFileAfterCopy('/home/Music/Rock', 'filtered.mp3', { path: 'Rock/filtered.mp3', year: '2025' });
@@ -754,10 +753,9 @@ describe('toggleSourceDir', () => {
       expect(dirEl.querySelector('.children')).toBeNull();
     });
 
-    it('passes isFiltered=true to buildSourceChildren when filterActive', () => {
+    it('passes isFiltered=true to buildSourceChildren when filter term set', () => {
       setupToggleDOM();
-      state.filterActive = true;
-      state.sourceFilter = 'rock';
+      setFilterTerm('sync-source', 'rock');
 
       toggleSourceDir('/home/Music/Rock');
 
@@ -819,12 +817,11 @@ describe('toggleSourceDir', () => {
     });
   });
 
-  describe('updateSourceHeaderCount (filter active)', () => {
+  describe('updateSourceHeaderCount (filter term set)', () => {
     beforeEach(() => {
       // Re-use setupToggleDOM but activate filter
       setupToggleDOM({ initExpanded: true });
-      state.filterActive = true;
-      state.sourceFilter = 'rock';
+      setFilterTerm('sync-source', 'rock');
     });
 
     it('updates filter count to "N dossier(s)" after toggle', () => {
@@ -833,12 +830,12 @@ describe('toggleSourceDir', () => {
       expect(filterCount.textContent).toMatch(/\d+ dossier/);
     });
 
-    it('does nothing when filterActive is false', () => {
-      state.filterActive = false;
+    it('updates the element even when no filter term (legacy element kept)', () => {
+      setFilterTerm('sync-source', '');
       toggleSourceDir('/home/Music/Rock');
 
       const filterCount = document.getElementById('source-filter-count')!;
-      expect(filterCount.textContent).toBe('');
+      expect(filterCount.textContent).toMatch(/\d+ dossier/);
     });
   });
 });
@@ -1293,8 +1290,7 @@ describe('renderSource', () => {
   beforeEach(() => {
     setupRenderSourceDOM();
     state.sourceFiles = {};
-    state.filterActive = false;
-    state.sourceFilter = '';
+    state.filters = {};
     state.sourceExpanded.clear();
     state.sourceNodeMap.clear();
     vi.clearAllMocks();
@@ -1378,8 +1374,7 @@ describe('renderSource', () => {
         'b.mp3': { path: 'Jazz/b.mp3' },
         'c.mp3': { path: 'Rock/ACDC/thunder.mp3' },
       };
-      state.filterActive = true;
-      state.sourceFilter = 'rock';
+      setFilterTerm('sync-source', 'rock');
     });
 
     it('renders directories matching the filter term', () => {
@@ -1399,19 +1394,19 @@ describe('renderSource', () => {
       expect(fileRows.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('shows "Aucun dossier trouvé" when nothing matches', () => {
-      state.sourceFilter = 'zzznonexistent';
+    it('shows empty-state message when nothing matches (EPIC-030)', () => {
+      setFilterTerm('sync-source', 'zzznonexistent');
       renderSource();
 
-      const filterCount = document.getElementById('source-filter-count')!;
-      expect(filterCount.textContent).toBe('Aucun dossier trouvé');
+      const empty = document.querySelector('#source-container .panel-empty')!;
+      expect(empty.textContent).toBe('Aucun dossier trouvé pour ce filtre.');
     });
 
-    it('shows dossier count in filter element', () => {
+    it('shows filtered/total count in the chip (EPIC-030)', () => {
       renderSource();
 
-      const filterCount = document.getElementById('source-filter-count')!;
-      expect(filterCount.textContent).toBe('1 dossier');
+      const countEl = document.querySelector('.filter-chip[data-scope="sync-source"] .filter-count')!;
+      expect(countEl.textContent).toBe('1/3');
     });
 
     it('shows header count in (filtered / total) format', () => {
@@ -1425,7 +1420,7 @@ describe('renderSource', () => {
       // Dir "ACDC" has no files directly, just a subdir containing "thunder.mp3"
       // Filter is "rock" — ACDC name doesn't match, but descendant has no name to match either
       // With dirHasMatchingDescendant mocked to return false, ACDC won't appear
-      state.sourceFilter = 'thunder';
+      setFilterTerm('sync-source', 'thunder');
       state.sourceExpanded.add('/home/Music/Rock');
 
       renderSource();
@@ -1437,7 +1432,7 @@ describe('renderSource', () => {
     it('renders subdirectory when dirHasMatchingDescendant returns true', () => {
       // dirHasMatchingDescendant is called TWICE per dir (renderFilteredSource + renderFilteredDirNode)
       vi.mocked(dirHasMatchingDescendant).mockReturnValue(true);
-      state.sourceFilter = 'thunder';
+      setFilterTerm('sync-source', 'thunder');
 
       renderSource();
 

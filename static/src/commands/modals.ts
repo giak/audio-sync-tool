@@ -15,7 +15,6 @@ registry.bind({ key: 'Escape', activeModal: 'cueEditor', handler: () => closeAll
 registry.bind({
   key: 'Escape',
   activeModal: null,
-  filterActive: false,
   isAudioPlaying: false,
   handler: () => closeContextMenu(),
 });

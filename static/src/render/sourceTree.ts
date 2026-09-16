@@ -1,7 +1,7 @@
 // ─── Source Data panel: tree building, toggle, filtering, rendering ───────
 
 import { api } from '../api.js';
-import { focusItemByElement, setActivePanel } from '../focus.js';
+import { focusItemByElement, revalidateFocus, setActivePanel } from '../focus.js';
 import { getActivePlaylistName, getPendingTracks } from '../playlist.js';
 import { state, type TreeNode } from '../state.js';
 import { confirmDialog, showContextMenu, showError } from '../ui.js';
@@ -10,6 +10,7 @@ import { setBatchCopy } from './batchCopy.js';
 import { openCueEditor } from './cueEditor.js';
 import { doDragCopy } from './dragDrop.js';
 import { makeFileEl, makeFileTable } from './fileRow.js';
+import { createFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
 
 // ── Internal types ────────────────────────────────────────────────────────
@@ -237,7 +238,12 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
     dirEl.classList.add('expanded');
     const info = state.sourceNodeMap.get(dirPath);
     if (info) {
-      const childrenEl = buildSourceChildren(info.node as TreeNode, dirPath, info.baseDir, state.filterActive);
+      const childrenEl = buildSourceChildren(
+        info.node as TreeNode,
+        dirPath,
+        info.baseDir,
+        getFilterTerm('sync-source').length > 0,
+      );
       dirEl.appendChild(childrenEl);
       requestAnimationFrame(() => {
         const cont = dirEl.closest('#source-container, #playlist-source-container') as HTMLElement | null;
@@ -256,7 +262,6 @@ export function togglePlaylistSourceDir(dirPath: string): void {
 }
 
 function updateSourceHeaderCount(): void {
-  if (!state.filterActive) return;
   const dirs = document.querySelectorAll('#source-container .directory');
   const filterCount = document.getElementById('source-filter-count');
   if (filterCount) {
@@ -339,7 +344,7 @@ export function renderDirTree(node: TreeNode, container: HTMLElement, basePath: 
 
 function renderFilteredSource(container: HTMLElement, allTrees: TreeAndDir[]): number {
   let visibleCount = 0;
-  const term = state.sourceFilter.toLowerCase();
+  const term = getFilterTerm('sync-source').toLowerCase();
   for (const { tree, dirPath } of allTrees) {
     const dirNames = Object.keys(tree)
       .filter(k => k !== '__files__')
@@ -354,7 +359,7 @@ function renderFilteredSource(container: HTMLElement, allTrees: TreeAndDir[]): n
 }
 
 function renderFilteredDirNode(node: TreeNode, container: HTMLElement, basePath: string, name: string): void {
-  const term = state.sourceFilter.toLowerCase();
+  const term = getFilterTerm('sync-source').toLowerCase();
   const fullPath = `${basePath}/${name}`;
   if (!name.toLowerCase().includes(term) && !dirHasMatchingDescendant(node, term)) return;
 
@@ -482,6 +487,14 @@ export function renderSource(): void {
   container.innerHTML = '';
   state.sourceNodeMap = new Map();
 
+  // EPIC-030 : chip de filtre intégré (mémorisé scope 'sync-source')
+  createFilterChip(container, {
+    scope: 'sync-source',
+    placeholder: 'Filtrer dossiers / fichiers…',
+    onChange: renderSource,
+    onBlur: () => revalidateFocus(),
+  });
+
   const allTrees: TreeAndDir[] = [];
   let totalCount = 0;
 
@@ -523,14 +536,17 @@ export function renderSource(): void {
   }
 
   const headerCount = document.getElementById('source-header-count');
-  if (state.filterActive && state.sourceFilter) {
+  const sourceFilterActive = getFilterTerm('sync-source').length > 0;
+  if (sourceFilterActive) {
     const filteredCount = renderFilteredSource(container, allTrees);
     if (headerCount)
       headerCount.textContent = `(${filteredCount.toLocaleString('fr')} / ${totalCount.toLocaleString('fr')})`;
-    const filterCount = document.getElementById('source-filter-count');
-    if (filterCount) {
-      filterCount.textContent =
-        filteredCount === 0 ? 'Aucun dossier trouvé' : `${filteredCount} dossier${filteredCount > 1 ? 's' : ''}`;
+    updateFilterCount('sync-source', filteredCount, totalCount);
+    if (filteredCount === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'panel-empty';
+      empty.textContent = 'Aucun dossier trouvé pour ce filtre.';
+      container.appendChild(empty);
     }
   } else {
     for (const { tree, dirPath } of allTrees) {
@@ -538,10 +554,6 @@ export function renderSource(): void {
     }
     renderExtraDirs(container, allTrees);
     if (headerCount) headerCount.textContent = totalCount > 0 ? `(${totalCount.toLocaleString('fr')})` : '';
-    if (!state.filterActive) {
-      const filterCount = document.getElementById('source-filter-count');
-      if (filterCount) filterCount.textContent = '';
-    }
   }
 
   requestAnimationFrame(() => {

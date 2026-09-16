@@ -122,7 +122,7 @@ describe('dupsUI v2 (groupes)', () => {
   });
 
   it('apply button uses the arbitrated winner without override', async () => {
-    const { applyGroupPlan: mockedApply } = await import('../actions.js');
+    await import('../actions.js');
     openDupsMode();
     const songCard = [...document.querySelectorAll('.dup-card')].find(c =>
       c.textContent?.includes('song (2 versions)'),

@@ -100,7 +100,9 @@ export function buildVersionGroups(
     norm: normalizeName(m.filename),
     parent: -1,
   }));
-  nodes.forEach((n, i) => (n.parent = i));
+  nodes.forEach((n, i) => {
+    n.parent = i;
+  });
 
   // Arêtes : durée compatible (±2 s, None exclu) ET nom similaire.
   // Pour limiter l'O(n²) : index par clé de durée arrondie ±2.

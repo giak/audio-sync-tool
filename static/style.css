@@ -549,28 +549,45 @@ tr.file-row.twin-hint > td {
   border-color: rgba(0,255,136,0.3);
 }
 
-/* ===== Filter Palette (floating) ===================================== */
-#filter-palette {
-  position: fixed;
-  top: 12px; left: 50%; transform: translateX(-50%);
-  z-index: 50;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-active);
-  padding: 6px 12px;
-  display: flex; align-items: center; gap: 10px;
-  min-width: 320px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+/* ===== FilterChip intégré (EPIC-030) ================================= */
+.filter-chip {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 8px; padding: 3px 8px;
+  border: 1px solid transparent;
   border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-input) 55%, transparent);
 }
-#source-filter {
-  flex: 1;
-  padding: 4px 8px;
-  background: var(--bg-input); color: var(--text-primary);
-  border: 1px solid var(--border-panel);
-  font-size: 13px; outline: none; border-radius: 2px;
+.filter-chip:hover { border-color: var(--border-panel); }
+.filter-chip .filter-icon { font-size: 11px; opacity: 0.6; }
+.filter-chip .filter-input {
+  flex: 1; min-width: 0;
+  background: transparent; color: var(--text-primary);
+  border: none; outline: none;
+  font-size: 12px; font-family: inherit;
 }
-#source-filter:focus { border-color: var(--border-active); outline: none; }
-#source-filter-count { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.filter-chip .filter-input::placeholder { color: var(--text-muted); opacity: 0.55; }
+.filter-chip .filter-input:focus { outline: none; }
+.filter-chip:focus-within {
+  border-color: var(--border-active);
+  background: var(--bg-input);
+}
+/* Filtré : le chip s'affirme (état visible en permanence) */
+.filter-chip.active {
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, var(--bg-input));
+}
+.filter-chip .filter-count {
+  font-size: 11px; color: var(--text-muted); white-space: nowrap;
+}
+.filter-chip.active .filter-count { color: var(--amber); }
+.filter-chip .filter-clear {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 12px;
+  padding: 0 2px; border-radius: 2px;
+  display: none;
+}
+.filter-chip.active .filter-clear { display: inline; }
+.filter-chip .filter-clear:hover { color: var(--led-red); }
 
 /* ===== Modal System ================================================== */
 .modal {

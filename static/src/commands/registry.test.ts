@@ -84,7 +84,7 @@ describe('CommandRegistry', () => {
   describe('filterInputFocused', () => {
     it('matches when isFilterInputFocused matches', () => {
       const filterInput = document.createElement('input');
-      filterInput.id = 'source-filter';
+      filterInput.className = 'filter-input';
       document.body.appendChild(filterInput);
       filterInput.focus();
 

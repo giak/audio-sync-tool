@@ -34,7 +34,6 @@ registry.bind({
 // Échap — stop audio
 registry.bind({
   key: 'Escape',
-  filterActive: false,
   activeModal: null,
   isAudioPlaying: true,
   handler: () => stopPlayer(),

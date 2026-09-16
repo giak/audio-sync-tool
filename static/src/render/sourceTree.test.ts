@@ -69,6 +69,7 @@ vi.mock('./cueEditor.js', () => ({ openCueEditor: vi.fn() }));
 
 // ── Import the module under test ──────────────────────────────────────────
 
+import { createFilterChip, setFilterTerm } from './filterChip.js';
 import { renderDirTree, renderSource, togglePlaylistSourceDir, toggleSourceDir } from './sourceTree.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -512,20 +513,19 @@ describe('render/sourceTree', () => {
       // Just shouldn't throw
     });
 
-    it('in filter mode, renders filtered tree and updates filter count', () => {
+    it('in filter mode, renders filtered tree and updates chip count', () => {
       setupContainer();
-
-      const filterCount = document.createElement('div');
-      filterCount.id = 'source-filter-count';
-      document.body.appendChild(filterCount);
 
       state.sourceFiles = {
         '/base': {
           'song.mp3': { path: 'Music/song.mp3', year: '2024', duration: 180, codec: 'MP3' },
+          // Fichier racine : compté dans le total, jamais rendu dans l'arbre → count 1/2
+          'loose.mp3': { path: 'loose.mp3', year: null, duration: null, codec: null },
         },
       };
-      state.filterActive = true;
-      state.sourceFilter = 'Music';
+      setFilterTerm('sync-source', 'Music');
+      // Chip présent (scope 'sync-source') pour que updateFilterCount ait une cible
+      createFilterChip(document.body, { scope: 'sync-source', onChange: () => {} });
 
       // Make dirHasMatchingDescendant return true for the Music node
       (dirHasMatchingDescendant as ReturnType<typeof vi.fn>).mockReturnValue(true);
@@ -535,31 +535,27 @@ describe('render/sourceTree', () => {
       // Filter mode renders directory too
       const dirs = document.querySelectorAll('#source-container .directory');
       expect(dirs.length).toBe(1);
-      expect(filterCount.textContent).toBe('1 dossier');
-
-      filterCount.remove();
+      const countEl = document.querySelector('.filter-chip[data-scope="sync-source"] .filter-count');
+      expect(countEl?.textContent).toBe('1/2');
     });
 
-    it('in filter mode shows "Aucun dossier trouvé" when nothing matches', () => {
+    it('in filter mode shows empty-state message when nothing matches', () => {
       setupContainer();
-
-      const filterCount = document.createElement('div');
-      filterCount.id = 'source-filter-count';
-      document.body.appendChild(filterCount);
 
       state.sourceFiles = {
         '/base': {
           'song.mp3': { path: 'Music/song.mp3', year: '2024', duration: 180, codec: 'MP3' },
         },
       };
-      state.filterActive = true;
-      state.sourceFilter = 'ZZZ';
+      setFilterTerm('sync-source', 'ZZZ');
+      createFilterChip(document.body, { scope: 'sync-source', onChange: () => {} });
       // dirHasMatchingDescendant returns false by default
 
       renderSource();
 
-      expect(filterCount.textContent).toBe('Aucun dossier trouvé');
-      filterCount.remove();
+      const empties = document.querySelectorAll('#source-container .panel-empty');
+      expect(empties.length).toBe(1);
+      expect(empties[0].textContent).toBe('Aucun dossier trouvé pour ce filtre.');
     });
   });
 

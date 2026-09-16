@@ -1,9 +1,11 @@
 // ─── Éparpillé panel rendering ────────────────────────────────────────────
 
-import { focusItemByElement, setActivePanel } from '../focus.js';
+import { foldTerm, matchesTokens } from '../filterEngine.js';
+import { focusItemByElement, revalidateFocus, setActivePanel } from '../focus.js';
 import { type EparsSelection, state } from '../state.js';
 import { computeStatus, countAllEparsFiles, type FileStatus } from '../utils.js';
 import { makeFileEl, makeFileTable } from './fileRow.js';
+import { createFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
 
 // ── File selection logic ─────────────────────────────────────────────────
@@ -87,6 +89,16 @@ export function renderEpars(): void {
   const savedScrollTop = container.scrollTop;
   container.innerHTML = '';
 
+  // EPIC-030 : chip de filtre intégré (mémorisé scope 'sync-epars')
+  createFilterChip(container, {
+    scope: 'sync-epars',
+    placeholder: 'Filtrer nom, année, codec…',
+    onChange: renderEpars,
+    onBlur: () => revalidateFocus(),
+  });
+  const eparsTerm = foldTerm(getFilterTerm('sync-epars'));
+  const eparsActive = eparsTerm.length > 0;
+
   const totalFiles = countAllEparsFiles(state.eparsFiles);
   const dupCount = state.dupMatches.size;
   const headerCount = document.getElementById('epars-header-count');
@@ -127,6 +139,11 @@ export function renderEpars(): void {
     for (const [filename, data] of sorted) {
       const relPath = data.path;
       const fullpath = `${dirPath}/${relPath}`;
+      if (
+        eparsActive &&
+        !matchesTokens(eparsTerm, { name: filename, year: data.year ?? null, codec: data.codec ?? null })
+      )
+        continue;
       const status = computeStatus(filename, state.sourceFiles, state.journal as any);
       if (status === 'nouveau') countNouveau++;
       else if (status === 'doublon') countDoublon++;
@@ -154,6 +171,28 @@ export function renderEpars(): void {
     }
     if (tbody?.childElementCount) {
       fileList.appendChild(fileTable);
+    }
+    // Masquer le groupe de dossier épars si le filtre ne garde rien dedans
+    if (eparsActive && !tbody?.childElementCount) {
+      dirDiv.classList.add('hidden');
+      fileList.classList.add('hidden');
+    }
+  }
+
+  // Compteur du chip : matchés / total (recalcul léger après filtrage)
+  if (eparsActive) {
+    let matched = 0;
+    for (const files of Object.values(state.eparsFiles)) {
+      for (const [filename, data] of Object.entries(files)) {
+        if (matchesTokens(eparsTerm, { name: filename, year: data.year ?? null, codec: data.codec ?? null })) matched++;
+      }
+    }
+    updateFilterCount('sync-epars', matched, countAllEparsFiles(state.eparsFiles));
+    if (matched === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'panel-empty';
+      empty.textContent = 'Aucun fichier ne matche ce filtre.';
+      container.appendChild(empty);
     }
   }
 

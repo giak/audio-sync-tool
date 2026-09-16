@@ -3,9 +3,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildVersionGroups } from './dupGroups.js';
 
-const E = (duration: number, codec: string) => ({ path: 'x', duration, codec });
-// Les helpers ci-dessous évitent la répétition des littéraux d'index.
-
 describe('buildVersionGroups', () => {
   it('ignores isolated files (no group of 1)', () => {
     const g = buildVersionGroups(

@@ -121,47 +121,6 @@ export function promptDialog(
   // openModal focusera le premier focusable visible (l'input, une fois visible).
 }
 
-// ── Filter palette ─────────────────────────────────────────────────────────
-const filterInput = document.getElementById('source-filter') as HTMLInputElement | null;
-let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-export function initFilterPalette(onFilterChange: () => void): void {
-  if (!filterInput) return;
-  filterInput.addEventListener('input', () => {
-    clearTimeout(filterDebounceTimer!);
-    filterDebounceTimer = setTimeout(() => {
-      state.sourceFilter = filterInput.value;
-      state.filterActive = !!state.sourceFilter;
-      if (!state.filterActive) state.sourceExpanded = new Set(state.sourceManuallyExpanded);
-      onFilterChange();
-    }, 150);
-  });
-}
-
-export function openFilterPalette(setActivePanel: (panel: 'epars' | 'source') => void, renderSource: () => void): void {
-  setActivePanel('source');
-  state.filterActive = true;
-  state.sourceFilter = '';
-  if (filterInput) {
-    filterInput.value = '';
-    filterInput.focus();
-  }
-  const countEl = document.getElementById('source-filter-count');
-  if (countEl) countEl.textContent = '';
-  document.getElementById('filter-palette')?.classList.remove('hidden');
-  renderSource();
-}
-
-export function closeFilterPalette(renderSource: () => void): void {
-  state.filterActive = false;
-  state.sourceFilter = '';
-  state.sourceExpanded = new Set(state.sourceManuallyExpanded);
-  if (filterInput) filterInput.value = '';
-  document.getElementById('filter-palette')?.classList.add('hidden');
-  renderSource();
-  revalidateFocus();
-}
-
 // ── Error display ─────────────────────────────────────────────────────────
 /**
  * Show a red error message in the status bar that disappears after 5 seconds.

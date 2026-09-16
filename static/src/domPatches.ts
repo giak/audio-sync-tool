@@ -104,7 +104,8 @@ export function patchSourceFileAfterCopy(
   let totalSource = 0;
   for (const files of Object.values(state.sourceFiles)) totalSource += Object.keys(files).length;
   const headerCount = document.getElementById('source-header-count');
-  if (!state.filterActive) {
+  const filterActive = (state.filters['sync-source'] ?? '').length > 0;
+  if (!filterActive) {
     if (headerCount) headerCount.textContent = totalSource > 0 ? `(${totalSource.toLocaleString('fr')})` : '';
   } else if (headerCount) {
     const currentMatches = headerCount.textContent?.match(/[\d\s]+(?= \/)/);

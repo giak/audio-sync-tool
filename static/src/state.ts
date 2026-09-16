@@ -110,8 +110,9 @@ interface AppState {
   sourceFocusPath: string | null;
   sourceExpanded: Set<string>;
   sourceNodeMap: Map<string, SourceNodeInfo>;
-  sourceFilter: string;
-  filterActive: boolean;
+  /** EPIC-030 : filtres mémorisés par liste (scope → terme). Survit aux
+   *  changements de page/scan, perdu au reload (décision session). */
+  filters: Record<string, string>;
   audioSeekStep: number;
   playlistMode: boolean;
   playlists: SavedPlaylist[];
@@ -161,8 +162,7 @@ const _state: AppState = {
   sourceFocusPath: null,
   sourceExpanded: new Set(),
   sourceNodeMap: new Map(),
-  sourceFilter: '',
-  filterActive: false,
+  filters: {},
   audioSeekStep: 20,
   playlistMode: false,
   playlists: [],

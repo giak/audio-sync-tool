@@ -19,7 +19,7 @@ const {
   openModal,
   showToast,
   showError,
-  openFilterPalette,
+  focusFilterChip,
   closeAllModals,
 } = vi.hoisted(() => ({
   bind: vi.fn(),
@@ -47,7 +47,7 @@ const {
   openModal: vi.fn(),
   showToast: vi.fn(),
   showError: vi.fn(),
-  openFilterPalette: vi.fn(),
+  focusFilterChip: vi.fn(),
   closeAllModals: vi.fn(),
 }));
 
@@ -71,7 +71,8 @@ vi.mock('../playlist.js', () => ({
   savePlaylist,
   exportPlaylist,
 }));
-vi.mock('../ui.js', () => ({ openModal, showToast, showError, openFilterPalette, closeAllModals }));
+vi.mock('../ui.js', () => ({ openModal, showToast, showError, closeAllModals }));
+vi.mock('../render/filterChip.js', () => ({ focusFilterChip }));
 vi.mock('../state.js', () => ({ state, emit: vi.fn(), on: vi.fn() }));
 
 import './playlist.js';
@@ -225,15 +226,16 @@ describe('commands/playlist', () => {
     });
   });
 
-  describe('F7 and / — open filter', () => {
-    it('F7 opens filter palette', () => {
+  describe('F7 and / — focus filter chip (EPIC-030)', () => {
+    it('F7 focuses the playlist-source chip by default', () => {
       B_F7.handler();
-      expect(openFilterPalette).toHaveBeenCalledWith(expect.any(Function), renderPlaylistSource);
+      expect(focusFilterChip).toHaveBeenCalledWith('playlist-source');
     });
 
-    it('/ opens filter palette', () => {
+    it('/ focuses the playlist-tracks chip when sidebar focused', () => {
+      state.playlistFocus = 'sidebar';
       B_slash.handler();
-      expect(openFilterPalette).toHaveBeenCalledWith(expect.any(Function), renderPlaylistSource);
+      expect(focusFilterChip).toHaveBeenCalledWith('playlist-tracks');
     });
   });
 

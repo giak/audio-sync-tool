@@ -134,8 +134,7 @@ function setupTestState(): void {
   state.journal = [];
   state.sourceExpanded.clear();
   state.sourceNodeMap.clear();
-  state.filterActive = false;
-  state.sourceFilter = '';
+  state.filters = {};
   state.activePanel = 'epars';
   state.activeModal = null;
   state.playlistMode = false;
@@ -196,7 +195,6 @@ beforeEach(async () => {
   document.getElementById('epars-header-count')!.textContent = '';
   document.getElementById('source-header-count')!.textContent = '';
   document.getElementById('epars-status-line')!.innerHTML = '';
-  document.getElementById('filter-palette')!.classList.add('hidden');
   document.getElementById('main-panels')!.classList.remove('hidden');
   document.getElementById('playlist-layout')!.classList.add('hidden');
   document.getElementById('playlist-source-container')!.innerHTML = '';
@@ -512,7 +510,7 @@ describe('Keyboard navigation', () => {
     expect(playBtn!.textContent).toBe('⏹');
   });
 
-  it('F7 opens filter palette and activates source panel', async () => {
+  it('F7 focuses the filter chip of the focused panel (EPIC-030)', async () => {
     renderEpars();
     renderSource();
 
@@ -520,9 +518,10 @@ describe('Keyboard navigation', () => {
     await flush();
 
     expect(ev.defaultPrevented).toBe(true);
-    expect(state.filterActive).toBe(true);
-    expect(document.getElementById('filter-palette')!.classList.contains('hidden')).toBe(false);
-    expect(state.activePanel).toBe('source');
+    // activePanel = 'epars' → le chip de la colonne épars est focusé
+    const chipInput = document.querySelector('.filter-chip[data-scope="sync-epars"] .filter-input');
+    expect(chipInput).not.toBeNull();
+    expect(document.activeElement).toBe(chipInput);
   });
 
   it('Shift+ArrowRight seeks audio forward when playing', async () => {
@@ -1358,26 +1357,25 @@ describe('Playlist mode', () => {
     expect(tracks[1].classList.contains('focused')).toBe(false);
   });
 
-  it('F7 opens filter palette in playlist mode', async () => {
+  it('F7 is intercepted but no-op in playlist mode (chips livrés en P1)', async () => {
     await enterPlaylist();
 
     const ev = dispatchKey('F7');
     await flush();
 
     expect(ev.defaultPrevented).toBe(true);
-    expect(state.filterActive).toBe(true);
-    expect(document.getElementById('filter-palette')!.classList.contains('hidden')).toBe(false);
+    // P0 : seuls les chips Sync existent — pas encore de chip playlist-source
+    expect(document.querySelector('.filter-chip[data-scope="playlist-source"]')).toBeNull();
   });
 
-  it('/ opens filter palette in playlist mode', async () => {
+  it('/ is intercepted but no-op in playlist mode (chips livrés en P1)', async () => {
     await enterPlaylist();
 
     const ev = dispatchKey('/');
     await flush();
 
     expect(ev.defaultPrevented).toBe(true);
-    expect(state.filterActive).toBe(true);
-    expect(document.getElementById('filter-palette')!.classList.contains('hidden')).toBe(false);
+    expect(document.querySelector('.filter-chip[data-scope="playlist-source"]')).toBeNull();
   });
 
   it('Delete removes in-playlist class from source panel', async () => {
@@ -1636,7 +1634,7 @@ describe('Playlist mode', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('Keyboard gaps', () => {
-  it('/ opens filter palette in normal mode', async () => {
+  it('/ focuses the filter chip in normal mode (EPIC-030)', async () => {
     renderEpars();
     renderSource();
 
@@ -1644,9 +1642,9 @@ describe('Keyboard gaps', () => {
     await flush();
 
     expect(ev.defaultPrevented).toBe(true);
-    expect(state.filterActive).toBe(true);
-    expect(document.getElementById('filter-palette')!.classList.contains('hidden')).toBe(false);
-    expect(state.activePanel).toBe('source');
+    const chipInput = document.querySelector('.filter-chip[data-scope="sync-epars"] .filter-input');
+    expect(chipInput).not.toBeNull();
+    expect(document.activeElement).toBe(chipInput);
   });
 
   it('Escape stops audio when playing in normal mode', async () => {

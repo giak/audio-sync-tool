@@ -63,7 +63,7 @@ export function renderDups(): void {
     const effectiveWinner = winner ? (g.members.find(m => m.fullPath === winner) ?? g.winner) : g.winner;
 
     const card = document.createElement('div');
-    card.className = 'dup-card' + (gi === focusIndex ? ' focused' : '');
+    card.className = `dup-card${gi === focusIndex ? ' focused' : ''}`;
     card.dataset.index = String(gi);
 
     const h = document.createElement('div');

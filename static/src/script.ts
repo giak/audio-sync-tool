@@ -23,12 +23,11 @@ import {
   renderPlaylistManager,
   renderPlaylistPanel,
   renderPlaylistSource,
-  renderSource,
   setupRenderSubscriptions,
 } from './render.js';
-import { state } from './state.js';
-import { closeAllModals, confirmDialog, initFilterPalette, openModal } from './ui.js';
 import { goPage } from './router.js';
+import { state } from './state.js';
+import { closeAllModals, confirmDialog, openModal } from './ui.js';
 
 async function enterPlaylistMode(): Promise<void> {
   goPage('playlist');
@@ -121,14 +120,6 @@ document.addEventListener('click', (e: MouseEvent) => {
   const target = e.target as HTMLElement | null;
   if (target?.classList.contains('modal-backdrop')) closeAllModals();
   if (target?.classList.contains('modal-close')) closeAllModals();
-});
-
-// ── Filter palette → renderSource when filter changes ─────────────────────
-import { revalidateFocus } from './focus.js';
-
-initFilterPalette(() => {
-  renderSource();
-  revalidateFocus();
 });
 
 // ── Server health indicator ────────────────────────────────────────────────
