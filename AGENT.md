@@ -69,16 +69,17 @@ $  → scope/périmètre (était ⟐ dans source)
   test_nml.py ← pytest (29 tests)
   test_analysis.py ← pytest (15 tests)
   templates/index.html ← pages Sync/Playlist/Doublons + modales
-  static/ ← 40 modules ES (src/ + render/ + commands/) + 33 *.test.ts (814 tests)
+  static/ ← 42 modules ES (src/ + render/ + commands/) + 34 *.test.ts (811 tests)
     script.js ← orchestrateur (nav handlers, toolbar)
     router.js ← goPage('sync'|'playlist'|'dups') — source de vérité nav
     state.js ← état global mutable (EventEmitter, Proxy)
     api.js ← fetch wrapper (retry réseau)
     audio.js ← togglePlay, seek, stop
     focus.js ← navigation spatiale ↑↓←→Tab + twin-hint jumeau
-    ui.js ← modales, filtre palette, toasts
+    ui.js ← modales, toasts
     render.js ← assembler (re-export render/)
     actions.js ← config, scan, copy, move, replace, mkdir, groupes
+    filterEngine.js ← matcher tokens filtrage (casse/accents, nom+année+codec)
     dupDetect.js ← matching doublons (durée ±2 s + nom fuzzy ≥ 0,88)
     dupGroups.js ← groupes de versions (union-find) + arbitrage qualité
     playlist.js ← CRUD + drag-drop
@@ -103,10 +104,12 @@ $  → scope/périmètre (était ⟐ dans source)
     !playlistMode dérivé: playlistMode === (page === 'playlist')
 
   %ARCHITECTURE.keyboard
-    ~normal: Tab↔panels, ↑↓nav, ←→columns, Enter play, Space select, F5 copy, R replace-homonyme, F7 filter, Escape close
+    ~normal: Tab↔panels, ↑↓nav, ←→columns, Enter play, Space select, F5 copy, R replace-homonyme, F7// filter-chip, Escape exit-chip/close
     ~playlist: Tab↔source/sidebar, ↑↓nav, Space toggle, Enter play, F7 filter, Delete remove, Ctrl+S save, Ctrl+E export, Ctrl+↑↓ reorder
     ~dups: ↑↓ groupes, clic membre = override gagnant, R applique plan (perdants rangés → _trash), Échap → sync
     !clavier scopé page via registry (ctx.page) + activeModal:null — modal dialogue bloque tout
+    !F7// focusent le chip de la liste focusée (render/filterChip.js, input.filter-input)
+    !filtres mémorisés par scope dans state.filters (sync-epars, sync-source ; P1: playlist-*, dups)
 
 %SURGERY [12 règles numérotées S1-S12]
   !S1: NE JAMAIS modifier signature fonction

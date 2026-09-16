@@ -12,6 +12,10 @@ manquants, les copie en un clic vers le bon sous-dossier, et intègre un
   exact **et** homonymes probables — durée ±2 s + nom, LED ambre), copie en un
   clic (F5) vers la bonne source, remplacement d'homonyme de moindre qualité
   (R — l'ancien part dans `_trash/<date>/`, jamais effacé).
+- **Filtre rapide** (chips intégrés au-dessus des colonnes Sync) : F7 ou /
+  focus le chip de la colonne focusée, filtre en direct insensible casse/accents
+  sur nom + **année** + codec, mémorisé par liste (changer de colonne/page le
+  conserve), ✕/Backspace pour effacer.
 - **Doublons** : vue dédiée des groupes de versions d'un même morceau (épars
   et/ou rangés) — arbitrage automatique par qualité (FLAC > 320 > 128), override
   au clic, application du plan (gagnant rangé à droite, perdants rangés → trash).
@@ -88,8 +92,8 @@ disponibles dans les pages.
 | **Entrée** | Jouer le fichier | Déplier/replier un dossier |
 | **Espace** | Sélectionner le fichier | Déplier/replier un dossier |
 | **F5** | Copier vers le dossier survolé (avec confirmation) | |
-| **F7** / **/** | — | Focus le filtre de dossiers |
-| **Échap** | Fermer modale / annuler le filtre / stopper l'audio | |
+| **F7** / **/** | Focus le chip de filtre de la colonne focusée — tape pour filtrer (nom, année, codec) ; ✕ ou Backspace champ vide pour effacer | Même comportement sur l'arbre (auto-dépliage des branches matchées) |
+| **Échap** | Sortir du chip / fermer modale / stopper l'audio | |
 | **N** | Noter le fichier focusé (0-100, clic sur la zone de note aussi possible) | |
 | **R** / double-clic | Remplacer l'homonyme (l'ancien rangé → `_trash/<date>/`) — seulement sur les lignes à LED ambre | |
 
@@ -226,7 +230,7 @@ audio-sync-tool/
 ├── templates/index.html   # Interface utilisateur
 ├── static/
 │   ├── style.css          # Thème SCADA (JetBrains Mono, LED glow)
-│   ├── src/               # Sources TypeScript (40 modules)
+│   ├── src/               # Sources TypeScript (42 modules)
 │   │   ├── commands/      # Command Pattern (10 modules)
 │   │   ├── render/        # Component factories (11 modules — fileRow, cueEditor, playlistUI, dupsUI…)
 │   │   ├── router.ts      # Routeur de pages (sync | playlist | dups)
@@ -234,7 +238,7 @@ audio-sync-tool/
 │   │   ├── dupGroups.ts   # Groupes de versions + arbitrage qualité
 │   │   ├── script.ts      # Orchestrateur (~160 lignes)
 │   │   ├── state.ts       # Proxy + EventEmitter + RAF batcher
-│   │   └── *.test.ts      # 33 fichiers de test (vitest)
+│   │   └── *.test.ts      # 34 fichiers de test (vitest)
 │   └── dist/              # Compilés par esbuild (gitignored)
 ├── data/                  # Config, journal, cache, playlists, ratings, beatgrids (gitignored)
 ├── docs/superpowers/      # Specs + plans d'implémentation
@@ -268,7 +272,7 @@ npm run typecheck          # Vérification des types (tsc)
 npm run lint               # Vérification Biome (0 erreurs — vérifié)
 npm run lint:write         # Correction auto des problèmes
 npm run format             # Formatage Biome
-npm test                   # 814 tests, 33 fichiers
+npm test                   # 811 tests, 34 fichiers
 npm run test:shuffle       # Même suite en --sequence.shuffle (stabilité)
 ```
 
@@ -286,7 +290,7 @@ npm run test:shuffle       # Même suite en --sequence.shuffle (stabilité)
 #### Frontend (vitest)
 
 ```bash
-npm test                   # 814 tests, 33 fichiers
+npm test                   # 811 tests, 34 fichiers
 npm run coverage           # Clean → test → rapport (~91% lignes)
 ```
 
@@ -295,7 +299,7 @@ npm run coverage           # Clean → test → rapport (~91% lignes)
 | Suite | Tests | Couverture |
 |-------|-------|------------|
 | Pytest | 190 | — |
-| Vitest | 814 | 90.98% lignes/statements, 81.87% branches, 87.43% fonctions (mesure EPIC-021 — à rafraîchir) |
+| Vitest | 811 | 90.98% lignes/statements, 81.87% branches, 87.43% fonctions (mesure EPIC-021 — à rafraîchir) |
 
 ### Évolutions & traçabilité
 

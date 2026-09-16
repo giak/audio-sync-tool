@@ -1,6 +1,6 @@
 # EPIC-030 — Filtre rapide universel par liste (chips intégralement intégrés)
 
-> **Statut** : ⚪ Backlog — design validé (brainstorm session 2026-09-16)
+> **Statut** : 🔵 En cours — **P0 livré** (commit `850584a`), P1/P2 à venir
 > **Priorité** : Haute (recherche transversale, friction quotidienne)
 > **Découle de** : usage quotidien des pages Sync/Playlist/Doublons (sessions 2026-09)
 
@@ -86,14 +86,21 @@ par le matcher : les chiffres matchent aussi l'année).
 
 ## Tâches
 
-### P0 — Moteur + chip Sync (les deux colonnes)
-- [ ] `filterEngine.ts` : matcher tokens (nom+année+codec), casse/accents, AND
-- [ ] `state.filters` : Record<scope, string> + nettoyage `sourceFilter`
-- [ ] Composant chip (factory TS) + CSS (compact/actif, count, clear)
-- [ ] `sync-epars` : filtrage de la liste plate + compteur
-- [ ] `sync-source` : migration du filtre existant (auto-dépliage conservé)
-- [ ] F7// routent vers le chip de la colonne focusée ; Backspace/Échap/✕
-- [ ] Tests : matcher (tokens, accents, année), scopes mémorisés, chip render
+### P0 — Moteur + chip Sync (les deux colonnes) — ✅ 2026-09-16
+- [x] `filterEngine.ts` : matcher tokens (nom+année+codec), casse/accents, AND
+- [x] `state.filters` : Record<scope, string> + nettoyage `sourceFilter`/`filterActive`
+      (les deux champs legacy **supprimés** du state, pas seulement dérivés)
+- [x] Composant chip (factory TS `createFilterChip`) + CSS (compact/actif, count, clear)
+- [x] `sync-epars` : filtrage de la liste plate + compteur + bandeau « aucun résultat »
+- [x] `sync-source` : migration du filtre existant (auto-dépliage conservé) +
+      bandeau « Aucun dossier trouvé pour ce filtre »
+- [x] F7// routent vers le chip de la colonne focusée (`commands/filter.ts`) ;
+      Backspace/Échap/✕ ; Échap-Tab-↓ dans l'input (navigation.ts)
+- [x] Tests : matcher (14), chips + scopes (16), intégration adaptée — 803/803 vitest,
+      190/190 pytest, typecheck/lint/build ✓
+- [x] Palette flottante supprimée (DOM, CSS, `initFilterPalette`, bindings) ;
+      `isFilterInputFocused` détecte désormais la classe `.filter-input`
+      (l'id `source-filter` n'existe plus)
 
 ### P1 — Playlist + Doublons
 - [ ] `playlist-source` + `playlist-tracks` (mêmes chips)
@@ -133,7 +140,20 @@ par le matcher : les chiffres matchent aussi l'année).
 - Shuffle-proof : `state.filters` réinitialisé dans le `setupTestState` des
   tests d'intégration
 
-## Validation (cible)
+## Traçabilité
+
+| Étape | Commit | Contenu |
+|---|---|---|
+| P0 | `850584a` | filterEngine + filterChip + scopes sync-epars/sync-source + F7// + retrait palette (29 fichiers, +455/−399) |
+
+Découvertes P0 documentées : `domPatches.ts` lit désormais `state.filters['sync-source']`
+(compteur header après copy) ; le registry ne porte plus `filterActive` (les bindings
+Échap audio/menu-contextuel n'étaient déclenchés que si ce champ mort était `false`).
+
+## Validation navigateur
+
+- [ ] **Utilisateur** : chip visible au-dessus des 2 colonnes Sync, frappe filtre en
+      direct, mémorisation en changeant de colonne/page, ✕ et Backspace, F7//
 
 - Tests matcher : accents, casse, année, codec, AND multi-tokens
 - Tests chips : render compact/actif, count, mémorisation inter-pages
