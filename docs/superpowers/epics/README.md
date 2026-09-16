@@ -47,7 +47,7 @@
 | [EPIC-025](EPIC-025-playlist-playback.md) | Lecture dans le panneau Playlist — bouton ▶ par piste + glow du nom | 🟢 Livré | Moyenne | spec `2026-09-14-playlist-playback-design.md` |
 | [EPIC-026](EPIC-026-liste-fichiers-tableau-contraste.md) | Liste fichiers en vrai tableau (colgroup `table-layout: fixed`) + « Cues » hors épars + textes éclaircis | 🟢 Livré | Haute | mesures headless `/tmp/opencode/measure-*.html` |
 | [EPIC-027](EPIC-027-mkdir-dossier-racine-source.md) | Créer un dossier racine Source Data via bouton ➕ (`/mkdir` + `extra_dirs.json`, retrait index-only) | 🟢 Livré | Moyenne | session 2026-09-15 |
-| [EPIC-028](EPIC-028-doublons-remplacement-qualite.md) | Doublons épars ↔ source : détection (durée ±2 s + nom fuzzy) + remplacement qualité (FLAC vs MP3) via trash `_trash/` — jamais d'effacement | 🟡 En cours (P0+P1bis+action livrés, P2 backlog) | Haute | spec `2026-09-15-doublons-detection-design.md` (as-built inclus) |
+| [EPIC-028](EPIC-028-doublons-remplacement-qualite.md) | Doublons épars ↔ source : détection (durée ±2 s + nom fuzzy) + remplacement qualité (FLAC vs MP3) via trash `_trash/` — jamais d'effacement | 🟢 Presque livrée (P0+P1+P1bis+P2, reste validation visuelle P2) | Haute | spec `2026-09-15-doublons-detection-design.md` (as-built inclus) |
 
 ## État actuel du projet (2026-09-16)
 
