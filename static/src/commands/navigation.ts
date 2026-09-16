@@ -11,18 +11,21 @@ import {
   setActivePanel,
 } from '../focus.js';
 import { state } from '../state.js';
+import { hideFilterChip } from '../render/filterChip.js';
 import { registry } from './registry.js';
 
 // Tab — switch panels (Sync mode)
 registry.bind({
   key: 'Tab',
   activePanel: 'epars',
+  isInput: false,
   playlistMode: false,
   handler: () => setActivePanel('source'),
 });
 registry.bind({
   key: 'Tab',
   activePanel: 'source',
+  isInput: false,
   playlistMode: false,
   handler: () => setActivePanel('epars'),
 });
@@ -30,6 +33,7 @@ registry.bind({
 // ↓ Sync
 registry.bind({
   key: 'ArrowDown',
+  isInput: false,
   playlistMode: false,
   handler: () => {
     const container =
@@ -43,6 +47,7 @@ registry.bind({
 // ↑ Sync
 registry.bind({
   key: 'ArrowUp',
+  isInput: false,
   playlistMode: false,
   handler: () => {
     const container =
@@ -57,6 +62,7 @@ registry.bind({
 registry.bind({
   key: 'ArrowLeft',
   activePanel: 'source',
+  isInput: false,
   playlistMode: false,
   handler: () => {
     const container = document.getElementById('source-container');
@@ -68,6 +74,7 @@ registry.bind({
 registry.bind({
   key: 'ArrowRight',
   activePanel: 'source',
+  isInput: false,
   playlistMode: false,
   handler: () => {
     const container = document.getElementById('source-container');
@@ -79,6 +86,7 @@ registry.bind({
 registry.bind({
   key: 'ArrowLeft',
   activePanel: 'epars',
+  isInput: false,
   playlistMode: false,
   isAudioPlaying: false,
   shiftKey: false,
@@ -87,6 +95,7 @@ registry.bind({
 registry.bind({
   key: 'ArrowRight',
   activePanel: 'epars',
+  isInput: false,
   playlistMode: false,
   isAudioPlaying: false,
   shiftKey: false,
@@ -96,6 +105,7 @@ registry.bind({
 // Enter / Space Sync
 registry.bind({
   key: 'Enter',
+  isInput: false,
   playlistMode: false,
   handler: () => {
     const container =
@@ -115,6 +125,7 @@ registry.bind({
 
 registry.bind({
   key: ' ',
+  isInput: false,
   playlistMode: false,
   handler: () => {
     const container =
@@ -193,13 +204,15 @@ registry.bind({
   handler: () => navigateHistory(1),
 });
 
-// Filter chip (EPIC-030) — Échap, Tab, ↓ dans l'input filtre : blur → la
-// liste reprend le focus (le terme est conservé, mémorisé par scope)
+// Filter chip (EPIC-030) — Échap, Tab, ↓ dans l'input filtre : blur + cache
+// le chip (F7 le ré-affiche) et rend le focus à la liste. Le terme reste
+// mémorisé par scope tant que la session vit.
 registry.bind({
   key: 'Escape',
   isFilterInputFocused: true,
   handler: () => {
     (document.activeElement as HTMLElement | null)?.blur();
+    hideFilterChip();
     revalidateFocus();
   },
 });

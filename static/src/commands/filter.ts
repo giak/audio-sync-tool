@@ -1,7 +1,12 @@
-// ─── Filter command: F7 or / → focus le chip de la liste focusée (EPIC-030) ─
+// ─── Filter command (EPIC-030) : F7 = toggle de la zone de filtre, / = ouvrir ─
+// F7 : caché → ouvre + focus ; déjà focus → ferme (blur + hide) ; sinon focus.
+// /  : ouvre + focus seulement (depuis un autre input aussi — pas de isInput :
+//      taper « / » dans un autre input filtre le chip courant, convention vim).
+// Échap dans l'input ferme aussi (navigation.ts). Le terme reste mémorisé par
+// scope tant que la session vit — ré-afficher restaure le filtre.
 
 import { setActivePanel } from '../focus.js';
-import { focusFilterChip } from '../render/filterChip.js';
+import { focusFilterChip, hideFilterChip } from '../render/filterChip.js';
 import { state as st } from '../state.js';
 import { registry } from './registry.js';
 
@@ -20,15 +25,31 @@ function focusCurrentChip(): void {
   focusFilterChip(currentFilterScope());
 }
 
+function closeCurrentChip(): void {
+  const input = document.activeElement;
+  if (input instanceof HTMLElement) input.blur();
+  hideFilterChip();
+}
+
+/** L'élément focusé est-il l'input d'un chip filtre ? */
+function filterInputFocused(): boolean {
+  return document.activeElement instanceof HTMLInputElement && document.activeElement.classList.contains('filter-input');
+}
+
 registry.bind({
   key: 'F7',
   activeModal: null,
-  handler: focusCurrentChip,
+  handler: () => {
+    // Déjà dans l'input filtre → F7 referme (toggle)
+    if (filterInputFocused()) {
+      closeCurrentChip();
+      return;
+    }
+    focusCurrentChip();
+  },
 });
 
 registry.bind({
   key: '/',
-  isInput: false,
-  activeModal: null,
   handler: focusCurrentChip,
 });

@@ -1,4 +1,4 @@
-// ─── Unit tests: commands/playlist.ts — 17 playlist-mode keyboard bindings ───
+// ─── Unit tests: commands/playlist.ts — 15 playlist-mode keyboard bindings ───
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Hoist spies ───────────────────────────────────────────────────────────
@@ -19,7 +19,6 @@ const {
   openModal,
   showToast,
   showError,
-  focusFilterChip,
   closeAllModals,
 } = vi.hoisted(() => ({
   bind: vi.fn(),
@@ -47,7 +46,6 @@ const {
   openModal: vi.fn(),
   showToast: vi.fn(),
   showError: vi.fn(),
-  focusFilterChip: vi.fn(),
   closeAllModals: vi.fn(),
 }));
 
@@ -72,7 +70,6 @@ vi.mock('../playlist.js', () => ({
   exportPlaylist,
 }));
 vi.mock('../ui.js', () => ({ openModal, showToast, showError, closeAllModals }));
-vi.mock('../render/filterChip.js', () => ({ focusFilterChip }));
 vi.mock('../state.js', () => ({ state, emit: vi.fn(), on: vi.fn() }));
 
 import './playlist.js';
@@ -89,8 +86,6 @@ function find(matcher: Partial<Binding>): Binding {
 
 let B_tab: Binding,
   B_space: Binding,
-  B_F7: Binding,
-  B_slash: Binding,
   B_del: Binding,
   B_bs: Binding,
   B_ctrlS: Binding,
@@ -106,8 +101,6 @@ let B_tab: Binding,
 beforeAll(() => {
   B_tab = find({ key: 'Tab', playlistMode: true });
   B_space = find({ key: ' ', playlistMode: true, playlistFocus: 'source', isInput: false });
-  B_F7 = find({ key: 'F7', playlistMode: true });
-  B_slash = find({ key: '/', playlistMode: true, isInput: false });
   B_del = find({ key: 'Delete', playlistMode: true, playlistFocus: 'sidebar', isInput: false });
   B_bs = find({ key: 'Backspace', playlistMode: true, playlistFocus: 'sidebar', isInput: false });
   B_ctrlS = find({ key: 's', ctrlKey: true, playlistMode: true });
@@ -223,19 +216,6 @@ describe('commands/playlist', () => {
       B_space.handler();
       expect(showToast).toHaveBeenCalledWith(expect.stringContaining('focuser un fichier'));
       c.remove();
-    });
-  });
-
-  describe('F7 and / — focus filter chip (EPIC-030)', () => {
-    it('F7 focuses the playlist-source chip by default', () => {
-      B_F7.handler();
-      expect(focusFilterChip).toHaveBeenCalledWith('playlist-source');
-    });
-
-    it('/ focuses the playlist-tracks chip when sidebar focused', () => {
-      state.playlistFocus = 'sidebar';
-      B_slash.handler();
-      expect(focusFilterChip).toHaveBeenCalledWith('playlist-tracks');
     });
   });
 

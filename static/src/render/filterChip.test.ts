@@ -10,6 +10,7 @@ import {
   ensureFilterChip,
   focusFilterChip,
   getFilterTerm,
+  hideFilterChip,
   setFilterTerm,
   updateFilterCount,
 } from './filterChip.js';
@@ -175,5 +176,47 @@ describe('filterChip (persistant)', () => {
     expect(focusFilterChip('sync-epars')).toBe(true);
     expect(document.activeElement).toBe(makeInput());
     expect(focusFilterChip('nope')).toBe(false);
+  });
+
+  it('hideFilterChip hides all chips and keeps the memorized term', () => {
+    const list = document.createElement('div');
+    document.body.appendChild(list);
+    ensureFilterChip(list, { scope: 'sync-epars', onChange: () => {} });
+    setFilterTerm('sync-epars', 'ab');
+
+    hideFilterChip();
+
+    const chip = document.querySelector<HTMLElement>('.filter-chip')!;
+    expect(chip.classList.contains('hidden')).toBe(true);
+    // Le terme reste mémorisé : ré-afficher restaure le filtre
+    expect(getFilterTerm('sync-epars')).toBe('ab');
+  });
+
+  it('focusFilterChip re-shows a hidden chip (F7 toggle)', () => {
+    const list = document.createElement('div');
+    document.body.appendChild(list);
+    ensureFilterChip(list, { scope: 'sync-epars', onChange: () => {} });
+    hideFilterChip();
+    expect(document.querySelector<HTMLElement>('.filter-chip')!.classList.contains('hidden')).toBe(true);
+
+    expect(focusFilterChip('sync-epars')).toBe(true);
+
+    const chip = document.querySelector<HTMLElement>('.filter-chip')!;
+    expect(chip.classList.contains('hidden')).toBe(false);
+    expect(document.activeElement).toBe(makeInput());
+  });
+
+  it('hideFilterChip(scope) hides only the given scope', () => {
+    const a = document.createElement('div');
+    document.body.appendChild(a);
+    ensureFilterChip(a, { scope: 'sync-epars', onChange: () => {} });
+    const b = document.createElement('div');
+    document.body.appendChild(b);
+    ensureFilterChip(b, { scope: 'sync-source', onChange: () => {} });
+
+    hideFilterChip('sync-epars');
+
+    expect(document.querySelector<HTMLElement>('.filter-chip[data-scope="sync-epars"]')!.classList.contains('hidden')).toBe(true);
+    expect(document.querySelector<HTMLElement>('.filter-chip[data-scope="sync-source"]')!.classList.contains('hidden')).toBe(false);
   });
 });

@@ -524,6 +524,62 @@ describe('Keyboard navigation', () => {
     expect(document.activeElement).toBe(chipInput);
   });
 
+  it('F7 toggles: hides the chip when pressed again while input focused', async () => {
+    renderEpars();
+    renderSource();
+
+    dispatchKey('F7'); // ouvre
+    await flush();
+    dispatchKey('F7'); // referme
+    await flush();
+
+    const chip = document.querySelector<HTMLElement>('.filter-chip[data-scope="sync-epars"]')!;
+    expect(chip.classList.contains('hidden')).toBe(true);
+    expect(document.activeElement).not.toBe(chip.querySelector('.filter-input'));
+  });
+
+  it('Escape in filter input hides the chip and returns focus to the list', async () => {
+    renderEpars();
+    renderSource();
+
+    dispatchKey('F7');
+    await flush();
+    const chipInput = document.querySelector('.filter-chip[data-scope="sync-epars"] .filter-input') as HTMLInputElement;
+    expect(document.activeElement).toBe(chipInput);
+
+    dispatchKey('Escape');
+    await flush();
+
+    const chip = document.querySelector<HTMLElement>('.filter-chip[data-scope="sync-epars"]')!;
+    expect(chip.classList.contains('hidden')).toBe(true);
+    // Le focus revient à la liste épars
+    expect(document.querySelector('#epars-container .focused')).not.toBeNull();
+  });
+
+  it('Arrow keys and Space move the caret inside the filter input (no list hijack)', async () => {
+    renderEpars();
+    renderSource();
+
+    dispatchKey('F7');
+    await flush();
+    const chipInput = document.querySelector('.filter-chip[data-scope="sync-epars"] .filter-input') as HTMLInputElement;
+    chipInput.value = 'ab';
+    chipInput.setSelectionRange(2, 2);
+
+    // Frappe réelle : l'événement part de l'input et bubble vers document
+    const left = new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true });
+    chipInput.dispatchEvent(left);
+    expect(left.defaultPrevented).toBe(false);
+    const space = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    chipInput.dispatchEvent(space);
+    expect(space.defaultPrevented).toBe(false);
+
+    // La sélection multi-copie n'a pas basculé : l'Espace appartient au texte
+    const before = document.querySelectorAll('#epars-container .selected').length;
+    dispatchKey(' ');
+    expect(document.querySelectorAll('#epars-container .selected').length).toBe(before);
+  });
+
   it('Shift+ArrowRight seeks audio forward when playing', async () => {
     renderEpars();
     renderSource();

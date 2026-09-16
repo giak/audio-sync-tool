@@ -3,15 +3,17 @@
 import { seekAudio, stopPlayer } from '../audio.js';
 import { registry } from './registry.js';
 
-// ←→ — seek audio when playing
+// ←→ — seek audio when playing (jamais dans un input : le caret d'abord)
 registry.bind({
   key: 'ArrowLeft',
+  isInput: false,
   isAudioPlaying: true,
   shiftKey: false,
   handler: () => seekAudio(-1),
 });
 registry.bind({
   key: 'ArrowRight',
+  isInput: false,
   isAudioPlaying: true,
   shiftKey: false,
   handler: () => seekAudio(1),
@@ -20,12 +22,14 @@ registry.bind({
 // Shift+←→ — seek audio
 registry.bind({
   key: 'ArrowLeft',
+  isInput: false,
   shiftKey: true,
   isAudioPlaying: true,
   handler: () => seekAudio(-1),
 });
 registry.bind({
   key: 'ArrowRight',
+  isInput: false,
   shiftKey: true,
   isAudioPlaying: true,
   handler: () => seekAudio(1),

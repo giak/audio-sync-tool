@@ -124,15 +124,27 @@ export function isFilterActive(scope: string): boolean {
   return getFilterTerm(scope).length > 0;
 }
 
-/** Focus l'input du chip du scope demandé (routing F7//), s'il existe. */
+/** Focus l'input du chip du scope ; l'AFFICHE s'il était caché (F7 toggle).
+ *  Renvoie false si le chip n'existe pas (liste non rendue). */
 export function focusFilterChip(scope: string): boolean {
-  const chip = document.querySelector(`.filter-chip[data-scope="${scope}"] .filter-input`);
-  if (chip instanceof HTMLInputElement) {
-    chip.focus();
-    chip.select();
-    return true;
+  const chip = document.querySelector(`.filter-chip[data-scope="${scope}"]`);
+  if (!(chip instanceof HTMLElement)) return false;
+  chip.classList.remove('hidden');
+  const input = chip.querySelector('.filter-input');
+  if (input instanceof HTMLInputElement) {
+    input.focus();
+    input.select();
   }
-  return false;
+  return true;
+}
+
+/** Cache le chip du scope (ou tous si scope omis) — F7/Échap. Le terme reste
+ *  mémorisé dans state.filters : ré-afficher restaure le filtre. */
+export function hideFilterChip(scope?: string): void {
+  const selector = scope ? `.filter-chip[data-scope="${scope}"]` : '.filter-chip';
+  for (const chip of document.querySelectorAll(selector)) {
+    (chip as HTMLElement).classList.add('hidden');
+  }
 }
 
 /** Met à jour le compteur « matchés/total » du chip du scope. */

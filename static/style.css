@@ -557,6 +557,9 @@ tr.file-row.twin-hint > td {
   border-radius: 4px;
   background: color-mix(in srgb, var(--bg-input) 55%, transparent);
 }
+/* Caché par F7/Échap : visibility, pas display — la hauteur du slot est
+   préservée (pas de saut de layout à l'ouverture/fermeture du filtre). */
+.filter-chip.hidden { visibility: hidden; }
 .filter-chip:hover { border-color: var(--border-panel); }
 .filter-chip .filter-icon { font-size: 11px; opacity: 0.6; }
 .filter-chip .filter-input {
