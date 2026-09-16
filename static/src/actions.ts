@@ -412,6 +412,9 @@ export async function initApp(): Promise<void> {
     }
     // Dossiers racine vides (➕) — toujours, même sans cache de scan.
     state.sourceExtraDirs = new Set(cache?.extra_dirs || []);
+    // Doublons fuzzy (EPIC-028) : le cache vient de peupler les deux index —
+    // sans ça, aucun marqueur ambre après un simple rechargement de page.
+    refreshDupMatches();
 
     loadRatings().catch(() => {
       /* ratings are optional */

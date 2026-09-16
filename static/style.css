@@ -250,30 +250,46 @@ td.file.focused     { background: var(--bg-focus);  outline: 1px solid var(--bor
 
 /* ===== EPIC-028 P1 : doublons fuzzy (homonymes probables) ============
    4e état visuel : ambre = matché fuzzy à un jumeau rangé (le GRIS reste
-   réservé au doublon EXACT — nom de fichier identique). Barre gauche ambre
-   sur la ligne (même mécanique inset que le focus, zéro décalage layout),
-   glyph ↔, halo pulsé sur le jumeau à droite (.twin-hint). */
+   réservé au doublon EXACT — nom de fichier identique). Deux intensités
+   volontairement distinctes :
+   — marqueur gauche PERMANENT : discret (barre fine adoucie, LED sans
+     glow, contour à peine perceptible) — il vit sur la ligne en continu ;
+   — twin-hint DROITE TEMPORAIRE : marqué (contour 2px, fond teinté, LED
+     glow, pulsé lent) — il ne dure que le temps du focus. */
 
-.file-row.dup-fuzzy > td {
-  box-shadow: inset 3px 0 0 var(--amber);
+/* Barre uniquement sur le 1er td (comme le focus) — sur tous les td, on
+   peindrait une barre à chaque frontière de colonne. :not(.focused) : la
+   barre cyan du focus garde la priorité visuelle sur la ligne naviguée. */
+.file-row.dup-fuzzy:not(.focused) > td:first-child {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--amber) 75%, transparent);
 }
 .file-row.dup-fuzzy td.file::before {
   background: var(--led-amber);
-  box-shadow: 0 0 6px var(--led-amber);
 }
-.file-row.dup-fuzzy td.file { outline: 1px solid color-mix(in srgb, var(--amber) 55%, transparent); }
+.file-row.dup-fuzzy td.file {
+  outline: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+}
 
-.twin-hint > td {
-  outline: 1px solid var(--amber);
-  animation: twinPulse 1.6s ease-in-out infinite;
+tr.file-row.twin-hint {
+  outline: 2px solid var(--amber);
+  animation: twinPulse 2.4s ease-in-out infinite;
+}
+tr.file-row.twin-hint > td {
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+/* Variante dossier (jumeau replié : hint sur le conteneur rendu) */
+.twin-hint.directory {
+  outline: 2px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  animation: twinPulse 2.4s ease-in-out infinite;
 }
 .twin-hint td.file::before {
   background: var(--led-amber);
   box-shadow: 0 0 6px var(--led-amber);
 }
 @keyframes twinPulse {
-  0%, 100% { outline-color: color-mix(in srgb, var(--amber) 90%, transparent); }
-  50%      { outline-color: color-mix(in srgb, var(--amber) 30%, transparent); }
+  0%, 100% { outline-color: color-mix(in srgb, var(--amber) 85%, transparent); }
+  50%      { outline-color: color-mix(in srgb, var(--amber) 45%, transparent); }
 }
 
 /* Ligne d'état épars : segment homonymes (ambre) */

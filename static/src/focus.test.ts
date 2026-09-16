@@ -5,9 +5,9 @@ import {
   focusItemByPath,
   getFocusedItem,
   getItems,
+  initTwinHint,
   navigateColumn,
   navigateFocus,
-  initTwinHint,
   revalidateFocus,
   setActivePanel,
 } from './focus.js';
@@ -293,7 +293,7 @@ describe('twin-hint', () => {
 
   beforeEach(() => resetDup());
 
-  it("focus épars matché → .twin-hint sur le jumeau rendu à droite", () => {
+  it('focus épars matché → .twin-hint sur le jumeau rendu à droite', () => {
     state.dupMatches = new Map([
       [
         '/media/usb/song.mp3',
@@ -335,7 +335,38 @@ describe('twin-hint', () => {
     void matched;
   });
 
-  it("jumeau non rendu (dossier replié) → pas de .twin-hint, pas d'erreur", () => {
+  it('jumeau non rendu (dossier replié) → hint sur le dossier conteneur le plus profond rendu', () => {
+    state.dupMatches = new Map([
+      [
+        '/media/usb/song.mp3',
+        {
+          eparsFullPath: '/media/usb/song.mp3',
+          sourceFullPath: '/src/Techno/sub/deep.mp3',
+          eparsFilename: 'song.mp3',
+          sourceFilename: 'deep.mp3',
+          sim: 0.9,
+          delta: 0,
+          verdict: 'equal',
+        },
+      ],
+    ]);
+    // /src/Techno rendu, /src/Techno/sub absent du DOM (replié) — ajouter un
+    // dossier parent plus court pour vérifier que le PLUS PROFOND gagne.
+    const src = document.getElementById('source-container') as HTMLElement;
+    src.innerHTML =
+      '<div class="directory" data-focuspath="/src"></div>' +
+      '<div class="directory" data-focuspath="/src/Techno"></div>';
+    const container = document.getElementById('epars-container') as HTMLElement;
+    const row = container.querySelector('[data-focuspath="/media/usb/song.mp3"]') as HTMLElement;
+
+    focusItemByElement(container, row);
+
+    const hinted = document.querySelector('#source-container .twin-hint') as HTMLElement;
+    expect(hinted).not.toBeNull();
+    expect(hinted.dataset.focuspath).toBe('/src/Techno');
+  });
+
+  it("jumeau et conteneurs absents du DOM → pas de .twin-hint, pas d'erreur", () => {
     state.dupMatches = new Map([
       [
         '/media/usb/song.mp3',

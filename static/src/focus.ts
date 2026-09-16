@@ -27,7 +27,22 @@ function updateTwinHint(focusedEparsPath: string | null | undefined): void {
       return;
     }
   }
-  // jumeau non rendu (replié / filtré) → pas de hint
+  // Jumeau non rendu (dossier replié / filtré) → hint sur le dossier
+  // conteneur le plus profond RENDU. Les lignes .directory existent toujours
+  // dans le DOM (contrairement aux enfants des dossiers repliés) : c'est le
+  // seul moyen fiable de montrer « OÙ » dans l'état par défaut de l'arbre.
+  const twin = `${match.sourceFullPath}/`;
+  let bestDir: HTMLElement | null = null;
+  for (const dir of document.querySelectorAll('#source-container .directory')) {
+    const dp = (dir as HTMLElement).dataset.focuspath;
+    if (dp && twin.startsWith(`${dp}/`) && dp.length > (bestDir?.dataset.focuspath?.length ?? 0)) {
+      bestDir = dir as HTMLElement;
+    }
+  }
+  if (bestDir) {
+    bestDir.classList.add('twin-hint');
+    bestDir.scrollIntoView({ block: 'nearest' });
+  }
 }
 
 function onEparsFocusChanged(): void {

@@ -43,8 +43,8 @@ vi.mock('../utils.js', () => ({
 import { stopPlayer, togglePlay } from '../audio.js';
 import { focusItemByElement, setActivePanel } from '../focus.js';
 import { getRating } from '../ratings.js';
-import { showContextMenu } from '../ui.js';
 import { state } from '../state.js';
+import { showContextMenu } from '../ui.js';
 import { makeFileEl } from './fileRow.js';
 
 function makeRow(

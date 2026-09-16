@@ -429,6 +429,32 @@ describe('actions', () => {
 
   // ── Init ───────────────────────────────────────────────────────────
 
+  describe('initApp + dupMatches (EPIC-028)', () => {
+    it('peuple dupMatches depuis le cache /load (marqueurs ambre après reload)', async () => {
+      const status = document.createElement('div');
+      status.id = 'status-text';
+      document.body.appendChild(status);
+
+      api.mockResolvedValueOnce({ active: 0, configs: [{ name: 'd', source_data: '', epars_dirs: [] }] });
+      api.mockResolvedValueOnce({
+        source: { '/src': { 'song.mp3': { path: 'song.mp3', duration: 200, codec: 'MP3 320kbps' } } },
+        epars: {
+          '/epars': {
+            '01 - song (Radio Edit).flac': { path: '01 - song (Radio Edit).flac', duration: 200, codec: 'FLAC' },
+          },
+        },
+      });
+      api.mockResolvedValueOnce([]);
+
+      await initApp();
+
+      expect(state.dupMatches.size).toBe(1);
+      expect(state.dupMatches.get('/epars/01 - song (Radio Edit).flac')?.verdict).toBe('left-better');
+
+      status.remove();
+    });
+  });
+
   describe('initApp', () => {
     it('loads config, cache, journal on init', async () => {
       const status = document.createElement('div');
