@@ -45,25 +45,37 @@ class CommandRegistry {
     this.bindings.push(binding);
   }
 
+  /** Les conditions d'un binding matchent-elles le contexte ? Extrait pour
+   *  la matrice de caractérisation clavier (EPIC-031). */
+  bindingMatches(b: CommandBinding, ctx: CommandContext): boolean {
+    if (b.key !== ctx.key) return false;
+    if (b.ctrlKey !== undefined && b.ctrlKey !== ctx.ctrlKey) return false;
+    if (b.shiftKey !== undefined && b.shiftKey !== ctx.shiftKey) return false;
+    if (b.altKey !== undefined && b.altKey !== ctx.altKey) return false;
+    if (b.page !== undefined && b.page !== ctx.page) return false;
+    if (b.playlistMode !== undefined && b.playlistMode !== ctx.playlistMode) return false;
+    if (b.playlistFocus !== undefined && b.playlistFocus !== ctx.playlistFocus) return false;
+    if (b.activePanel !== undefined && b.activePanel !== ctx.activePanel) return false;
+    if (b.isInput !== undefined && b.isInput !== ctx.isInput) return false;
+    if (b.activeModal !== undefined && b.activeModal !== ctx.activeModal) return false;
+    if (b.isFilterInputFocused !== undefined && b.isFilterInputFocused !== ctx.isFilterInputFocused) return false;
+    if (b.isAudioPlaying !== undefined && b.isAudioPlaying !== ctx.isAudioPlaying) return false;
+    return true;
+  }
+
   dispatch(e: KeyboardEvent, ctx: CommandContext): boolean {
     for (const b of this.bindings) {
-      if (b.key !== e.key) continue;
-      if (b.ctrlKey !== undefined && b.ctrlKey !== ctx.ctrlKey) continue;
-      if (b.shiftKey !== undefined && b.shiftKey !== ctx.shiftKey) continue;
-      if (b.altKey !== undefined && b.altKey !== ctx.altKey) continue;
-      if (b.page !== undefined && b.page !== ctx.page) continue;
-      if (b.playlistMode !== undefined && b.playlistMode !== ctx.playlistMode) continue;
-      if (b.playlistFocus !== undefined && b.playlistFocus !== ctx.playlistFocus) continue;
-      if (b.activePanel !== undefined && b.activePanel !== ctx.activePanel) continue;
-      if (b.isInput !== undefined && b.isInput !== ctx.isInput) continue;
-      if (b.activeModal !== undefined && b.activeModal !== ctx.activeModal) continue;
-      if (b.isFilterInputFocused !== undefined && b.isFilterInputFocused !== ctx.isFilterInputFocused) continue;
-      if (b.isAudioPlaying !== undefined && b.isAudioPlaying !== ctx.isAudioPlaying) continue;
+      if (!this.bindingMatches(b, ctx)) continue;
       e.preventDefault();
       b.handler(ctx);
       return true;
     }
     return false;
+  }
+
+  /** Snapshot public des bindings (légende générée, matrice clavier). */
+  list(): readonly CommandBinding[] {
+    return [...this.bindings];
   }
 }
 
