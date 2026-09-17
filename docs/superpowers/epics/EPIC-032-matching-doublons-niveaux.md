@@ -1,6 +1,6 @@
 # EPIC-032 — Doublons à deux niveaux : exemplaires (même enregistrement) + versions (même morceau)
 
-> **Statut** : 🟢 Livrée (commit à venir)
+> **Statut** : 🟢 Livrée (`3faf049`)
 > **Créée** : 2026-09-17 · **Dernière mise à jour** : 2026-09-17
 > **Priorité** : Haute
 > **Docs liées** : EPIC-028 (détection v1, durée ±2 s + nom ≥ 0,88) · EPIC-029 (vue groupes v2)
@@ -80,7 +80,7 @@ Prototype validé sur les **vraies données** (`data/cache.json`, 6 522 fichiers
 
 | Commit | Message |
 |---|---|
-| _commit à venir_ | `feat(dups): matching à deux niveaux — versions d'un même morceau réunies par clé musicale, arbitrage/trash restreints aux mêmes enregistrements` |
+| `3faf049` | `feat(dups): EPIC-032 — matching à deux niveaux, versions d'un même morceau réunies, trash restreint aux mêmes enregistrements` |
 
 ## Décisions
 
