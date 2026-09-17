@@ -29,5 +29,11 @@
   },
   "dependencies": {
     "wavesurfer.js": "7.12.11"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "volta": {
+    "node": "22.23.2"
   }
 }
