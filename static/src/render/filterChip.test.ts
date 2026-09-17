@@ -216,7 +216,11 @@ describe('filterChip (persistant)', () => {
 
     hideFilterChip('sync-epars');
 
-    expect(document.querySelector<HTMLElement>('.filter-chip[data-scope="sync-epars"]')!.classList.contains('hidden')).toBe(true);
-    expect(document.querySelector<HTMLElement>('.filter-chip[data-scope="sync-source"]')!.classList.contains('hidden')).toBe(false);
+    expect(
+      document.querySelector<HTMLElement>('.filter-chip[data-scope="sync-epars"]')!.classList.contains('hidden'),
+    ).toBe(true);
+    expect(
+      document.querySelector<HTMLElement>('.filter-chip[data-scope="sync-source"]')!.classList.contains('hidden'),
+    ).toBe(false);
   });
 });

@@ -124,6 +124,8 @@ export async function showExportModal(): Promise<void> {
 registry.bind({
   key: 'Tab',
   playlistMode: true,
+  label: 'Basculer source ↔ sidebar',
+  group: 'playlist',
   handler: () => togglePlaylistFocus(),
 });
 
@@ -133,6 +135,8 @@ registry.bind({
   playlistMode: true,
   playlistFocus: 'source',
   isInput: false,
+  label: 'Ajouter / retirer le morceau',
+  group: 'playlist',
   handler: () => toggleTrackInPlaylist(),
 });
 
@@ -142,6 +146,8 @@ registry.bind({
   playlistMode: true,
   playlistFocus: 'sidebar',
   isInput: false,
+  label: 'Retirer la piste du sidebar',
+  group: 'playlist',
   handler: () => {
     const focused = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
     if (focused) {
@@ -159,6 +165,8 @@ registry.bind({
   playlistMode: true,
   playlistFocus: 'sidebar',
   isInput: false,
+  label: 'Retirer la piste du sidebar (Backspace)',
+  group: 'playlist',
   handler: () => {
     const focused = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
     if (focused) {
@@ -176,6 +184,8 @@ registry.bind({
   key: 's',
   ctrlKey: true,
   playlistMode: true,
+  label: 'Sauvegarder la playlist',
+  group: 'playlist',
   handler: () => saveCurrentPlaylist(),
 });
 
@@ -184,6 +194,8 @@ registry.bind({
   key: 'e',
   ctrlKey: true,
   playlistMode: true,
+  label: 'Exporter la playlist',
+  group: 'playlist',
   handler: () => showExportModal(),
 });
 
@@ -193,6 +205,8 @@ registry.bind({
   ctrlKey: true,
   playlistMode: true,
   playlistFocus: 'sidebar',
+  label: 'Monter la piste',
+  group: 'playlist',
   handler: () => {
     const name = getActivePlaylistName();
     const focused = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
@@ -215,6 +229,8 @@ registry.bind({
   ctrlKey: true,
   playlistMode: true,
   playlistFocus: 'sidebar',
+  label: 'Descendre la piste',
+  group: 'playlist',
   handler: () => {
     const name = getActivePlaylistName();
     const focused = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
@@ -235,6 +251,8 @@ registry.bind({
   key: 'ArrowDown',
   playlistMode: true,
   isInput: false,
+  label: 'Naviguer vers le bas (source / pistes)',
+  group: 'playlist',
   handler: () => {
     if (state.playlistFocus === 'source') {
       const container = document.getElementById('playlist-source-container');
@@ -261,6 +279,8 @@ registry.bind({
   key: 'ArrowUp',
   playlistMode: true,
   isInput: false,
+  label: 'Naviguer vers le haut (source / pistes)',
+  group: 'playlist',
   handler: () => {
     if (state.playlistFocus === 'source') {
       const container = document.getElementById('playlist-source-container');
@@ -289,6 +309,8 @@ registry.bind({
   playlistMode: true,
   playlistFocus: 'source',
   isInput: false,
+  label: 'Jouer le fichier / déplier le dossier',
+  group: 'playlist',
   handler: () => {
     const container = document.getElementById('playlist-source-container');
     if (!container) return;
@@ -306,6 +328,8 @@ registry.bind({
   key: 'ArrowLeft',
   playlistMode: true,
   isInput: false,
+  label: 'Colonne précédente / seek audio en lecture',
+  group: 'playlist',
   handler: () => {
     const container = document.getElementById('playlist-source-container');
     if (container && state.playlistFocus === 'source' && !document.querySelector('audio:not(.paused)')) {
@@ -318,6 +342,8 @@ registry.bind({
   key: 'ArrowRight',
   playlistMode: true,
   isInput: false,
+  label: 'Colonne suivante / seek audio en lecture',
+  group: 'playlist',
   handler: () => {
     const container = document.getElementById('playlist-source-container');
     if (container && state.playlistFocus === 'source' && !document.querySelector('audio:not(.paused)')) {

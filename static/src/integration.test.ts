@@ -1421,9 +1421,7 @@ describe('Playlist mode', () => {
 
     expect(ev.defaultPrevented).toBe(true);
     // P1 : le chip playlist-source existe et reçoit le focus
-    const input = document.querySelector<HTMLInputElement>(
-      '.filter-chip[data-scope="playlist-source"] .filter-input',
-    );
+    const input = document.querySelector<HTMLInputElement>('.filter-chip[data-scope="playlist-source"] .filter-input');
     expect(input).not.toBeNull();
     expect(document.activeElement).toBe(input);
   });
@@ -1435,9 +1433,7 @@ describe('Playlist mode', () => {
     await flush();
 
     expect(ev.defaultPrevented).toBe(true);
-    const input = document.querySelector<HTMLInputElement>(
-      '.filter-chip[data-scope="playlist-source"] .filter-input',
-    );
+    const input = document.querySelector<HTMLInputElement>('.filter-chip[data-scope="playlist-source"] .filter-input');
     expect(document.activeElement).toBe(input);
   });
 

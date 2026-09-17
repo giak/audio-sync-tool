@@ -33,12 +33,16 @@ function closeCurrentChip(): void {
 
 /** L'élément focusé est-il l'input d'un chip filtre ? */
 function filterInputFocused(): boolean {
-  return document.activeElement instanceof HTMLInputElement && document.activeElement.classList.contains('filter-input');
+  return (
+    document.activeElement instanceof HTMLInputElement && document.activeElement.classList.contains('filter-input')
+  );
 }
 
 registry.bind({
   key: 'F7',
   activeModal: null,
+  label: 'Afficher / masquer le filtre de la liste focusée',
+  group: 'sync',
   handler: () => {
     // Déjà dans l'input filtre → F7 referme (toggle)
     if (filterInputFocused()) {
@@ -51,5 +55,7 @@ registry.bind({
 
 registry.bind({
   key: '/',
+  label: 'Ouvrir le filtre (convention vim, même depuis un input)',
+  group: 'sync',
   handler: focusCurrentChip,
 });

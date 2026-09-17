@@ -1,6 +1,9 @@
 // ─── Orchestrator: keyboard router via CommandRegistry + toolbar + init ────
 
 import { buildContext, registry } from './commands/registry.js';
+// EPIC-031 P1 — menu.ts EN PREMIER : le menu ouvert isole le clavier (↑↓/Enter/
+// Échap-menu gagnent sur tout, pile menu → modale → filtre → dossier → audio).
+import './commands/menu.js';
 import './commands/navigation.js';
 import './commands/audio.js';
 import './commands/copy.js';
@@ -17,6 +20,7 @@ import { initTwinHint, setActivePanel } from './focus.js';
 import { createNewPlaylist, loadPlaylists, savePlaylist, setPendingTracks } from './playlist.js';
 import { openCueEditor } from './render/cueEditor.js';
 import { openDupsMode } from './render/dupsUI.js';
+import { renderKeyboardLegend } from './render/legend.js';
 import {
   clearJournal,
   renderJournal,
@@ -72,6 +76,10 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
   if (ctx.activeModal !== null && e.key !== 'Escape') return;
   registry.dispatch(e, ctx);
 });
+
+// Légende générée depuis les bindings labellisés (EPIC-031 P1) — tous les
+// modules commands/* sont importés ci-dessus, le registry est complet.
+renderKeyboardLegend();
 
 // ── Toolbar bindings ──────────────────────────────────────────────────────
 (document.getElementById('btn-config') as HTMLElement | null)!.onclick = () => openModal('config');
@@ -154,3 +162,9 @@ initConfigUI();
 setupRenderSubscriptions();
 initTwinHint(); // EPIC-028 P1 : halo ambre sur le jumeau rangé au focus épars
 initApp();
+
+// EPIC-031 P1 : Échap = pile de fermeture menu → modale → filtre → dossier →
+// audio ; Shift+F10 ouvre le menu contextuel ; ? ouvre la légende.
+document
+  .getElementById('status-text')
+  ?.append(' — Échap ferme (menu/modale/filtre/dossier/audio) · Shift+F10 menu · ? légende');

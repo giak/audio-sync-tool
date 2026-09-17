@@ -8,8 +8,11 @@ import { registry } from './registry.js';
 
 registry.bind({
   key: 'r',
+  page: 'sync',
   activeModal: null,
   isInput: false,
+  label: 'Remplacer l’homonyme rangé (l’ancien → _trash)',
+  group: 'sync',
   handler: () => {
     const el = document.querySelector('#epars-container .focused .file') as HTMLElement | null;
     const fullpath = el?.dataset.fullpath;

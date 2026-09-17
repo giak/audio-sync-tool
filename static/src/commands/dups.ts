@@ -11,6 +11,8 @@ registry.bind({
   page: 'dups',
   activeModal: null,
   isInput: false,
+  label: 'Naviguer vers le bas (paires de doublons)',
+  group: 'dups',
   handler: () => dupsMoveFocus(1),
 });
 
@@ -19,6 +21,8 @@ registry.bind({
   page: 'dups',
   activeModal: null,
   isInput: false,
+  label: 'Naviguer vers le haut (paires de doublons)',
+  group: 'dups',
   handler: () => dupsMoveFocus(-1),
 });
 
@@ -27,6 +31,8 @@ registry.bind({
   page: 'dups',
   activeModal: null,
   isInput: false,
+  label: 'Appliquer le plan de rangement (perdants → _trash)',
+  group: 'dups',
   handler: () => dupsApplyFocused(),
 });
 
@@ -35,5 +41,7 @@ registry.bind({
   page: 'dups',
   activeModal: null,
   isInput: false,
+  label: 'Revenir en page Sync',
+  group: 'dups',
   handler: () => closeDupsMode(),
 });

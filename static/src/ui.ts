@@ -175,6 +175,52 @@ interface ContextMenuItem {
 
 let _ctxMenuEl: HTMLElement | null = null;
 
+/** Menu contextuel actuellement affiché ? (EPIC-031 P1 — pilier 1 de la pile
+ *  Échap : le menu est un état DOM hors registry, le routeur doit le lire.) */
+export function isContextMenuOpen(): boolean {
+  return _ctxMenuEl !== null;
+}
+
+/** Éléments du menu contextuel ouvert, dans l'ordre d'affichage. */
+function ctxMenuItems(): HTMLElement[] {
+  if (!_ctxMenuEl) return [];
+  return Array.from(_ctxMenuEl.querySelectorAll<HTMLElement>('.ctx-item'));
+}
+
+/** Retourne l'index de l'item surligné, -1 si aucun. */
+function ctxMenuHighlightIndex(): number {
+  return ctxMenuItems().findIndex(el => el.classList.contains('ctx-highlight'));
+}
+
+/** Surligne l'item d'index idx (borné, -1 = aucun) — pas de focus DOM : le
+ *  focus reste sur l'élément sous-jacent (listes, arbre), la saisie du clavier
+ *  continue d'arriver au routeur registry. */
+function setCtxMenuHighlight(idx: number): void {
+  const items = ctxMenuItems();
+  if (items.length === 0) return;
+  const bounded = Math.max(0, Math.min(items.length - 1, idx));
+  items.forEach((el, i) => {
+    el.classList.toggle('ctx-highlight', i === bounded);
+  });
+}
+
+/** Déplace la surbrillance de `delta` items (↑↓), boucle aux extrémités. */
+export function moveContextMenuHighlight(delta: number): void {
+  const items = ctxMenuItems();
+  if (items.length === 0) return;
+  setCtxMenuHighlight((ctxMenuHighlightIndex() + delta + items.length) % items.length);
+}
+
+/** Active l'item surligné (Enter) ; sans surbrillance → premier item
+ *  (convention des menus natifs). Ferme le menu avant l'action. */
+export function activateContextMenuItem(): void {
+  const items = ctxMenuItems();
+  if (items.length === 0) return;
+  const idx = ctxMenuHighlightIndex();
+  const target = items[idx === -1 ? 0 : idx];
+  closeContextMenu();
+  target.click();
+}
 export function showContextMenu(x: number, y: number, items: ContextMenuItem[]): void {
   closeContextMenu();
   if (items.length === 0) return;

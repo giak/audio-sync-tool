@@ -171,42 +171,9 @@
         <div class="legend-row"><span class="badge-demo">≈ homonymes</span> Plusieurs entrées NML</div>
         <div class="legend-row"><span class="badge-demo">✕ non importé</span> Absent du NML</div>
       </div>
-      <div class="legend-section">
-        <h4>Raccourcis — page Sync</h4>
-        <div class="legend-row"><kbd>↑↓</kbd> Naviguer fichiers / dossiers</div>
-        <div class="legend-row"><kbd>←→</kbd> Navigation colonnes (Source Data)</div>
-        <div class="legend-row"><kbd>Tab</kbd> Basculer panneau gauche ↔ droite</div>
-        <div class="legend-row"><kbd>Entrée</kbd> Jouer / déplier dossier</div>
-        <div class="legend-row"><kbd>Espace</kbd> Sélectionner fichier (multi-copie)</div>
-        <div class="legend-row"><kbd>F5</kbd> Copier → dossier focusé</div>
-        <div class="legend-row"><kbd>R</kbd> / double-clic Remplacer l'homonyme (l'ancien rangé → _trash)</div>
-        <div class="legend-row"><kbd>N</kbd> Noter le fichier (0-100)</div>
-        <div class="legend-row"><kbd>F7</kbd> Afficher / masquer le filtre · <kbd>/</kbd> l'ouvrir</div>
-        <div class="legend-row"><kbd>Shift</kbd> + <kbd>←→</kbd> Seek audio ±20 s</div>
-        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / fermer le filtre / stopper audio</div>
-      </div>
-      <div class="legend-section">
-        <h4>Raccourcis — page Playlist</h4>
-        <div class="legend-row"><kbd>↑↓</kbd> Naviguer source / pistes</div>
-        <div class="legend-row"><kbd>Tab</kbd> Basculer source ↔ sidebar</div>
-        <div class="legend-row"><kbd>Entrée</kbd> Jouer le fichier</div>
-        <div class="legend-row"><kbd>Espace</kbd> Ajouter / retirer morceau</div>
-        <div class="legend-row"><kbd>N</kbd> Noter le morceau (0-100)</div>
-        <div class="legend-row"><kbd>F7</kbd> Afficher / masquer le filtre · <kbd>/</kbd> l'ouvrir</div>
-        <div class="legend-row"><kbd>Suppr</kbd> / <kbd>←</kbd> Retirer du sidebar</div>
-        <div class="legend-row"><kbd>Ctrl</kbd> + <kbd>S</kbd> Sauvegarder la playlist</div>
-        <div class="legend-row"><kbd>Ctrl</kbd> + <kbd>E</kbd> Exporter la playlist</div>
-        <div class="legend-row"><kbd>Ctrl</kbd> + <kbd>↑↓</kbd> Réorganiser les pistes</div>
-        <div class="legend-row"><kbd>Échap</kbd> Fermer modale / stopper audio</div>
-      </div>
-      <div class="legend-section">
-        <h4>Raccourcis — page ↔ Doublons</h4>
-        <div class="legend-row"><kbd>↔ Doublons</kbd> Ouvrir la vue (bouton de nav, en haut)</div>
-        <div class="legend-row"><kbd>↑↓</kbd> Naviguer les groupes de versions</div>
-        <div class="legend-row">Clic sur un exemplaire Le désigner gagnant (override de l'arbitrage qualité)</div>
-        <div class="legend-row"><kbd>R</kbd> / <kbd>✓ Appliquer</kbd> Plan du groupe : gagnant conservé, rangés perdants → _trash</div>
-        <div class="legend-row"><kbd>Échap</kbd> / <kbd>📦 Sync</kbd> Revenir à la page Sync</div>
-      </div>
+      <!-- Sections « Raccourcis » GÉNÉRÉES depuis les bindings labellisés
+           (render/legend.ts, EPIC-031 P1) — insérées après la section États.
+           Éditer les raccourcis dans commands/*.ts, jamais ici. -->
       <div class="legend-section">
         <h4>Raccourcis — Cue editor</h4>
         <div class="legend-row"><kbd>←→</kbd> Seek ±5 s</div>
@@ -225,8 +192,8 @@
       </div>
     </div>
     <div id="legend-footer">
-      <span><kbd>Échap</kbd> ne quitte plus la page Playlist — cliquer <kbd>📦 Sync</kbd> pour revenir</span>
-      <span>Vue <kbd>↔ Doublons</kbd> : le remplacement demande toujours une confirmation, l'ancien fichier part dans <code>_trash/&lt;date&gt;/</code> (jamais effacé)</span>
+      <span><kbd>Échap</kbd> ferme dans l'ordre : menu → modale → filtre → dossier déplié → stop audio (page Sync)</span>
+      <span>Menu contextuel au clavier : <kbd>Shift</kbd> + <kbd>F10</kbd> ouvre, <kbd>↑↓</kbd> + <kbd>Entrée</kbd> naviguent, <kbd>?</kbd> affiche cette légende</span>
       <span>Seek : <kbd>Shift + ←→</kbd> ±20s (Sync) · <kbd>←→</kbd> ±5s (cue editor)</span>
     </div>
   </div>

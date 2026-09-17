@@ -10,6 +10,8 @@ registry.bind({
   playlistFocus: 'sidebar',
   isInput: false,
   activeModal: null,
+  label: 'Noter le morceau (0-100)',
+  group: 'playlist',
   handler: () => startRatingEdit(),
 });
 
@@ -20,5 +22,8 @@ registry.bind({
   playlistFocus: 'source',
   isInput: false,
   activeModal: null,
+  page: 'playlist',
+  label: 'Noter le fichier source (0-100)',
+  group: 'playlist',
   handler: () => startSourceRatingEdit(),
 });
