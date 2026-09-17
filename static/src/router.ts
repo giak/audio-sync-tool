@@ -1,16 +1,18 @@
 // ─── Page router (EPIC-028) : une seule source de vérité pour la nav ──────
-// state.page = 'sync' | 'playlist' | 'dups' — layouts mutuellement exclusifs,
-// boutons .active exclusifs. playlistMode est dérivé (page === 'playlist').
-// Extrait de script.ts pour être importable par dupsUI.ts sans effets de bord.
+// state.page = 'sync' | 'playlist' | 'dups' | 'years' — layouts mutuellement
+// exclusifs, boutons .active exclusifs. playlistMode est dérivé
+// (page === 'playlist'). Extrait de script.ts pour être importable par les
+// modules de vue sans effets de bord.
 
 import { state } from './state.js';
 
-export type Page = 'sync' | 'playlist' | 'dups';
+export type Page = 'sync' | 'playlist' | 'dups' | 'years';
 
 const PAGE_LAYOUTS: Record<Page, string[]> = {
   sync: ['main-panels'],
   playlist: ['playlist-layout'],
   dups: ['dups-layout'],
+  years: ['years-layout'],
 };
 
 export function goPage(page: Page): void {

@@ -52,6 +52,7 @@
 | [EPIC-030](EPIC-030-filtre-rapide-universel.md) | Filtre rapide universel par liste : chips persistants au-dessus de chaque colonne (5 scopes mémorisés session), moteur partagé nom+année+codec, F7 toggle / `/` ouvre, Échap ferme — garde `isInput` structurelle | ⏸️ En pause (décision 2026-09-16, EPIC-031 prioritaire) — P0 Sync + chip playlist-source livrés (`850584a`, `b109c12`, `56431a9`), chips playlist-tracks/dups en attente | Haute | brainstorm session 2026-09-16 (design dans l'EPIC) |
 | [EPIC-032](EPIC-032-matching-doublons-niveaux.md) | Doublons à deux niveaux : mêmes enregistrements (arbitrage/trash, v1) + **versions d'un même morceau** réunies par clé artiste/titre (parsing + inclusion de tokens, durées libres — jamais trashées automatiquement) | 🟢 Livrée (2026-09-17, prototype validé sur vraies données : 5 Energy Flash réunis, ~600 clusters, garde trash alignée sur la durée du gagnant) | Haute | EPIC-028 (moteur v1) |
 | [EPIC-031](EPIC-031-clavier-centralise-grammaire-catalogue.md) | Clavier : matrice de caractérisation (touches × contextes — bindings morts/shadowés = rouge CI), légende **générée** depuis les bindings labellisés (test bijection), grammaire des touches (Échap = pile de fermeture explicite), ergonomie sync (Space→M déplacer, écoute en chaîne, `?` aide). KISS : pas de nouveau sous-système — visibilité plutôt qu'architecture | 🟡 P0+P1 livrés (P0 `b66d091`, P1 2026-09-17) — matrice 78 cellules + 5 invariants (IDX dérivés du registry : shuffle-proof), 4 findings corrigés (Échap modale>filtre, fallback menu remplacé par l'état `isContextMenuOpen`, Alt+←/→ vivants, clavier dups déshadowé), pile Échap complète menu→modale→filtre→dossier→audio (invariant 4), légende générée + bijection, `?` légende, menu contextuel clavier (Shift+F10, ↑↓+Enter) ; P2 ergonomie à venir | Haute | bugs clavier 2026-09-16 (bindings morts, touches volées) |
+| [EPIC-033](EPIC-033-enrichissement-annees-id3.md) | Enrichissement des années ID3 manquantes (57 % du corpus) : 4 passes sans clé — MusicBrainz (1ʳᵉ sortie, 1 req/s) → Deezer → Discogs → iTunes — consolidation **1 427 certaines / 642 à revue / 1 629 introuvables** (3 704 fichiers sans année), apply mutagen par vagues de confiance + vue « Années manquantes » (preview → confirmation, jamais écraser) | 🟢 Livré (T1–T7 : collectes, UI, tests ; apply de la vague élargie restant) | Haute | mémoires Mnemolite `9539d4ab` (MB/Deezer), `32392db0` (iTunes), `73940be6` (réconciliation), `7e1d5ef1` (chiffres définitifs) |
 
 ## État actuel du projet (2026-09-16)
 
@@ -67,7 +68,9 @@
 - **EPIC-030 P0 livré** (2026-09-16) : filtre rapide côté Sync — chips intégrés
   `sync-epars`/`sync-source`, moteur partagé nom+année+codec, palette flottante
   retirée, focus/caret conservés à travers les re-renders (`850584a` + `b109c12`).
-- Prochains chantiers : **EPIC-031 P2** (ergonomie sync : M déplacer, écoute en chaîne), reprise **EPIC-030 P1** (chips playlist-tracks + dups), **EPIC-022**
+- Prochains chantiers : **EPIC-033** (années ID3 : T1 persister le dry-run hors /tmp, puis
+  backend preview/apply mutagen et UI vagues), **EPIC-031 P2** (ergonomie sync : M déplacer,
+  écoute en chaîne), reprise **EPIC-030 P1** (chips playlist-tracks + dups), **EPIC-022**
   (backlog, priorité Haute — a11y + responsive cue editor) ; EPIC-028/029 :
   validation visuelle des vues Doublons sur données réelles.
 - Historique antérieur : voir ci-dessous (2026-08-08).

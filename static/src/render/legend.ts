@@ -11,10 +11,11 @@
 
 import { registry } from '../commands/registry.js';
 
-const GROUPS: Array<{ id: 'sync' | 'playlist' | 'dups' | 'global'; title: string }> = [
+const GROUPS: Array<{ id: 'sync' | 'playlist' | 'dups' | 'years' | 'global'; title: string }> = [
   { id: 'sync', title: 'Raccourcis — page Sync' },
   { id: 'playlist', title: 'Raccourcis — page Playlist' },
   { id: 'dups', title: 'Raccourcis — page Doublons' },
+  { id: 'years', title: 'Raccourcis — page Années' },
   { id: 'global', title: 'Transverse — audio, modales & menus' },
 ];
 

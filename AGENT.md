@@ -20,7 +20,7 @@ $  → scope/périmètre (était ⟐ dans source)
   ├── stack: Python3.12 + Flask3.x + VanillaJS + Vitest + pytest + mutagen
   ├── port: 8765
   ├── storage: JSON in data/ (config, journal, cache, playlists, beatgrids, extra_dirs)
-  ├── pages: sync | playlist | dups (routeur goPage)
+  ├── pages: sync | playlist | dups | years (routeur goPage)
   ├── trash: <source>/_trash/<date>/ — déplacer, JAMAIS effacer (EPIC-028)
   └── user: Christophe/Giak (music collection)
 
@@ -66,10 +66,10 @@ $  → scope/périmètre (était ⟐ dans source)
   test_app.py ← pytest (146 tests)
   test_nml.py ← pytest (29 tests)
   test_analysis.py ← pytest (15 tests)
-  templates/index.html ← pages Sync/Playlist/Doublons + modales
+  templates/index.html ← pages Sync/Playlist/Doublons/Années + modales
   static/ ← 45 modules ES (src/ + render/ + commands/) + 39 *.test.ts (927 tests)
     script.js ← orchestrateur (nav handlers, toolbar)
-    router.js ← goPage('sync'|'playlist'|'dups') — source de vérité nav
+    router.js ← goPage('sync'|'playlist'|'dups'|'years') — source de vérité nav
     state.js ← état global mutable (EventEmitter, Proxy)
     api.js ← fetch wrapper (retry réseau)
     audio.js ← togglePlay, seek, stop
@@ -98,7 +98,7 @@ $  → scope/périmètre (était ⟐ dans source)
   $journal: append-only, horodaté (statuses: copied, moved, moved-to-trash, deleted, scan)
 
   %ARCHITECTURE.pages
-    $router: state.page ('sync'|'playlist'|'dups') ← router.js goPage()
+    $router: state.page ('sync'|'playlist'|'dups'|'years') ← router.js goPage()
     #layouts et boutons nav mutuellement exclusifs (source de vérité unique)
     !playlistMode dérivé: playlistMode === (page === 'playlist')
 
@@ -106,12 +106,20 @@ $  → scope/périmètre (était ⟐ dans source)
     ~normal: Tab↔panels, ↑↓nav, ←→columns, Enter play, Space select, F5 copy, R replace-homonyme, F7// filter-chip, Escape pile: menu→modale→filtre→dossier→audio, ? légende, Shift+F10 menu clavier (EPIC-031)
     ~playlist: Tab↔source/sidebar, ↑↓nav, Space toggle, Enter play, F7 filter, Delete remove, Ctrl+S save, Ctrl+E export, Ctrl+↑↓ reorder
     ~dups: ↑↓ groupes, clic membre = override gagnant, R applique plan (perdants rangés → _trash), Échap → sync
+    ~years: ↑↓ cartes à revue, clic = choisir année / rejeter (session locale — l'écriture reste scripts/apply_years.py), Échap → sync (EPIC-033)
     !clavier scopé page via registry (ctx.page) + activeModal:null — modal dialogue bloque tout
     !menu contextuel ouvert = état registry (ctx.isContextMenuOpen, EPIC-031) — ↓↑Enter Échap isole comme une modale ; surbrillance .ctx-highlight, focus DOM intact
     !matrice clavier (commands/keyboardMatrix.test.ts) : 78 cellules + 5 invariants (mort/shadowé/Échap-pile/labels), IDX dérivés du registry — shuffle-proof
     !légende GÉNÉRÉE depuis les bindings labellisés (label/group, render/legend.ts, bijection legend.test.ts) — éditer les raccourcis dans commands/*.ts, JAMAIS dans index.html
     !F7// focusent le chip de la liste focusée (render/filterChip.js, input.filter-input)
     !filtres mémorisés par scope dans state.filters (sync-epars, sync-source ; P1: playlist-*, dups)
+
+  %ARCHITECTURE.years
+    $pipeline: scripts/collect_years.py (MusicBrainz→Deezer, 1 req/s) → collect_discogs.py (60 req/min, token data/discogs_token) → caches data/year_cache.jsonl + data/discogs_cache.jsonl (clé 'artiste\ttitre', reprise incrémentale, erreurs re-jetables)
+    $apply: scripts/apply_years.py — vague « found » seule (Discogs strict) ; re-vérification de l'année sur disque AVANT écriture (jamais écraser) ; journal additif data/year_apply_journal.jsonl = backup ; --undo idempotent ; dry-run par défaut
+    !frames par format: MP3 TYER(v2.3)/TDRC(v2.4) selon version du tag existant, FLAC DATE, WAV TDRC (chunk ID3), M4A ©day, .wma exclu (non relu par get_audio_meta)
+    !caches consommés tels quels — ne JAMAIS re-interroger les 4 593 clés collectées (3 h 30 MB) ; collecte = incrémentale uniquement
+    !Discogs « lax » + ambiguës = revue humaine (720 fichiers, voie UI à venir, EPIC-033) — jamais d'application automatique
 
 %SURGERY [12 règles numérotées S1-S12]
   !S1: NE JAMAIS modifier signature fonction

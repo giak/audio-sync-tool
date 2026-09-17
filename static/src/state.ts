@@ -130,7 +130,7 @@ interface AppState {
   replaceBusy: boolean;
   /** Page visible (routeur goPage) — source de vérité de la navigation.
    *  playlistMode est dérivé : playlistMode === (page === 'playlist'). */
-  page: 'sync' | 'playlist' | 'dups';
+  page: 'sync' | 'playlist' | 'dups' | 'years';
   focusListId: 'epars' | 'source' | 'playlist-source' | 'playlist-tracks';
   lastCueTrack: PlaylistTrackLite | null;
 }

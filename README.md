@@ -32,6 +32,10 @@ manquants, les copie en un clic vers le bon sous-dossier, et intègre un
 - **Collection Traktor** : lecture de la collection NML, match par FILESIZE (Ko,
   convention Traktor), ajout des pistes absentes au collection, export NML
   configurable.
+- **Enrichissement des années** (scripts hors interface, EPIC-033) : compléter
+  les tags sans année via MusicBrainz → Deezer → Discogs, par vagues de
+  confiance (certaines appliquées en lot, ambiguës réservées à une revue),
+  jamais écraser une année existante — voir « Enrichissement des années » plus bas.
 
 ## Installation
 
@@ -220,6 +224,45 @@ Les notes sont stockées globalement (pas par playlist) dans
 avec deux points d'entrée `startRatingEdit()` (sidebar tracks) et
 `startSourceRatingEdit()` (file-rows dans l'arbre source).
 
+## Enrichissement des années (EPIC-033)
+
+À l'origine : **3 704 / 6 522 fichiers sans année (57 %)**. Pipeline **gratuit et sans compte**
+(mise à part l'option Discogs) : MusicBrainz (1ʳᵉ sortie du morceau, 1 req/s) → Deezer (sans
+clé) → Discogs (60 req/min, token dans `data/discogs_token`, git-ignoré chmod 600).
+Les résultats sont **mis en cache** (`data/year_cache.jsonl`, `data/discogs_cache.jsonl` —
+git-ignorés) : les 4 593 clés déjà collectées ne sont **jamais re-interrogées** ; une relance
+de collecte ne traite que l'incrément (reprise JSONL, erreurs re-jetables).
+
+**État au 2026-09-17** : 1 172 années « certaines » (garde durée ±15 s + tokens ; Discogs
+strict uniquement) — 720 candidats à revue humaine (629 ambiguës + 91 Discogs « lax »,
+voie UI à venir) — 1 806 introuvables — 6 non parsables.
+
+```bash
+# Collecte (incrémentale — inutile tant qu'aucun nouveau fichier n'arrive)
+./venv/bin/python scripts/collect_years.py --report        # MB → Deezer (1 req/s)
+./venv/bin/python scripts/collect_discogs.py --report      # Discogs sur les 'none'
+
+# Application de la vague « certaines »
+./venv/bin/python scripts/apply_years.py            # dry-run : rien n'écrit
+./venv/bin/python scripts/apply_years.py --apply    # écrit les tags (~5-10 min)
+./venv/bin/python scripts/apply_years.py --report   # résumé du journal
+./venv/bin/python scripts/apply_years.py --undo     # annule (idempotent)
+```
+
+**Garanties** (testées dans `test_apply_years.py`, 10 tests) :
+
+- **Jamais écraser** : chaque fichier est re-vérifié sur disque juste avant écriture ;
+  une année apparue depuis le scan → fichier sauté.
+- **Journal = backup** : `data/year_apply_journal.jsonl` (append-only) enregistre chaque
+  écriture ; l'opération étant purement additive (fichiers sans année), `--undo` retire
+  exactement les frames posés et restaure l'état antérieur.
+- **Formats natifs, lisibles par l'app** : MP3 `TYER` (tag v2.3) / `TDRC` (v2.4) — version
+  du tag existant préservée, FLAC `DATE`, WAV `TDRC` (chunk ID3), M4A `©day` ; `.wma`
+  exclu (non relu par `get_audio_meta`).
+- Dry-run par défaut, `--limit N` pour un échantillon de contrôle.
+
+Historique complet, chiffres détaillés et suite (revue des ambiguïtés) : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md).
+
 ## Structure
 
 ```
@@ -243,7 +286,7 @@ audio-sync-tool/
 ├── data/                  # Config, journal, cache, playlists, ratings, beatgrids (gitignored)
 ├── docs/superpowers/      # Specs + plans d'implémentation
 │   └── epics/             # ⭐ Registre des EPICs (traçabilité de toute évolution)
-├── scripts/               # Outils Node (build, validation)
+├── scripts/               # Outils Node (build, validation) + enrichissement années (collect_years, collect_discogs, apply_years — Python)
 ├── .github/workflows/     # CI : typecheck + lint + vitest + pytest
 ├── biome.json             # Linter + formateur Biome
 ├── vitest.config.js       # Tests frontend + coverage

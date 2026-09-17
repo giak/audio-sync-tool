@@ -707,6 +707,40 @@ def test_serve_audio_path_traversal_blocked(client):
 
 # --- get_audio_meta edge cases ---
 
+def test_get_audio_meta_m4a_cday():
+    """Lit l'année du tag MP4 (c)day — des M4A taggés étaient comptés sans
+    année par le scan (découvert via le script apply_years, EPIC-033)."""
+    import app as app_module
+
+    class MockInfo:
+        length = 300.0
+
+    class MockMP4:
+        info = MockInfo()
+
+        class tags:
+            @staticmethod
+            def get(key):
+                return {'\xa9day': ['2019']}.get(key)
+
+    def mock_mutagen_file(path, easy=False):
+        if path.endswith('.m4a'):
+            return MockMP4()
+        return None
+
+    original_mutagen = app_module.MutagenFile
+    app_module.MutagenFile = mock_mutagen_file
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, 'test.m4a')
+            open(path, 'w').close()
+            year, duration, codec = get_audio_meta(path)
+            assert year == '2019'
+            assert duration == 300
+            assert codec == 'M4A'
+    finally:
+        app_module.MutagenFile = original_mutagen
+
 def test_get_audio_meta_corrupt_file():
     """Returns None for year/duration, extension codec for a corrupt file."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -2582,3 +2616,130 @@ def test_track_add_already_present_matches_in_kib(client, tmp_path, monkeypatch)
     tree = nml_mod.load_nml(str(nml_path))
     idx = nml_mod.build_index(tree)
     assert len(idx[('Carbon Decay - In The Warehouse.mp3', '5243')]) == 1  # pas de doublon
+
+
+# ── EPIC-033 T2/T4 : /years/preview (consolidation des caches d'années) ────
+
+def _write_years_caches(monkeypatch, tmp_path, ycache, dcache=None, icache=None):
+    """Écrit les caches d'années de test + monkeypatch des chemins app."""
+    def dump(name, rows):
+        p = tmp_path / name
+        p.write_text('\n'.join(json.dumps(r) for r in rows) + '\n')
+        return str(p)
+
+    monkeypatch.setattr('app.YEAR_CACHE_PATH', dump('year_cache.jsonl', ycache))
+    monkeypatch.setattr('app.DISCOGS_CACHE_PATH',
+                        dump('discogs_cache.jsonl', dcache or []))
+    monkeypatch.setattr('app.ITUNES_CACHE_PATH',
+                        dump('itunes_cache.jsonl', icache or []))
+
+
+def _years_cache_json(tmp_path, files):
+    """cache.json minimal : {'source': {base: {fn: meta}}}."""
+    base = str(tmp_path / 'music')
+    payload = {'source': {base: {}}, 'epars': {}}
+    for fn, meta in files.items():
+        m = {'path': fn}
+        m.update(meta)
+        payload['source'][base][fn] = m
+    return base, payload
+
+
+def test_years_preview_vagues_et_conservation(client, tmp_path, monkeypatch):
+    """Toutes les files sans année sont comptées (somme = files_no_year) et
+    réparties par vague ; les non-parsables restent introuvables."""
+    _write_years_caches(monkeypatch, tmp_path,
+                        ycache=[{'key': 'foo\tbar', 'status': 'found',
+                                 'year': '1990', 'source': 'musicbrainz'}],
+                        dcache=[{'key': 'baz\tqux', 'status': 'lax',
+                                 'year': '2009'}])
+    base, payload = _years_cache_json(tmp_path, {
+        'foo - bar.mp3': {},                     # found MB → certaines
+        'Baz - Qux (Remix).flac': {},            # lax Discogs → a_revue
+        'Inconnu - Quelqu_un.mp3': {},           # aucune conclusion → introuvable
+        '05. .mp3': {},                          # non parsable → introuvable
+    })
+    monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
+    (tmp_path / 'cache.json').write_text(json.dumps(payload))
+
+    rv = client.get('/years/preview')
+    assert rv.status_code == 200
+    d = rv.get_json()
+    assert d['files_no_year'] == 4
+    assert len(d['certaines']) == 1
+    assert d['certaines'][0]['year'] == '1990'
+    assert d['certaines'][0]['title'] == 'bar'
+    assert len(d['a_revue']) == 1
+    assert d['a_revue'][0]['year'] == '2009' and d['a_revue'][0]['status'] == 'lax'
+    assert d['introuvables'] == 2
+    assert len(d['certaines']) + len(d['a_revue']) + d['introuvables'] == d['files_no_year']
+
+
+def test_years_preview_priorite_entre_sources(client, tmp_path, monkeypatch):
+    """Priorité MB/Deezer > Discogs > iTunes ; un 'none' amont laisse passer
+    le pool suivant ; le consensus ≤ 2 ans ne vaut PAS pour Discogs."""
+    _write_years_caches(
+        monkeypatch, tmp_path,
+        ycache=[{'key': 'found mb\tx', 'status': 'found', 'year': '1990'},
+                {'key': 'relay\tx', 'status': 'none'}],
+        dcache=[{'key': 'found mb\tx', 'status': 'lax', 'year': '2001'},
+                {'key': 'serre dg\tx', 'status': 'ambiguous',
+                 'years': ['2002', '2003']}],
+        icache=[{'key': 'relay\tx', 'status': 'lax', 'year': '2024'}])
+    base, payload = _years_cache_json(tmp_path, {
+        'Found MB - x.mp3': {},
+        'Serre DG - x.mp3': {},   # ambigu Discogs fenêtre ≤ 2 : reste à revue
+        'Relay - x.mp3': {},      # MB none → iTunes lax
+    })
+    monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
+    (tmp_path / 'cache.json').write_text(json.dumps(payload))
+
+    d = client.get('/years/preview').get_json()
+    certain = {it['artist']: it['year'] for it in d['certaines']}
+    review = {it['artist'] for it in d['a_revue']}
+    assert certain == {'found mb': '1990'}   # pas le lax Discogs 2001
+    assert review == {'serre dg', 'relay'}   # ambigu Discogs : pas de consensus
+    relay = next(it for it in d['a_revue'] if it['artist'] == 'relay')
+    assert relay['year'] == '2024'  # iTunes revendique le none MB
+
+
+def test_years_preview_derniere_ligne_par_fichier(client, tmp_path, monkeypatch):
+    """Deux lignes même clé : la DERNIÈRE gagne (runs corrigés), pas la
+    première — et si la dernière est 'error', le fichier retombe introuvable
+    (pas de résultat périmé)."""
+    _write_years_caches(monkeypatch, tmp_path,
+                        ycache=[{'key': 'a\tb', 'status': 'ambiguous',
+                                 'years': ['1995', '2014']},
+                                {'key': 'a\tb', 'status': 'found',
+                                 'year': '2000'},
+                                {'key': 'c\td', 'status': 'found',
+                                 'year': '1999'},
+                                {'key': 'c\td', 'status': 'error',
+                                 'years': ['HTTPError: 503']}])
+    base, payload = _years_cache_json(tmp_path, {
+        'A - B.mp3': {}, 'C - D.mp3': {}})
+    monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
+    (tmp_path / 'cache.json').write_text(json.dumps(payload))
+
+    d = client.get('/years/preview').get_json()
+    # c/d : found puis error → l'error est ignorée, le found antérieur reste
+    # valide (sémantique commune collecteurs / report_years.last_valid).
+    assert sorted((it['artist'], it['year']) for it in d['certaines']) == \
+        [('a', '2000'), ('c', '1999')]
+    assert d['introuvables'] == 0
+
+
+def test_years_preview_ne_propose_pas_les_fichiers_annes(client, tmp_path, monkeypatch):
+    """Un fichier avec année au scan n'entre jamais dans la preview."""
+    _write_years_caches(monkeypatch, tmp_path,
+                        ycache=[{'key': 'c\td', 'status': 'found', 'year': '1990'}])
+    base, payload = _years_cache_json(tmp_path, {
+        'A - B.mp3': {'year': '1984'},   # déjà année → exclu
+        'C - D.mp3': {},                 # sans année → candidat
+    })
+    monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
+    (tmp_path / 'cache.json').write_text(json.dumps(payload))
+
+    d = client.get('/years/preview').get_json()
+    assert d['files_no_year'] == 1
+    assert len(d['certaines']) == 1

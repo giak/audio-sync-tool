@@ -12,7 +12,7 @@ export interface CommandContext {
   ctrlKey: boolean;
   altKey: boolean;
   isInput: boolean;
-  page: 'sync' | 'playlist' | 'dups';
+  page: 'sync' | 'playlist' | 'dups' | 'years';
   playlistMode: boolean;
   playlistFocus: 'source' | 'sidebar';
   activePanel: 'epars' | 'source';
@@ -32,14 +32,14 @@ export type CommandHandler = (ctx: CommandContext) => void;
 
 /** Section de la légende générée (EPIC-031 P1) — sync/playlist/dups dans la
  *  colonne « Raccourcis » de la modale, global dans la colonne transverse. */
-export type LegendGroup = 'sync' | 'playlist' | 'dups' | 'global';
+export type LegendGroup = 'sync' | 'playlist' | 'dups' | 'years' | 'global';
 
 export interface CommandBinding {
   key: string;
   ctrlKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
-  page?: 'sync' | 'playlist' | 'dups';
+  page?: 'sync' | 'playlist' | 'dups' | 'years';
   playlistMode?: boolean;
   playlistFocus?: 'source' | 'sidebar';
   activePanel?: 'epars' | 'source';

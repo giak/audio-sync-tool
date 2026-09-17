@@ -14,6 +14,7 @@
       <button id="page-sync" class="page-btn active">📦 Sync</button>
       <button id="page-playlist" class="page-btn">🎵 Playlist</button>
       <button id="page-dups" class="page-btn" title="Doublons épars ↔ rangés (homonymes probables)">↔ Doublons</button>
+      <button id="page-years" class="page-btn" title="Années manquantes : revue des candidats (EPIC-033)">📅 Années</button>
       <button id="page-cue" class="page-btn" disabled title="Ouvre un cue (ligne playlist ou [Cues])">🎛️ Cue Editor</button>
     </div>
     <div id="toolbar">
@@ -46,6 +47,15 @@
       <h2>↔ Doublons épars ↔ rangés <span id="dups-count"></span></h2>
       <p id="dups-hint">↑↓ naviguer · <b>R</b> remplacer (l'ancien rangé → _trash) · Échap/clic 📦 Sync pour revenir</p>
       <div id="dups-list"></div>
+    </div>
+  </div>
+
+  <!-- Années manquantes layout (EPIC-033 T2/T4, hidden by default) -->
+  <div id="years-layout" class="hidden">
+    <div id="years-main" class="panel">
+      <h2>📅 Années manquantes <span id="years-count"></span></h2>
+      <p id="years-hint">↑↓ naviguer · clic = choisir une année / rejeter (session) · l'écriture des tags reste <b>scripts/apply_years.py</b> · Échap/clic 📦 Sync pour revenir</p>
+      <div id="years-list"></div>
     </div>
   </div>
 

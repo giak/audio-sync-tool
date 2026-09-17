@@ -1,9 +1,11 @@
 import os
+import re
 import sys
 import json
 import math
 import shutil
 import multiprocessing
+import unicodedata
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, send_file, abort
@@ -138,6 +140,17 @@ def get_audio_meta(path):
                 if val:
                     year = str(val)[:4]
                     break
+        # MP4 / M4A : tag (c)day (découvert via EPIC-033 — des M4A taggés
+        # étaient comptés « sans année » par le scan)
+        if year is None and hasattr(audio, 'tags') and audio.tags:
+            try:
+                val = audio.tags.get('\xa9day')
+            except Exception:
+                val = None
+            if val:
+                if isinstance(val, (list, tuple)):
+                    val = val[0]
+                year = str(val)[:4]
         # FLAC / Vorbis
         if year is None and hasattr(audio, 'get'):
             for tag in ('DATE', 'YEAR'):
@@ -832,6 +845,177 @@ def ratings():
         return jsonify({'ok': True})
 
     return jsonify(load_json(RATINGS_PATH, {}))
+
+
+# ── Années manquantes (EPIC-033 T2/T4) — caches collectes MB/Deezer/Discogs/iTunes ──
+
+YEAR_CACHE_PATH = os.path.join(DATA_DIR, 'year_cache.jsonl')
+DISCOGS_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_cache.jsonl')
+ITUNES_CACHE_PATH = os.path.join(DATA_DIR, 'itunes_cache.jsonl')
+
+# Miroir de scripts/collect_years.py (NOISE + artist_title) : le parse des clés
+# de cache doit être identique au collecteur, sans importer scripts/.
+_YEARS_NOISE = re.compile(
+    r"\b(remix|remaster(ed)?|edit|version|mix|hq|hd|official|video|audio|lyrics?|"
+    r"feat\.?|ft\.?|radio|single|album|club|extended|original|instrumental|acoustic|"
+    r"live|vol\.?\s*\d*|volume)\b", re.I)
+
+
+def _years_strip_accents(s):
+    return ''.join(c for c in unicodedata.normalize('NFD', s)
+                   if unicodedata.category(c) != 'Mn')
+
+
+def _artist_title(fn):
+    """(artiste|None, titre) depuis un nom de fichier — miroir collect_years.py."""
+    n = _years_strip_accents(fn.rsplit('.', 1)[0].lower())
+    m = re.match(r'^\s*(?:\(\d{1,3}\))?\s*\[([^\]]+)\]\s*(.+)$', n)
+    if m:
+        return _YEARS_NOISE.sub(' ', m.group(1)).strip(), _YEARS_NOISE.sub(' ', m.group(2)).strip()
+    n = re.sub(r'^\s*\d{1,3}[\s._-]+', '', n)
+    n = re.sub(r'\([^)]*\)', ' ', n)
+    n = re.sub(r'\[[^\]]*\]', ' ', n)
+    n = n.replace('_', ' ')
+    if ' - ' in n:
+        segs = n.split(' - ')
+    elif n.count('-') == 1:
+        segs = re.split(r'\s*-\s*', n)
+    else:
+        segs = [n]
+    segs = [re.sub(r'[-_.]+', ' ', s) for s in segs]
+    segs = [re.sub(r'\s+', ' ', s).strip() for s in segs]
+    segs = [s for s in segs if s and not re.fullmatch(r'\d{1,3}', s)]
+    if not segs:
+        return None, None
+    if len(segs) >= 2:
+        a, t = segs[0], segs[-1]
+    else:
+        t = re.sub(r'^\d{1,4}\s+', '', segs[0])
+        m2 = re.match(r'^(.{2,40}?)\s+-\s+(.+)$', t)
+        if m2:
+            a, t = m2.group(1), m2.group(2)
+        else:
+            a = None
+    a = re.sub(r'^\d{1,4}\s+', '', a) if a else None
+    return (_YEARS_NOISE.sub(' ', a).strip() if a else None), _YEARS_NOISE.sub(' ', t).strip()
+
+
+def _load_years_caches():
+    """Clé → résultat consolidé (priorité MB/Deezer > Discogs > iTunes ; un
+    pool ne revendique une clé que si son statut est concluant — cf.
+    scripts/report_years.py). Lignes 'error' ignorées (re-jetables).
+    Dernière ligne gagnante PAR FICHIER (l'historique JSONL contient des lignes
+    périmées des runs corrigés), priorité ENTRE fichiers ensuite."""
+    pools = []
+    for path in (YEAR_CACHE_PATH, DISCOGS_CACHE_PATH, ITUNES_CACHE_PATH):
+        if not os.path.exists(path):
+            continue
+        pool = {}
+        try:
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        r = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if r.get('status') in ('none', 'error'):
+                        continue
+                    pool[r['key']] = r
+        except OSError:
+            continue
+        pools.append((os.path.basename(path), pool))
+    resolved = {}
+    for name, pool in pools:
+        for k, r in pool.items():
+            if k not in resolved:
+                resolved[k] = (name, r)
+    return resolved
+
+
+def _years_wave(pool, rec):
+    """Vague de confiance d'un résultat (règles scripts/apply_years.py) :
+    le consensus « fenêtre ≤ 2 ans » ne vaut que pour MB/Deezer (Discogs et
+    iTunes ambiguous ont d'autres sémantiques)."""
+    st = rec.get('status')
+    if st == 'found' and rec.get('year'):
+        return 'certaines'
+    if st == 'ambiguous':
+        try:
+            cands = [int(y) for y in rec.get('years') or [] if str(y).isdigit()]
+        except (TypeError, ValueError):
+            cands = []
+        if (pool == 'year_cache.jsonl' and len(cands) >= 2
+                and max(cands) - min(cands) <= 2):
+            return 'certaines'
+        return 'a_revue'
+    if st == 'lax':
+        return 'a_revue'
+    return 'introuvables'
+
+
+@app.route('/years/preview')
+def years_preview():
+    """Vue « Années manquantes » : résultats consolidés par clé avec leurs
+    fichiers (sans année au dernier scan, format géré), vagues séparées.
+    LECTURE SEULE : l'application reste faite par scripts/apply_years.py."""
+    resolved = _load_years_caches()
+    cache = load_json(CACHE_PATH, {})
+    by_wave = {'certaines': [], 'a_revue': []}
+    files_no_year = 0
+    n_introuvables = 0
+    for side in ('source', 'epars'):
+        for base, files in cache.get(side, {}).items():
+            for fn, meta in files.items():
+                if meta.get('year'):
+                    continue
+                files_no_year += 1
+                # Miroir collect_years.load_keys : clé parsée sur le NOM de
+                # fichier (meta.path peut contenir des sous-dossiers).
+                a, t = _artist_title(fn)
+                if not t:
+                    n_introuvables += 1   # non parsable : aucune piste
+                    continue
+                key = f'{a or ""}\t{t}'
+                entry = resolved.get(key)
+                if entry is None:
+                    # Introuvable : aucune source n'a conclu. Pas de liste
+                    # (aucune action possible) — un compteur honnête suffit.
+                    n_introuvables += 1
+                    continue
+                pool_name, rec = entry
+                # Consensus MB/Deezer : année effective = 1ʳᵉ sortie (min des
+                # candidates), même sémantique que scripts/apply_years.py.
+                rec = dict(rec)
+                if rec.get('status') == 'ambiguous' and rec.get('year') is None:
+                    try:
+                        cands = [int(y) for y in rec.get('years') or []
+                                 if str(y).isdigit()]
+                    except (TypeError, ValueError):
+                        cands = []
+                    if (pool_name == 'year_cache.jsonl' and len(cands) >= 2
+                            and max(cands) - min(cands) <= 2):
+                        rec['year'] = str(min(cands))
+                        rec['source'] = 'consensus'
+                item = {
+                    'path': os.path.join(base, meta['path']) if meta.get('path') else os.path.join(base, fn),
+                    'filename': fn,
+                    'artist': a,
+                    'title': t,
+                    'status': rec.get('status'),
+                    'source': rec.get('source'),
+                    'year': rec.get('year'),
+                    'years': rec.get('years') or [],
+                }
+                by_wave[_years_wave(pool_name, rec)].append(item)
+    return jsonify({
+        'files_no_year': files_no_year,
+        'certaines': by_wave['certaines'],
+        'a_revue': by_wave['a_revue'],
+        'introuvables': n_introuvables,
+    })
 
 
 # ── Playlist routes ────────────────────────────────────────────────────────

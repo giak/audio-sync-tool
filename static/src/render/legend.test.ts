@@ -96,7 +96,7 @@ describe('légende générée ↔ bindings labellisés (bijection, EPIC-031 P1)'
     renderKeyboardLegend();
     expect(count()).toBe(before);
     const sections = document.querySelectorAll('#legend-grid .legend-section');
-    expect(sections.length).toBe(6); // États + Cue editor (statiques) + 4 générées
+    expect(sections.length).toBe(7); // États + Cue editor (statiques) + 5 générées (incl. page Années)
   });
 
   it('les touches modifiées portent leurs modificateurs (Ctrl+S, Shift+F10, Alt+←)', () => {

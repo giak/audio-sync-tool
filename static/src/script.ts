@@ -13,6 +13,7 @@ import './commands/playlist.js';
 import './commands/modals.js';
 import './commands/replace.js';
 import './commands/dups.js';
+import './commands/years.js';
 import { createSourceFolder, initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
 import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
@@ -21,6 +22,7 @@ import { createNewPlaylist, loadPlaylists, savePlaylist, setPendingTracks } from
 import { openCueEditor } from './render/cueEditor.js';
 import { openDupsMode } from './render/dupsUI.js';
 import { renderKeyboardLegend } from './render/legend.js';
+import { openYearsMode } from './render/yearsUI.js';
 import {
   clearJournal,
   renderJournal,
@@ -117,6 +119,11 @@ renderKeyboardLegend();
 // Vue Doublons (EPIC-028 P2) : vraie 3e page via le routeur goPage.
 (document.getElementById('page-dups') as HTMLElement | null)?.addEventListener('click', () => {
   if (state.page !== 'dups') openDupsMode();
+});
+
+// Vue Années (EPIC-033 T2/T4) : 4e page — revue des candidats par source.
+(document.getElementById('page-years') as HTMLElement | null)?.addEventListener('click', () => {
+  if (state.page !== 'years') void openYearsMode();
 });
 
 // ── Panel click ───────────────────────────────────────────────────────────
