@@ -89,7 +89,7 @@ describe('dupsUI v2 (groupes)', () => {
   it('clicking a member overrides the winner', () => {
     openDupsMode();
     const songCard = [...document.querySelectorAll('.dup-card')].find(c =>
-      c.textContent?.includes('song (2 versions)'),
+      c.textContent?.includes('song (2 exemplaires)'),
     )!;
     const mp3Row = [...songCard.querySelectorAll('.dup-member')].find(r => r.textContent?.includes('song.mp3'))!;
     mp3Row.click();
@@ -102,7 +102,7 @@ describe('dupsUI v2 (groupes)', () => {
     const { applyGroupPlan: mockedApply } = await import('../actions.js');
     openDupsMode();
     const songCard = [...document.querySelectorAll('.dup-card')].find(c =>
-      c.textContent?.includes('song (2 versions)'),
+      c.textContent?.includes('song (2 exemplaires)'),
     )!;
     const mp3Row = [...songCard.querySelectorAll('.dup-member')].find(r => r.textContent?.includes('song.mp3'))!;
     mp3Row.click(); // override
@@ -125,7 +125,7 @@ describe('dupsUI v2 (groupes)', () => {
     await import('../actions.js');
     openDupsMode();
     const songCard = [...document.querySelectorAll('.dup-card')].find(c =>
-      c.textContent?.includes('song (2 versions)'),
+      c.textContent?.includes('song (2 exemplaires)'),
     )!;
     (songCard.querySelector('.dup-apply') as HTMLButtonElement).click();
     document.getElementById('dialog-confirm')!.click();

@@ -29,12 +29,18 @@ function esc(s: string): string {
 
 function memberLabel(m: VersionGroup['members'][number]): string {
   const side = m.side === 'epars' ? 'épars' : 'rangé';
-  return `${esc(m.filename)} <span class="dup-side">(${side} · ${esc(m.codec ?? 'codec ?')})</span>`;
+  const version = m.sameRecording
+    ? ''
+    : ' <span class="dup-version" title="Autre version du même morceau (durée différente) — jamais déplacée automatiquement">≡ version</span>';
+  return `${esc(m.filename)} <span class="dup-side">(${side} · ${esc(m.codec ?? 'codec ?')})</span>${version}`;
 }
 
 function groupTitle(g: VersionGroup): string {
   const base = g.winner.filename.replace(/\.[^.]+$/, '');
-  return `${base} (${g.members.length} versions)`;
+  const versions = g.members.filter(m => !m.sameRecording).length;
+  const parts = [`${g.members.length} exemplaires`];
+  if (versions > 0) parts.push(`${versions} versions`);
+  return `${base} (${parts.join(' · ')})`;
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -129,7 +135,11 @@ function applyGroup(overridePath: string | null): void {
   if (!g) return;
   confirmDialog(
     `Groupe « ${groupTitle(g)} » :\n` +
-      `le gagnant désigné est conservé, les autres exemplaires RANGÉS vont dans _trash (jamais effacés). Continuer ?`,
+      `le gagnant désigné est conservé, les autres exemplaires RANGÉS de même enregistrement vont dans _trash (jamais effacés).` +
+      (g.members.some(m => !m.sameRecording)
+        ? `\nLes autres VERSIONS du morceau (durées différentes) ne sont pas touchées.`
+        : '') +
+      ` Continuer ?`,
     () => {
       void applyGroupPlan(g, overridePath);
     },

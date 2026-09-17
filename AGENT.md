@@ -67,7 +67,7 @@ $  → scope/périmètre (était ⟐ dans source)
   test_nml.py ← pytest (29 tests)
   test_analysis.py ← pytest (15 tests)
   templates/index.html ← pages Sync/Playlist/Doublons + modales
-  static/ ← 42 modules ES (src/ + render/ + commands/) + 34 *.test.ts (811 tests)
+  static/ ← 45 modules ES (src/ + render/ + commands/) + 39 *.test.ts (927 tests)
     script.js ← orchestrateur (nav handlers, toolbar)
     router.js ← goPage('sync'|'playlist'|'dups') — source de vérité nav
     state.js ← état global mutable (EventEmitter, Proxy)
@@ -79,7 +79,8 @@ $  → scope/périmètre (était ⟐ dans source)
     actions.js ← config, scan, copy, move, replace, mkdir, groupes
     filterEngine.js ← matcher tokens filtrage (casse/accents, nom+année+codec)
     dupDetect.js ← matching doublons (durée ±2 s + nom fuzzy ≥ 0,88)
-    dupGroups.js ← groupes de versions (union-find) + arbitrage qualité
+    dupGroups.js ← groupes de versions (union-find 2 passes : enregistrements + morceaux via musicKey) + arbitrage qualité (cohorte du gagnant uniquement)
+    musicKey.js ← clé musicale (artiste, titre) depuis nom de fichier : parsing segments/pistes/parenthèses + tokens faibles
     playlist.js ← CRUD + drag-drop
     utils.js ← formatTime, formatDuration, computeStatus
   data/ ← NE PAS TOUCHER
@@ -102,10 +103,13 @@ $  → scope/périmètre (était ⟐ dans source)
     !playlistMode dérivé: playlistMode === (page === 'playlist')
 
   %ARCHITECTURE.keyboard
-    ~normal: Tab↔panels, ↑↓nav, ←→columns, Enter play, Space select, F5 copy, R replace-homonyme, F7// filter-chip, Escape exit-chip/close
+    ~normal: Tab↔panels, ↑↓nav, ←→columns, Enter play, Space select, F5 copy, R replace-homonyme, F7// filter-chip, Escape pile: menu→modale→filtre→dossier→audio, ? légende, Shift+F10 menu clavier (EPIC-031)
     ~playlist: Tab↔source/sidebar, ↑↓nav, Space toggle, Enter play, F7 filter, Delete remove, Ctrl+S save, Ctrl+E export, Ctrl+↑↓ reorder
     ~dups: ↑↓ groupes, clic membre = override gagnant, R applique plan (perdants rangés → _trash), Échap → sync
     !clavier scopé page via registry (ctx.page) + activeModal:null — modal dialogue bloque tout
+    !menu contextuel ouvert = état registry (ctx.isContextMenuOpen, EPIC-031) — ↓↑Enter Échap isole comme une modale ; surbrillance .ctx-highlight, focus DOM intact
+    !matrice clavier (commands/keyboardMatrix.test.ts) : 78 cellules + 5 invariants (mort/shadowé/Échap-pile/labels), IDX dérivés du registry — shuffle-proof
+    !légende GÉNÉRÉE depuis les bindings labellisés (label/group, render/legend.ts, bijection legend.test.ts) — éditer les raccourcis dans commands/*.ts, JAMAIS dans index.html
     !F7// focusent le chip de la liste focusée (render/filterChip.js, input.filter-input)
     !filtres mémorisés par scope dans state.filters (sync-epars, sync-source ; P1: playlist-*, dups)
 

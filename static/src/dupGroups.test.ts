@@ -38,9 +38,9 @@ describe('buildVersionGroups', () => {
     expect(g.length).toBe(1);
     expect(g[0].members.length).toBe(3);
     expect(g[0].winner.filename).toBe('track.flac');
-    // losers bruts = tous les non-gagnants ; applyGroupPlan ne déplace que
-    // les RANGÉS (les épars perdants restent en place, décision utilisateur).
-    expect(g[0].losers.map(l => l.side).sort()).toEqual(['epars', 'source']);
+    // losers (EPIC-032) = candidats trash : rangés de même enregistrement.
+    // L'épars radio edit non gagnant n'y figure plus — décision utilisateur.
+    expect(g[0].losers.map(l => l.side)).toEqual(['source']);
   });
 
   it('clusters two source files with no epars (dedup côté rangé)', () => {
@@ -84,6 +84,123 @@ describe('buildVersionGroups', () => {
       { '/s': { 'artist - title.mp3': { path: 'artist - title.mp3', duration: 200, codec: 'MP3 320kbps' } } },
     );
     expect(g.length).toBe(1);
+  });
+
+  it('reunites VERSIONS of one song across durations (EPIC-032, Energy Flash réel)', () => {
+    const g = buildVersionGroups(
+      {
+        '/e': {
+          '02 - Joey Beltram - Energy Flash.mp3': {
+            path: '02 - Joey Beltram - Energy Flash.mp3',
+            duration: 285,
+            codec: 'MP3 320kbps',
+          },
+          "joey beltram - classics - 01 - energy flash (from 'beltram vol1').mp3": {
+            path: "joey beltram - classics - 01 - energy flash (from 'beltram vol1').mp3",
+            duration: 351,
+            codec: 'MP3 320kbps',
+          },
+        },
+      },
+      {
+        '/s': {
+          '0602-joey_beltram-energy_flash.flac': {
+            path: '0602-joey_beltram-energy_flash.flac',
+            duration: 349,
+            codec: 'FLAC',
+          },
+          '101_joey_beltram_-_energy_flash.flac': {
+            path: '101_joey_beltram_-_energy_flash.flac',
+            duration: 353,
+            codec: 'FLAC',
+          },
+          '11_joey_beltram_-_energy_flash.flac': {
+            path: '11_joey_beltram_-_energy_flash.flac',
+            duration: 352,
+            codec: 'FLAC',
+          },
+        },
+      },
+    );
+    // Les 5 « Energy Flash » (durées 285→353, noms très différents) = UN groupe.
+    expect(g.length).toBe(1);
+    expect(g[0].members.length).toBe(5);
+    // Versions hors cohorte du gagnant (353) : la radio 285 s (Δ68) et le rip
+    // 349 s (Δ4) — le classics 351 s (Δ2) reste « même enregistrement ».
+    expect(g[0].members.filter(m => !m.sameRecording).length).toBe(2);
+  });
+
+  it('arbitrage limited to winning cohort : version jamais gagnante ni perdante', () => {
+    const g = buildVersionGroups(
+      {
+        '/e': {
+          // version radio (285 s) — même morceau, autre enregistrement
+          '02 - Joey Beltram - Energy Flash.mp3': {
+            path: '02 - Joey Beltram - Energy Flash.mp3',
+            duration: 285,
+            codec: 'FLAC',
+          },
+        },
+      },
+      {
+        '/s': {
+          // cohorte confirmée (v1) : jumeaux 352/353 — gagnant 353 (FLAC, durée max)
+          '11_joey_beltram_-_energy_flash.flac': {
+            path: '11_joey_beltram_-_energy_flash.flac',
+            duration: 352,
+            codec: 'FLAC',
+          },
+          '101_joey_beltram_-_energy_flash.flac': {
+            path: '101_joey_beltram_-_energy_flash.flac',
+            duration: 353,
+            codec: 'FLAC',
+          },
+        },
+      },
+    );
+    expect(g.length).toBe(1);
+    const members = g[0].members;
+    expect(members.length).toBe(3);
+    // Le gagnant vient de la cohorte confirmée {352, 353}, pas du FLAC radio isolé.
+    expect(g[0].winner.duration).toBe(353);
+    // Le perdant rangé est le jumeau de durée, PAS la version radio.
+    expect(g[0].losers.map(l => l.duration)).toEqual([352]);
+    // sameRecording : la version radio est exclue de la cohorte gagnante.
+    const radio = members.find(m => m.duration === 285)!;
+    expect(radio.sameRecording).toBe(false);
+    expect(g[0].winner.sameRecording).toBe(true);
+  });
+
+  it('does NOT cluster same title from different artists (garde artiste)', () => {
+    const g = buildVersionGroups(
+      {
+        '/e': {
+          '01 - alpha - energy flash.mp3': {
+            path: '01 - alpha - energy flash.mp3',
+            duration: 200,
+            codec: 'MP3 320kbps',
+          },
+        },
+      },
+      {
+        '/s': {
+          '02 - omega - energy flash.mp3': {
+            path: '02 - omega - energy flash.mp3',
+            duration: 200,
+            codec: 'MP3 320kbps',
+          },
+        },
+      },
+    );
+    expect(g).toEqual([]);
+  });
+
+  it('does NOT cluster weak-token-only names across durations (vinylrips a1/b1)', () => {
+    const g = buildVersionGroups(
+      { '/e': { 'a1 untitled.mp3': { path: 'a1 untitled.mp3', duration: 200, codec: 'MP3 320kbps' } } },
+      { '/s': { 'b1 untitled (mix).mp3': { path: 'b1 untitled (mix).mp3', duration: 500, codec: 'MP3 320kbps' } } },
+    );
+    expect(g).toEqual([]);
   });
 
   it('sorts groups deterministically by key', () => {

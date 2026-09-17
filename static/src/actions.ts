@@ -3,7 +3,7 @@
 import { api } from './api.js';
 import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
 import { detectDuplicates } from './dupDetect.js';
-import type { VersionGroup } from './dupGroups.js';
+import { durationCompatible, type VersionGroup } from './dupGroups.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
 import { loadRatings } from './ratings.js';
 import { getBatchCopy } from './render.js';
@@ -490,7 +490,12 @@ export async function applyGroupPlan(group: VersionGroup, overridePath: string |
     const alt = group.members.find(m => m.fullPath === overridePath);
     if (alt) finalWinner = alt;
   }
-  const losers = group.members.filter(m => m.fullPath !== finalWinner.fullPath && m.side === 'source');
+  // EPIC-032 : seuls les rangés de MÊME ENREGISTREMENT (durée ±2 s du gagnant
+  // désigné) vont au trash — les autres versions du morceau (mix, album,
+  // radio…) sont hors de portée de l'arbitrage, même en override.
+  const losers = group.members.filter(
+    m => m.fullPath !== finalWinner.fullPath && m.side === 'source' && durationCompatible(m, finalWinner),
+  );
   if (losers.length === 0) {
     if (statusText) statusText.textContent = 'Rien à déplacer : le gagnant choisi est déjà le seul exemplaire rangé.';
     return;
