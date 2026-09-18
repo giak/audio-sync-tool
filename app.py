@@ -852,6 +852,7 @@ def ratings():
 YEAR_CACHE_PATH = os.path.join(DATA_DIR, 'year_cache.jsonl')
 DISCOGS_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_cache.jsonl')
 ITUNES_CACHE_PATH = os.path.join(DATA_DIR, 'itunes_cache.jsonl')
+REFORM_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_reform_cache.jsonl')
 
 # Miroir de scripts/collect_years.py (NOISE + artist_title) : le parse des clés
 # de cache doit être identique au collecteur, sans importer scripts/.
@@ -901,13 +902,14 @@ def _artist_title(fn):
 
 
 def _load_years_caches():
-    """Clé → résultat consolidé (priorité MB/Deezer > Discogs > iTunes ; un
-    pool ne revendique une clé que si son statut est concluant — cf.
-    scripts/report_years.py). Lignes 'error' ignorées (re-jetables).
+    """Clé → résultat consolidé (priorité MB/Deezer > Discogs > iTunes >
+    reform ; un pool ne revendique une clé que si son statut est concluant —
+    cf. scripts/report_years.py). Lignes 'error' ignorées (re-jetables).
     Dernière ligne gagnante PAR FICHIER (l'historique JSONL contient des lignes
     périmées des runs corrigés), priorité ENTRE fichiers ensuite."""
     pools = []
-    for path in (YEAR_CACHE_PATH, DISCOGS_CACHE_PATH, ITUNES_CACHE_PATH):
+    for path in (YEAR_CACHE_PATH, DISCOGS_CACHE_PATH, ITUNES_CACHE_PATH,
+                 REFORM_CACHE_PATH):
         if not os.path.exists(path):
             continue
         pool = {}

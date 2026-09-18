@@ -115,11 +115,12 @@ $  → scope/périmètre (était ⟐ dans source)
     !filtres mémorisés par scope dans state.filters (sync-epars, sync-source ; P1: playlist-*, dups)
 
   %ARCHITECTURE.years
-    $pipeline: scripts/collect_years.py (MusicBrainz→Deezer, 1 req/s) → collect_discogs.py (60 req/min, token data/discogs_token) → caches data/year_cache.jsonl + data/discogs_cache.jsonl (clé 'artiste\ttitre', reprise incrémentale, erreurs re-jetables)
-    $apply: scripts/apply_years.py — vague « found » seule (Discogs strict) ; re-vérification de l'année sur disque AVANT écriture (jamais écraser) ; journal additif data/year_apply_journal.jsonl = backup ; --undo idempotent ; dry-run par défaut
+    $pipeline: scripts/collect_years.py (MusicBrainz→Deezer, 1 req/s) → collect_discogs.py (60 req/min, token data/discogs_token) → collect_itunes.py (sans clé, ~20 req/min) → collect_discogs_reform.py (Discogs requêtes REFORMULÉES : junk-artiste split au 1ᵉʳ marqueur de face, suffixes junk coupés) → caches data/year_cache.jsonl + discogs_cache.jsonl + itunes_cache.jsonl + discogs_reform_cache.jsonl (clé 'artiste\ttitre', reprise incrémentale, erreurs re-jetables)
+    $apply: scripts/apply_years.py — vague « found » seule ; re-vérification de l'année sur disque AVANT écriture (jamais écraser) ; journal additif data/year_apply_journal.jsonl = backup ; --undo idempotent ; dry-run par défaut
     !frames par format: MP3 TYER(v2.3)/TDRC(v2.4) selon version du tag existant, FLAC DATE, WAV TDRC (chunk ID3), M4A ©day, .wma exclu (non relu par get_audio_meta)
-    !caches consommés tels quels — ne JAMAIS re-interroger les 4 593 clés collectées (3 h 30 MB) ; collecte = incrémentale uniquement
-    !Discogs « lax » + ambiguës = revue humaine (720 fichiers, voie UI à venir, EPIC-033) — jamais d'application automatique
+    !caches consommés tels quels — ne JAMAIS re-interroger les clés collectées (3 h 30 MB) ; collecte = incrémentale uniquement
+    !consolidation: scripts/report_years.py + GET /years/preview (app.py) — priorité par clé MB/Deezer > Discogs > iTunes > reform (reform = dernier rideau, ne cible que des 'none' amont → zéro chevauchement) ; lignes 'error' re-jetables ; consensus fenêtre ≤ 2 ans = year_cache UNIQUEMENT
+    !Discogs « lax » + ambiguës + reform lax/ambigu = revue humaine (vue Années, ~years) — jamais d'application automatique
 
 %SURGERY [12 règles numérotées S1-S12]
   !S1: NE JAMAIS modifier signature fonction

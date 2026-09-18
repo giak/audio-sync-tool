@@ -7,8 +7,10 @@
 > **État actuel** : tout le code et les tests sont en **TypeScript** (`static/src/**/*.ts`).
 > Les tests vivent dans des fichiers `*.test.ts` co-localisés avec leur module
 > (ex. `static/src/integration.test.ts`, `static/src/commands/playlist.test.ts`),
-> plus `test_app.py` / `test_nml.py` pour le backend pytest. Il n'existe plus de
-> fichier de test `.js` — ne pas en créer.
+> plus les suites backend pytest (`test_app.py`, `test_nml.py`, `test_analysis.py`,
+> `test_apply_years.py`, `test_collect_itunes.py`, `test_collect_discogs_reform.py`,
+> `test_report_years.py` — 237 tests). Il n'existe plus de fichier de test `.js` —
+> ne pas en créer.
 
 ---
 

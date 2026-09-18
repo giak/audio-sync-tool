@@ -229,18 +229,27 @@ avec deux points d'entrée `startRatingEdit()` (sidebar tracks) et
 À l'origine : **3 704 / 6 522 fichiers sans année (57 %)**. Pipeline **gratuit et sans compte**
 (mise à part l'option Discogs) : MusicBrainz (1ʳᵉ sortie du morceau, 1 req/s) → Deezer (sans
 clé) → Discogs (60 req/min, token dans `data/discogs_token`, git-ignoré chmod 600).
-Les résultats sont **mis en cache** (`data/year_cache.jsonl`, `data/discogs_cache.jsonl` —
-git-ignorés) : les 4 593 clés déjà collectées ne sont **jamais re-interrogées** ; une relance
-de collecte ne traite que l'incrément (reprise JSONL, erreurs re-jetables).
+Les résultats sont **mis en cache** (`data/year_cache.jsonl`, `data/discogs_cache.jsonl`,
+`data/itunes_cache.jsonl`, `data/discogs_reform_cache.jsonl` — git-ignorés) : les clés déjà
+collectées ne sont **jamais re-interrogées** ; une relance de collecte ne traite que
+l'incrément (reprise JSONL, erreurs re-jetables).
 
-**État au 2026-09-17** : 1 172 années « certaines » (garde durée ±15 s + tokens ; Discogs
-strict uniquement) — 720 candidats à revue humaine (629 ambiguës + 91 Discogs « lax »,
-voie UI à venir) — 1 806 introuvables — 6 non parsables.
+**État au 2026-09-17** : vague « certaines » **appliquée** (1 349 écritures OK, journal =
+backup `data/year_apply_journal.jsonl`, `--undo` idempotent) — consolidation 5 sources :
+**1 442 certaines / 769 à revue / 1 487 introuvables** (+6 non parsables), dont l'appoint
+**reformulé** (`collect_discogs_reform.py`) : +15 certaines / +127 à revue sur les
+introuvables MB/Deezer/Discogs/iTunes — intégré au consolidé (`scripts/report_years.py` +
+`/years/preview`) en dernier rideau, sans chevauchement avec les sources amont.
 
 ```bash
 # Collecte (incrémentale — inutile tant qu'aucun nouveau fichier n'arrive)
 ./venv/bin/python scripts/collect_years.py --report        # MB → Deezer (1 req/s)
 ./venv/bin/python scripts/collect_discogs.py --report      # Discogs sur les 'none'
+./venv/bin/python scripts/collect_itunes.py --report       # iTunes sans clé (~20 req/min)
+./venv/bin/python scripts/collect_discogs_reform.py        # Discogs requêtes reformulées
+
+# Rapport consolidé (toutes sources, sans double comptage)
+./venv/bin/python scripts/report_years.py --files
 
 # Application de la vague « certaines »
 ./venv/bin/python scripts/apply_years.py            # dry-run : rien n'écrit

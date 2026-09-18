@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Rapport consolidé des vagues de confiance, toutes sources d'années confondues —
 LECTURE SEULE : fusionne year_cache.jsonl (MB/Deezer), discogs_cache.jsonl (strict
-+ lax + ambiguous) et itunes_cache.jsonl, sans double comptage.
++ lax + ambiguous), itunes_cache.jsonl et discogs_reform_cache.jsonl (passe
+Discogs sur REQUÊTES REFORMULÉES, ciblée par construction sur les introuvables),
+sans double comptage.
 
 Priorité par clé : MB/Deezer d'abord (première collecte, sémantique 1ʳᵉ sortie),
-puis Discogs, puis iTunes. La règle « consensus » d'apply_years.py est réutilisée
+puis Discogs, puis iTunes, puis reform en dernier rideau (sans chevauchement
+avec les pools amont : elle ne collecte que des clés 'none' partout). La règle
+« consensus » d'apply_years.py est réutilisée
 telle quelle : ambiguous avec toutes les candidates dans une fenêtre ≤ 2 ans →
 certaine (1ʳᵉ sortie = min).
 
@@ -30,6 +34,7 @@ CACHE = os.path.join(ROOT, 'data', 'cache.json')
 YEAR_CACHE = os.path.join(ROOT, 'data', 'year_cache.jsonl')
 DG_CACHE = os.path.join(ROOT, 'data', 'discogs_cache.jsonl')
 IT_CACHE = os.path.join(ROOT, 'data', 'itunes_cache.jsonl')
+RF_CACHE = os.path.join(ROOT, 'data', 'discogs_reform_cache.jsonl')
 
 
 def last_valid(recs):
@@ -43,12 +48,12 @@ def last_valid(recs):
 
 
 def load_all():
-    """Clé → (résultat, source_pool). Priorité MB/Deezer > Discogs > iTunes :
-    un pool ne revendique une clé que si son statut est concluant (found /
-    ambiguous / lax) — un 'none' laisse la place au pool suivant."""
+    """Clé → (résultat, source_pool). Priorité MB/Deezer > Discogs > iTunes >
+    reform : un pool ne revendique une clé que si son statut est concluant
+    (found / ambiguous / lax) — un 'none' laisse la place au pool suivant."""
     pool_of = {}
     for path, pool in ((YEAR_CACHE, 'year_cache'), (DG_CACHE, 'discogs'),
-                       (IT_CACHE, 'itunes')):
+                       (IT_CACHE, 'itunes'), (RF_CACHE, 'reform')):
         by_key = defaultdict(list)
         with open(path) as f:
             for line in f:
@@ -127,7 +132,7 @@ def main(files=False):
                     if rec.get('year'):
                         years[rec['year']] += 1
 
-    print('=== VAGUES CONSOLIDÉES (MB/Deezer → Discogs → iTunes) ===')
+    print('=== VAGUES CONSOLIDÉES (MB/Deezer → Discogs → iTunes → reform) ===')
     if not files:
         print('(par clés ; lancez --files pour le décompte par fichiers)')
     else:

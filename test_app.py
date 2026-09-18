@@ -2620,8 +2620,12 @@ def test_track_add_already_present_matches_in_kib(client, tmp_path, monkeypatch)
 
 # ── EPIC-033 T2/T4 : /years/preview (consolidation des caches d'années) ────
 
-def _write_years_caches(monkeypatch, tmp_path, ycache, dcache=None, icache=None):
-    """Écrit les caches d'années de test + monkeypatch des chemins app."""
+def _write_years_caches(monkeypatch, tmp_path, ycache, dcache=None, icache=None,
+                        rcache=None):
+    """Écrit les caches d'années de test + monkeypatch des chemins app.
+    Le cache reform est TOUJOURS redirigé (il existe sur disque, écrit en
+    direct par la passe en cours — sans redirection, les tests liraient
+    des données réelles)."""
     def dump(name, rows):
         p = tmp_path / name
         p.write_text('\n'.join(json.dumps(r) for r in rows) + '\n')
@@ -2632,6 +2636,8 @@ def _write_years_caches(monkeypatch, tmp_path, ycache, dcache=None, icache=None)
                         dump('discogs_cache.jsonl', dcache or []))
     monkeypatch.setattr('app.ITUNES_CACHE_PATH',
                         dump('itunes_cache.jsonl', icache or []))
+    monkeypatch.setattr('app.REFORM_CACHE_PATH',
+                        dump('discogs_reform_cache.jsonl', rcache or []))
 
 
 def _years_cache_json(tmp_path, files):
@@ -2743,3 +2749,41 @@ def test_years_preview_ne_propose_pas_les_fichiers_annes(client, tmp_path, monke
     d = client.get('/years/preview').get_json()
     assert d['files_no_year'] == 1
     assert len(d['certaines']) == 1
+
+
+def test_years_preview_pool_reform_dernier_rideau(client, tmp_path, monkeypatch):
+    """Le pool reform (Discogs requêtes reformulées) résout les clés 'none'
+    partout ailleurs : found → certaines, lax → a_revue — et ne masque
+    JAMAIS une conclusion amont (pas de chevauchement par construction)."""
+    _write_years_caches(
+        monkeypatch, tmp_path,
+        ycache=[{'key': 'digitalism\tzdarlight', 'status': 'none'},
+                {'key': 'lfo\tfreak', 'status': 'none'},
+                {'key': 'tim xavier\treal jack', 'status': 'found',
+                 'year': '2001', 'source': 'musicbrainz'}],
+        dcache=[{'key': 'digitalism\tzdarlight', 'status': 'none'},
+                {'key': 'lfo\tfreak', 'status': 'none'}],
+        icache=[{'key': 'digitalism\tzdarlight', 'status': 'none'}],
+        rcache=[{'key': 'digitalism\tzdarlight', 'status': 'found',
+                 'year': '2005', 'source': 'reform_discogs'},
+                {'key': 'lfo\tfreak', 'status': 'lax', 'year': '2009',
+                 'source': 'reform_discogs'},
+                {'key': 'tim xavier\treal jack', 'status': 'lax',
+                 'year': '2003', 'source': 'reform_discogs'}])
+    base, payload = _years_cache_json(tmp_path, {
+        'Digitalism - Zdarlight.mp3': {},   # reform found → certaines
+        'LFO - Freak.mp3': {},              # reform lax → a_revue
+        'Tim Xavier - Real Jack.mp3': {},   # MB found → PAS écrasé par reform
+    })
+    monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
+    (tmp_path / 'cache.json').write_text(json.dumps(payload))
+
+    d = client.get('/years/preview').get_json()
+    certain = {it['artist']: (it['year'], it['source'])
+               for it in d['certaines']}
+    review = {it['artist'] for it in d['a_revue']}
+    assert certain['digitalism'] == ('2005', 'reform_discogs')
+    assert certain['tim xavier'] == ('2001', 'musicbrainz')  # amont intact
+    assert review == {'lfo'}
+    assert len(d['certaines']) + len(d['a_revue']) + d['introuvables'] \
+        == d['files_no_year'] == 3

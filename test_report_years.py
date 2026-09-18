@@ -1,5 +1,5 @@
 """Tests de scripts/report_years.py (EPIC-033 T5) — consolidation des vagues
-sur les 4 sources, sans réseau : caches redirigés vers tmp_path."""
+sur les sources, sans réseau : caches redirigés vers tmp_path."""
 import json
 import os
 import sys
@@ -8,18 +8,24 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scr
 import report_years
 
 
-def write_caches(tmp_path, monkeypatch, ycache, dcache, icache, cache=None):
+def write_caches(tmp_path, monkeypatch, ycache, dcache, icache, rcache=None,
+                 cache=None):
     (tmp_path / 'year_cache.jsonl').write_text(
         '\n'.join(json.dumps(r) for r in ycache) + '\n')
     (tmp_path / 'discogs_cache.jsonl').write_text(
         '\n'.join(json.dumps(r) for r in dcache) + '\n')
     (tmp_path / 'itunes_cache.jsonl').write_text(
         '\n'.join(json.dumps(r) for r in icache) + '\n')
+    # Cache reform TOUJOURS redirigé (il existe sur disque : le run en cours
+    # l'écrit — un test non isolé lirait des données réelles).
+    (tmp_path / 'discogs_reform_cache.jsonl').write_text(
+        '\n'.join(json.dumps(r) for r in (rcache or [])) + '\n')
     if cache is not None:
         (tmp_path / 'cache.json').write_text(json.dumps(cache))
     monkeypatch.setattr(report_years, 'YEAR_CACHE', str(tmp_path / 'year_cache.jsonl'))
     monkeypatch.setattr(report_years, 'DG_CACHE', str(tmp_path / 'discogs_cache.jsonl'))
     monkeypatch.setattr(report_years, 'IT_CACHE', str(tmp_path / 'itunes_cache.jsonl'))
+    monkeypatch.setattr(report_years, 'RF_CACHE', str(tmp_path / 'discogs_reform_cache.jsonl'))
     monkeypatch.setattr(report_years, 'CACHE', str(tmp_path / 'cache.json'))
 
 
@@ -99,3 +105,38 @@ def test_cles_non_revendiquees_introuvables(monkeypatch, tmp_path):
     pool = report_years.load_all()
     assert report_years.wave_of(*pool['\tX']) == 'certaines'
     assert '\tY' not in pool   # jamais revendiquée → introuvable au comptage
+
+
+def test_reform_dernier_rideau_sans_chevauchement(monkeypatch, tmp_path):
+    # Le pool reform ne cible que des clés 'none' partout ailleurs (par
+    # construction du collecteur) : il ne doit jamais masquer un pool amont.
+    write_caches(tmp_path, monkeypatch,
+                 ycache=[rec('\tA', 'found', year='1990'),
+                         rec('\tC', 'none')],
+                 dcache=[rec('\tB', 'lax', year='2003'),
+                         rec('\tC', 'none')],
+                 icache=[rec('\tA', 'lax', year='2010'),
+                         rec('\tB', 'none'),
+                         rec('\tC', 'none')],
+                 rcache=[rec('\tA', 'found', year='1999'),   # masqué par MB
+                         rec('\tB', 'ambiguous', years=['2003', '2005']),
+                         rec('\tC', 'found', year='2007')])
+    pool = report_years.load_all()
+    assert pool['\tA'][0] == 'year_cache'   # reform ne l'écrase pas
+    assert pool['\tA'][1]['year'] == '1990'
+    assert pool['\tB'][0] == 'discogs'
+    assert pool['\tC'][0] == 'reform'       # résolue par le dernier rideau
+    assert report_years.wave_of(*pool['\tC']) == 'certaines'
+
+
+def test_reform_lax_et_ambiguous_en_a_revue(monkeypatch, tmp_path):
+    write_caches(tmp_path, monkeypatch,
+                 ycache=[rec('\tL', 'none'), rec('\tM', 'none')],
+                 dcache=[rec('\tL', 'none'), rec('\tM', 'none')],
+                 icache=[],
+                 rcache=[rec('\tL', 'lax', year='2009'),
+                         rec('\tM', 'ambiguous', years=['2003', '2005'])])
+    pool = report_years.load_all()
+    # Mêmes règles que Discogs/iTunes : pas de consensus automatique reform.
+    assert report_years.wave_of(*pool['\tL']) == 'a_revue'
+    assert report_years.wave_of(*pool['\tM']) == 'a_revue'
