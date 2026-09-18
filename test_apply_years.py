@@ -68,6 +68,7 @@ def env(tmp_path, monkeypatch):
     add('amb.wav')                      # ambigu → exclu
     add('lax.m4a')                      # discogs lax → exclu
     add('deja.mp3', year='2000')        # année au scan → pas candidat
+    add('large.wav')                    # ambigu spread large → candidat via --review
     add('inconnu.mp3')                  # aucune clé found → no_match
     (music / '05. .mp3').write_bytes(b'')  # non parsable
     cache['source'][str(music)]['05. .mp3'] = {'path': '05. .mp3'}
@@ -93,6 +94,15 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(apply_years, 'YEAR_CACHE', str(ycache))
     monkeypatch.setattr(apply_years, 'DG_CACHE', str(dcache))
     monkeypatch.setattr(apply_years, 'JOURNAL', str(tmp_path / 'journal.jsonl'))
+    # Caches iTunes + reform + choix de revue : vides par défaut (redirigés).
+    monkeypatch.setattr(apply_years, 'IT_CACHE', str(tmp_path / 'itunes_cache.jsonl'))
+    monkeypatch.setattr(apply_years, 'RF_CACHE', str(tmp_path / 'discogs_reform_cache.jsonl'))
+    monkeypatch.setattr(apply_years, 'RF2_CACHE', str(tmp_path / 'discogs_reform2_cache.jsonl'))
+    monkeypatch.setattr(apply_years, 'BP_CACHE', str(tmp_path / 'beatport_cache.jsonl'))
+    monkeypatch.setattr(apply_years, 'REVIEW_PATH', str(tmp_path / 'year_review.json'))
+    for p in ('itunes_cache.jsonl', 'discogs_reform_cache.jsonl',
+              'beatport_cache.jsonl'):
+        (tmp_path / p).write_text('')
     (tmp_path / 'cache.json').write_text(json.dumps(cache))
     return tmp_path, music
 
@@ -110,6 +120,77 @@ def test_load_found_fusionne_et_exclut(env):
     assert found['\tserre'] == ('2002', 'consensus')
     assert '\tlarge' not in found    # spread large = vraies sorties distinctes
     assert found.get('\tamb') is None  # spread large : vraies sorties distinctes
+
+
+def test_load_found_itunes_et_reform_dernier_rideau(env):
+    """Found itunes/reform complètent la vague certaine — JAMAIS en écrasant
+    un amont (même priorité que report_years.py)."""
+    tmp_path, _ = env
+    (tmp_path / 'itunes_cache.jsonl').write_text(
+        json.dumps({'key': '\tnouveau_it', 'status': 'found', 'year': '1985',
+                    'source': 'itunes'}) + '\n')
+    (tmp_path / 'discogs_reform_cache.jsonl').write_text('\n'.join(json.dumps(r) for r in [
+        {'key': '\tt3', 'status': 'found', 'year': '2099', 'source': 'reform_discogs'},
+        {'key': '\tnouveau', 'status': 'found', 'year': '1977', 'source': 'reform_discogs'},
+    ]) + '\n')
+    found = apply_years.load_found()
+    assert found['\tnouveau_it'] == ('1985', 'itunes')     # ajouté par itunes
+    # t4 déjà found MB dans le fixture → l'iTunes NE l'écrase pas
+    assert found['\tt4'] == ('1985', 'musicbrainz')
+    # t3 : discogs_strict déjà présent → le reform 2099 NE l'écrase pas
+    assert found['\tt3'] == ('2001', 'discogs_strict')
+    # clé nouvelle pour tous les pools → le reform l'ajoute
+    assert found['\tnouveau'] == ('1977', 'reform_strict')
+
+
+def test_load_found_reform2_dernier_rideau(env):
+    """Found reform2 (junk-artiste numérique) complète la vague certaine,
+    entre reform et Beatport — jamais en écrasant un amont."""
+    tmp_path, _ = env
+    (tmp_path / 'discogs_reform2_cache.jsonl').write_text('\n'.join(json.dumps(r) for r in [
+        {'key': '\tr2_nouveau', 'status': 'found', 'year': '2002',
+         'source': 'reform2_discogs_strict'},
+        {'key': '\tt3', 'status': 'found', 'year': '2099',
+         'source': 'reform2_discogs_strict'},
+    ]) + '\n')
+    found = apply_years.load_found()
+    assert found['\tr2_nouveau'] == ('2002', 'reform2_strict')  # ajouté
+    assert found['\tt3'] == ('2001', 'discogs_strict')  # amont pas écrasé
+
+
+def test_load_found_beatport_dernier_rideau(env):
+    tmp_path, _ = env
+    (tmp_path / 'beatport_cache.jsonl').write_text('\n'.join(json.dumps(r) for r in [
+        {'key': '\tbp_nouveau', 'status': 'found', 'year': '2008',
+         'source': 'beatport_strict'},
+        {'key': '\tt1', 'status': 'found', 'year': '1900',
+         'source': 'beatport_strict'},
+    ]) + '\n')
+    found = apply_years.load_found()
+    assert found['\tbp_nouveau'] == ('2008', 'beatport_strict')  # ajouté
+    assert found['\tt1'] == ('1990', 'musicbrainz')   # MB déjà là → pas écrasé
+
+
+def test_review_override_et_rejets_ignores(env):
+    """--review : un choix humain OVERRIDE la consolidation (source 'review') ;
+    les rejets (null) sont ignorés ; fichier corrompu → {} ; sans --review,
+    les choix sont ignorés."""
+    tmp_path, _ = env
+    (tmp_path / 'year_review.json').write_text(json.dumps({
+        '\tlarge': '2014',       # ambigu spread large → l'humain tranche
+        '\tnon\tpas': None,      # rejet : ignoré
+    }))
+    review = apply_years.load_review()
+    assert review == {'\tlarge': '2014'}
+    items, _ = apply_years.build_worklist(review=review)
+    large = next(i for i in items if os.path.basename(i['path']) == 'large.wav')
+    assert (large['year'], large['source']) == ('2014', 'review')
+    # Re-vérification : sans review, large.wav n'est PAS candidat
+    items0, _ = apply_years.build_worklist()
+    assert not any(os.path.basename(i['path']) == 'large.wav' for i in items0)
+    # Fichier corrompu → {}
+    (tmp_path / 'year_review.json').write_text('{oops')
+    assert apply_years.load_review() == {}
 
 
 def test_build_worklist_selection(env):

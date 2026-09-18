@@ -1,9 +1,9 @@
-// ─── Années page commands (EPIC-033 T2/T4) ─────────────────────────────────
-// Page scopée : ↑↓ naviguent les cartes à revue, Échap revient en Sync.
-// Les choix d'année/rejet se font au clic (pas de raccourci : décision à
-// éviter en aveugle), pattern dups.ts.
+// ─── Années page commands (EPIC-033 T2/T4, P2 : e = export) ─────────────
+// Page scopée : ↑↓ naviguent les cartes à revue, e exporte les choix,
+// Échap revient en Sync. Les choix d'année/rejet se font au clic (pas de
+// raccourci : décision à éviter en aveugle), pattern dups.ts.
 
-import { closeYearsMode, yearsMoveFocus } from '../render/yearsUI.js';
+import { closeYearsMode, exportChoices, yearsMoveFocus } from '../render/yearsUI.js';
 import { registry } from './registry.js';
 
 registry.bind({
@@ -24,6 +24,16 @@ registry.bind({
   label: 'Naviguer vers le haut (années à revue)',
   group: 'years',
   handler: () => yearsMoveFocus(-1),
+});
+
+registry.bind({
+  key: 'e',
+  page: 'years',
+  activeModal: null,
+  isInput: false,
+  label: 'Exporter les choix de revue (→ apply_years --review)',
+  group: 'years',
+  handler: () => exportChoices(),
 });
 
 registry.bind({

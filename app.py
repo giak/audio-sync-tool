@@ -853,6 +853,8 @@ YEAR_CACHE_PATH = os.path.join(DATA_DIR, 'year_cache.jsonl')
 DISCOGS_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_cache.jsonl')
 ITUNES_CACHE_PATH = os.path.join(DATA_DIR, 'itunes_cache.jsonl')
 REFORM_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_reform_cache.jsonl')
+REFORM2_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_reform2_cache.jsonl')
+BEATPORT_CACHE_PATH = os.path.join(DATA_DIR, 'beatport_cache.jsonl')
 
 # Miroir de scripts/collect_years.py (NOISE + artist_title) : le parse des clés
 # de cache doit être identique au collecteur, sans importer scripts/.
@@ -909,7 +911,7 @@ def _load_years_caches():
     périmées des runs corrigés), priorité ENTRE fichiers ensuite."""
     pools = []
     for path in (YEAR_CACHE_PATH, DISCOGS_CACHE_PATH, ITUNES_CACHE_PATH,
-                 REFORM_CACHE_PATH):
+                 REFORM_CACHE_PATH, REFORM2_CACHE_PATH, BEATPORT_CACHE_PATH):
         if not os.path.exists(path):
             continue
         pool = {}
@@ -1018,6 +1020,41 @@ def years_preview():
         'a_revue': by_wave['a_revue'],
         'introuvables': n_introuvables,
     })
+
+
+# ── EPIC-033 P2 : persistance des choix de revue (vue Années → apply_years --review)
+
+REVIEW_PATH = os.path.join(DATA_DIR, 'year_review.json')
+
+
+@app.route('/years/review', methods=['GET', 'POST'])
+def years_review():
+    """Choix de revue humaine de la vue Années — pattern ratings : fichier JSON
+    data/year_review.json, clé = 'artiste\ttitre', valeur = année 'YYYY' ou
+    null (rejet). GET lit, POST fusionne puis sauvegarde. Clé invalide (sans
+    tabulation) ou année non numérique → 400, rien n'est écrit.
+    Ne touche JAMAIS aux fichiers audio : l'application des tags reste
+    scripts/apply_years.py --review."""
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        choices = data.get('choices')
+        if not isinstance(choices, dict):
+            return jsonify({'ok': False, 'error': 'choices (dict) requis'}), 400
+        clean = {}
+        for k, v in choices.items():
+            if not isinstance(k, str) or '\t' not in k:
+                return jsonify({'ok': False, 'error': f'clé invalide : {k!r}'}), 400
+            if v is None:
+                clean[k] = None
+            elif isinstance(v, str) and v.isdigit() and len(v) == 4:
+                clean[k] = v
+            else:
+                return jsonify({'ok': False, 'error': f'valeur invalide pour {k!r}'}), 400
+        reviews = load_json(REVIEW_PATH, {})
+        reviews.update(clean)
+        save_json(REVIEW_PATH, reviews)
+        return jsonify({'ok': True, 'count': len(reviews)})
+    return jsonify(load_json(REVIEW_PATH, {}))
 
 
 # ── Playlist routes ────────────────────────────────────────────────────────

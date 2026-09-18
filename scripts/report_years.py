@@ -35,6 +35,8 @@ YEAR_CACHE = os.path.join(ROOT, 'data', 'year_cache.jsonl')
 DG_CACHE = os.path.join(ROOT, 'data', 'discogs_cache.jsonl')
 IT_CACHE = os.path.join(ROOT, 'data', 'itunes_cache.jsonl')
 RF_CACHE = os.path.join(ROOT, 'data', 'discogs_reform_cache.jsonl')
+RF2_CACHE = os.path.join(ROOT, 'data', 'discogs_reform2_cache.jsonl')
+BP_CACHE = os.path.join(ROOT, 'data', 'beatport_cache.jsonl')
 
 
 def last_valid(recs):
@@ -53,8 +55,11 @@ def load_all():
     (found / ambiguous / lax) — un 'none' laisse la place au pool suivant."""
     pool_of = {}
     for path, pool in ((YEAR_CACHE, 'year_cache'), (DG_CACHE, 'discogs'),
-                       (IT_CACHE, 'itunes'), (RF_CACHE, 'reform')):
+                       (IT_CACHE, 'itunes'), (RF_CACHE, 'reform'), (RF2_CACHE, 'reform2'),
+                       (BP_CACHE, 'beatport')):
         by_key = defaultdict(list)
+        if not os.path.exists(path):
+            continue           # passe jamais lancée (ex. beatport en pause)
         with open(path) as f:
             for line in f:
                 line = line.strip()

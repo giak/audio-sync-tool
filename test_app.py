@@ -2621,10 +2621,10 @@ def test_track_add_already_present_matches_in_kib(client, tmp_path, monkeypatch)
 # ── EPIC-033 T2/T4 : /years/preview (consolidation des caches d'années) ────
 
 def _write_years_caches(monkeypatch, tmp_path, ycache, dcache=None, icache=None,
-                        rcache=None):
+                        rcache=None, r2cache=None):
     """Écrit les caches d'années de test + monkeypatch des chemins app.
-    Le cache reform est TOUJOURS redirigé (il existe sur disque, écrit en
-    direct par la passe en cours — sans redirection, les tests liraient
+    Les caches reform/reform2 sont TOUJOURS redirigés (ils existent sur disque
+    ou existeront dès le premier run — sans redirection, les tests liraient
     des données réelles)."""
     def dump(name, rows):
         p = tmp_path / name
@@ -2638,6 +2638,8 @@ def _write_years_caches(monkeypatch, tmp_path, ycache, dcache=None, icache=None,
                         dump('itunes_cache.jsonl', icache or []))
     monkeypatch.setattr('app.REFORM_CACHE_PATH',
                         dump('discogs_reform_cache.jsonl', rcache or []))
+    monkeypatch.setattr('app.REFORM2_CACHE_PATH',
+                        dump('discogs_reform2_cache.jsonl', r2cache or []))
 
 
 def _years_cache_json(tmp_path, files):
@@ -2787,3 +2789,89 @@ def test_years_preview_pool_reform_dernier_rideau(client, tmp_path, monkeypatch)
     assert review == {'lfo'}
     assert len(d['certaines']) + len(d['a_revue']) + d['introuvables'] \
         == d['files_no_year'] == 3
+
+
+def test_years_preview_pool_reform2_junk_artiste(client, tmp_path, monkeypatch):
+    """Pool reform2 (junk-artiste numérique : '#07 enzyme x', séries 2cb…) :
+    mêmes règles que reform — found → certaines, lax → a_revue, jamais
+    d'écrasement amont."""
+    _write_years_caches(
+        monkeypatch, tmp_path,
+        ycache=[{'key': '#07 enzyme x\topbokken', 'status': 'none'},
+                {'key': 'enzyme x\tthe siren', 'status': 'none'},
+                {'key': 'tim xavier\treal jack', 'status': 'found',
+                 'year': '2001', 'source': 'musicbrainz'}],
+        dcache=[{'key': '#07 enzyme x\topbokken', 'status': 'none'},
+                {'key': 'enzyme x\tthe siren', 'status': 'none'}],
+        rcache=[{'key': 'enzyme x\tthe siren', 'status': 'none'}],
+        r2cache=[{'key': '#07 enzyme x\topbokken', 'status': 'found',
+                  'year': '2002', 'source': 'reform2_discogs_strict'},
+                 {'key': 'enzyme x\tthe siren', 'status': 'lax',
+                  'year': '2001', 'source': 'reform2_discogs'},
+                 {'key': 'tim xavier\treal jack', 'status': 'found',
+                  'year': '2099', 'source': 'reform2_discogs_strict'}])
+    base, payload = _years_cache_json(tmp_path, {
+        '#07 enzyme x - Opbokken.mp3': {},   # reform2 found → certaines
+        'Enzyme X - The Siren.mp3': {},      # reform2 lax → a_revue
+        'Tim Xavier - Real Jack.mp3': {},    # MB found → PAS écrasé par v2
+    })
+    monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
+    (tmp_path / 'cache.json').write_text(json.dumps(payload))
+
+    d = client.get('/years/preview').get_json()
+    certain = {it['artist']: (it['year'], it['source'])
+               for it in d['certaines']}
+    review = {it['artist'] for it in d['a_revue']}
+    assert certain['#07 enzyme x'] == ('2002', 'reform2_discogs_strict')
+    assert certain['tim xavier'] == ('2001', 'musicbrainz')  # amont intact
+    assert review == {'enzyme x'}
+    assert len(d['certaines']) + len(d['a_revue']) + d['introuvables'] \
+        == d['files_no_year'] == 3
+
+
+def test_years_review_get_post_fusion_et_validation(client, tmp_path, monkeypatch):
+    """GET lit, POST fusionne sans écraser les autres clés ; clé sans
+    tabulation ou année non conforme → 400 et RIEN n'est écrit."""
+    review_path = tmp_path / 'year_review.json'
+    monkeypatch.setattr('app.REVIEW_PATH', str(review_path))
+
+    rv = client.get('/years/review')
+    assert rv.status_code == 200 and rv.get_json() == {}
+
+    rv = client.post('/years/review', json={
+        'choices': {'amb\tx': '2002', 'lax\ty': None}})
+    assert rv.status_code == 200 and rv.get_json()['ok'] is True
+    assert json.loads(review_path.read_text()) == {'amb\tx': '2002', 'lax\ty': None}
+
+    # Fusion : une seconde POST ne perd pas la première clé
+    rv = client.post('/years/review', json={'choices': {'autre\tz': '1999'}})
+    assert rv.status_code == 200
+    assert json.loads(review_path.read_text()) == {
+        'amb\tx': '2002', 'lax\ty': None, 'autre\tz': '1999'}
+
+    # Rejets : null acceptés et persistés
+    rv = client.post('/years/review', json={'choices': {'non\tn': None}})
+    assert rv.status_code == 200
+
+    # Clé invalide (sans tabulation) → 400, fichier intact
+    before = review_path.read_text()
+    rv = client.post('/years/review', json={'choices': {'sans-tab': '2002'}})
+    assert rv.status_code == 400
+    assert review_path.read_text() == before
+
+    # Année invalide → 400
+    rv = client.post('/years/review', json={'choices': {'a\tb': '2OO5'}})
+    assert rv.status_code == 400
+
+    # Payload absurde → 400
+    rv = client.post('/years/review', json={'choices': 'pas-un-dict'})
+    assert rv.status_code == 400
+
+
+def test_years_review_fichier_corrompu_revanire_vide(client, tmp_path, monkeypatch):
+    """year_review.json corrompu : GET rend {} (load_json éprouvé), pas de 500."""
+    review_path = tmp_path / 'year_review.json'
+    review_path.write_text('{corrompu')
+    monkeypatch.setattr('app.REVIEW_PATH', str(review_path))
+    rv = client.get('/years/review')
+    assert rv.status_code == 200 and rv.get_json() == {}

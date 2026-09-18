@@ -230,16 +230,31 @@ avec deux points d'entrée `startRatingEdit()` (sidebar tracks) et
 (mise à part l'option Discogs) : MusicBrainz (1ʳᵉ sortie du morceau, 1 req/s) → Deezer (sans
 clé) → Discogs (60 req/min, token dans `data/discogs_token`, git-ignoré chmod 600).
 Les résultats sont **mis en cache** (`data/year_cache.jsonl`, `data/discogs_cache.jsonl`,
-`data/itunes_cache.jsonl`, `data/discogs_reform_cache.jsonl` — git-ignorés) : les clés déjà
+`data/itunes_cache.jsonl`, `data/discogs_reform_cache.jsonl`, `data/discogs_reform2_cache.jsonl`
+— git-ignorés) : les clés déjà
 collectées ne sont **jamais re-interrogées** ; une relance de collecte ne traite que
 l'incrément (reprise JSONL, erreurs re-jetables).
 
-**État au 2026-09-17** : vague « certaines » **appliquée** (1 349 écritures OK, journal =
-backup `data/year_apply_journal.jsonl`, `--undo` idempotent) — consolidation 5 sources :
-**1 442 certaines / 769 à revue / 1 487 introuvables** (+6 non parsables), dont l'appoint
-**reformulé** (`collect_discogs_reform.py`) : +15 certaines / +127 à revue sur les
-introuvables MB/Deezer/Discogs/iTunes — intégré au consolidé (`scripts/report_years.py` +
-`/years/preview`) en dernier rideau, sans chevauchement avec les sources amont.
+**État au 2026-09-18** : vague « certaines » **appliquée** (1 349 écritures OK, journal =
+backup `data/year_apply_journal.jsonl`, `--undo` idempotent) — consolidation 6 sources :
+**1 443 certaines / 781 à revue / 1 474 introuvables** (+6 non parsables), dont les
+apports **reformulé** (`collect_discogs_reform.py` : +15 certaines / +127 à revue) et
+**junk-artiste numérique** (`collect_discogs_reform2.py` : +1 certaine / +12 à revue sur
+les 556 artistes numériques/symboles — `#07 enzyme x`, `204`, `2006 prodigy`) — intégré au
+consolidé (`scripts/report_years.py` + `/years/preview`) en dernier rideau, sans
+chevauchement avec les sources amont.
+
+**Revue industrialisée (P2)** : dans la vue Années, choisissez/rejetez puis **e** (ou bouton
+💾) → les choix sont persistés (`data/year_review.json`) ; `apply_years.py --review --apply`
+les applique par lot — un choix humain OVERRIDE toujours la consolidation, journal + `--undo`
+inchangés.
+
+**Passe Beatport** (techno digitale 2004+, complément des sources vinyle) : Beatport
+n'ouvre pas la création d'apps OAuth au public — méthode éprouvée (celle de beets-beatport4) :
+ouvrir https://api.beatport.com/v4/docs/, onglet Réseau (F12), « Login with Beatport », puis
+copier la réponse JSON du POST `/v4/auth/o/token/` dans `data/beatport_token.json`
+(chmod 600, git-ignoré). Le token expire (~1 h) : recommencer la copie quand le script le
+demande.
 
 ```bash
 # Collecte (incrémentale — inutile tant qu'aucun nouveau fichier n'arrive)
@@ -247,6 +262,8 @@ introuvables MB/Deezer/Discogs/iTunes — intégré au consolidé (`scripts/repo
 ./venv/bin/python scripts/collect_discogs.py --report      # Discogs sur les 'none'
 ./venv/bin/python scripts/collect_itunes.py --report       # iTunes sans clé (~20 req/min)
 ./venv/bin/python scripts/collect_discogs_reform.py        # Discogs requêtes reformulées
+./venv/bin/python scripts/collect_discogs_reform2.py --go  # junk-artiste numérique (aperçu sans --go)
+./venv/bin/python scripts/collect_beatport.py              # Beatport (EN PAUSE — token portail requis)
 
 # Rapport consolidé (toutes sources, sans double comptage)
 ./venv/bin/python scripts/report_years.py --files
@@ -254,6 +271,7 @@ introuvables MB/Deezer/Discogs/iTunes — intégré au consolidé (`scripts/repo
 # Application de la vague « certaines »
 ./venv/bin/python scripts/apply_years.py            # dry-run : rien n'écrit
 ./venv/bin/python scripts/apply_years.py --apply    # écrit les tags (~5-10 min)
+./venv/bin/python scripts/apply_years.py --review   # + choix humains de la vue Années
 ./venv/bin/python scripts/apply_years.py --report   # résumé du journal
 ./venv/bin/python scripts/apply_years.py --undo     # annule (idempotent)
 ```

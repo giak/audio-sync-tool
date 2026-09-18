@@ -402,6 +402,17 @@ tr.file-row.twin-hint > td {
 .years-btn:hover { border-color: var(--amber); color: var(--amber); }
 .years-btn.chosen { border-color: var(--led-green); color: var(--led-green); }
 .years-btn.years-reject:hover { border-color: #e5534b; color: #e5534b; }
+.years-export { margin-left: 10px; font-weight: 600; }
+.years-export:hover { border-color: var(--led-green); color: var(--led-green); }
+.years-export-input {
+  flex: 1; min-width: 0;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border-panel); border-radius: 4px;
+  padding: 3px 8px; margin-left: 10px;
+  font-size: 12px; font-family: inherit;
+}
+.years-export-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+.years-export-input:focus { outline: none; border-color: var(--border-active); }
 
 /* Ligne d'état épars : segment homonymes (ambre) */
 .s-dupfuzzy { color: var(--amber); }

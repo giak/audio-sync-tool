@@ -3,7 +3,11 @@
 Dry-run par défaut : aucun tag n'est écrit sans --apply.
 
 Sources : data/year_cache.jsonl (MB/Deezer) + data/discogs_cache.jsonl
-(seul le statut strict de Discogs est certain ; « lax » exige une revue humaine).
+(seul le statut strict de Discogs est certain ; « lax » exige une revue humaine)
++ itunes_cache.jsonl / discogs_reform_cache.jsonl (found uniquement — même
+consolidation que report_years.py : priorité MB/Deezer > Discogs > iTunes > reform).
+Les choix humains de la vue Années (data/year_review.json, option --review)
+OVERRIDE la consolidation : une année choisie à la main bat toute source automatique.
 Règle de consensus : une clé « ambiguous » dont toutes les candidates tiennent
 dans une fenêtre ≤ 2 ans (variantes de datation MB de la même sortie) devient
 certaine — 1ʳᵉ sortie = min des candidates.
@@ -17,6 +21,7 @@ ok, ts} : l'opération étant purement additive, le journal EST le backup ;
 Usage (racine du projet) :
   ./venv/bin/python scripts/apply_years.py            # dry-run
   ./venv/bin/python scripts/apply_years.py --apply    # écrit les tags
+  ./venv/bin/python scripts/apply_years.py --review   # + choix de la vue Années
   ./venv/bin/python scripts/apply_years.py --undo     # retire les frames journalisés
   ./venv/bin/python scripts/apply_years.py --report   # résumé du journal
   options : --limit N
@@ -45,6 +50,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, 'data', 'cache.json')
 YEAR_CACHE = os.path.join(ROOT, 'data', 'year_cache.jsonl')
 DG_CACHE = os.path.join(ROOT, 'data', 'discogs_cache.jsonl')
+IT_CACHE = os.path.join(ROOT, 'data', 'itunes_cache.jsonl')
+RF_CACHE = os.path.join(ROOT, 'data', 'discogs_reform_cache.jsonl')
+RF2_CACHE = os.path.join(ROOT, 'data', 'discogs_reform2_cache.jsonl')
+BP_CACHE = os.path.join(ROOT, 'data', 'beatport_cache.jsonl')
+REVIEW_PATH = os.path.join(ROOT, 'data', 'year_review.json')
 JOURNAL = os.path.join(ROOT, 'data', 'year_apply_journal.jsonl')
 # Formats dont l'écriture est gérée ET relue par get_audio_meta (app.py).
 # .wma exclus : l'app ne lit pas les tags ASF (YAGNI).
@@ -121,13 +131,56 @@ def load_found():
             r = json.loads(line)
             if r.get('status') == 'found' and r.get('year'):
                 found[r['key']] = (str(r['year']), 'discogs_strict')
+
+    def add_pool(path, src):
+        """Found d'un pool d'appoint — jamais en écrasant un amont (report_years)."""
+        try:
+            f = open(path)
+        except FileNotFoundError:
+            return
+        with f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                r = json.loads(line)
+                if (r.get('status') == 'found' and r.get('year')
+                        and r['key'] not in found):
+                    found[r['key']] = (str(r['year']), src)
+
+    # iTunes, reform/reform2 et Beatport en dernier rideau (priorité
+    # report_years.py).
+    add_pool(IT_CACHE, 'itunes')
+    add_pool(RF_CACHE, 'reform_strict')
+    add_pool(RF2_CACHE, 'reform2_strict')
+    add_pool(BP_CACHE, 'beatport_strict')
     return found
 
 
-def build_worklist(limit=None):
+def load_review():
+    """Choix de revue valides : {key: 'YYYY'} (rejets null ignorés, fichier
+    absent ou corrompu → {})."""
+    if not os.path.exists(REVIEW_PATH):
+        return {}
+    try:
+        with open(REVIEW_PATH) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if v}
+
+
+def build_worklist(limit=None, review=None):
     """Fichiers sans année dont la clé a une année certaine.
+    review : {key: 'YYYY'} des choix humains (vue Années → /years/review) —
+    OVERRIDE de la consolidation : un choix explicite bat toute source.
     Retourne (items, stats) ; item = {path, year, source}."""
     found = load_found()
+    for k, y in (review or {}).items():
+        if y:
+            found[k] = (str(y), 'review')
     with open(CACHE) as f:
         cache = json.load(f)
     items = []
@@ -355,6 +408,8 @@ def main():
                     help='retirer les frames journalisés')
     ap.add_argument('--report', action='store_true',
                     help='resume du journal')
+    ap.add_argument('--review', action='store_true',
+                    help='injecter les choix de la vue Années (year_review.json)')
     ap.add_argument('--limit', type=int, default=None)
     args = ap.parse_args()
     if args.report:
@@ -363,7 +418,10 @@ def main():
     if args.undo:
         do_undo(args.limit)
         return
-    items, stats = build_worklist(args.limit)
+    review = load_review() if args.review else None
+    if args.review:
+        print('choix de revue charges : %d' % len(review))
+    items, stats = build_worklist(args.limit, review)
     if args.apply:
         do_apply(items)
     else:

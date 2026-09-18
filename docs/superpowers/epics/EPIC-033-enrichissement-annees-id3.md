@@ -247,7 +247,55 @@ tombent en « à revue » (pas de consensus automatique, idem Discogs/iTunes) �
 935 vitest ✓) ; helpers de tests redirigent DÉSORMAIS le cache reform (écrit en
 direct par le run — sinon fuite de données réelles dans les tests) ; endpoint vérifié
 sur données réelles : 142 items reform dans la vue (15 stricts → certaines, 127 → à revue).
-**P2** export des choix de la vue Années + consommation `apply_years --review` (industrialise
-la revue des 642) ; **P3** fingerprint AcoustID/chromaprint sur le résiduel uniquement
-(clé app requise, couverture faible sur ce catalogue). Interdits inchangés : écriture auto
-de lax, heuristique dossier, re-requête identique déjà `none`.
+**P2 — livrée (2026-09-18)** : export des choix de la vue Années + consommation
+`apply_years --review` (industrialise la revue des 769 à revue). Chaîne : choix de session →
+**e** (ou bouton 💾) → `POST /years/review` → `data/year_review.json` (pattern ratings,
+fusion, clés sans tab / années non numériques → 400) → `apply_years.py --review`
+(override : l'humain bat toute source, `source: 'review'`) → écriture par lot avec journal +
+undo inchangés. Reprise de session au chargement (choix persistés re-marqués), champ année
+libre pour trancher une ambiguïté hors candidates (appliqué à la carte focusée à l'export),
+choix de session désormais réinitialisés à l'ouverture (pas de focus hérité). Correctif de
+cohérence au passage : `load_found()` consomme désormais les found iTunes + reform (dernier
+rideau, priorité report_years) — l'apply ne s'appuyait plus sur un socle partiel. +4 tests
+pytest (endpoint ×2, last-rideau apply, override review — suite **241**) +6 vitest (export,
+reprise, champ année — suite **941**) ; lint + build OK.
+
+**P1bis — passe Beatport (2026-09-18, script écrit — ⏸️ EN PAUSE, décision utilisateur : accès OAuth fermé + token portail à recopier ~1 h = trop de friction ; reprise = token dans data/beatport_token.json puis run)** :
+suite au brainstorm/sondes (mémoire Mnemolite `ad9e92a8`) — YouTube « - Topic » validé comme
+source fiable UNIQUEMENT ère digitale (release_date yt-dlp, 3/3 d'accord, mais 0 couverture
+vinyle-era + biais réédition démontré : Model 500 → 2009 au lieu de 1985) → écarté comme
+source automatique du résidu ; **Beatport retenu** (base techno digitale 2004+, OAuth compte
+gratuit, pattern Discogs). `scripts/collect_beatport.py` (+8 tests, suite **251 pytest**) :
+OAuth2 doc officielle — **création d'app OAuth fermée au public** (constaté live 2026-09-18 +
+beets-beatport4 : « not possible to request API access the normal way ») → méthode éprouvée :
+token copié du portail docs (F12 → POST /auth/o/token/ → JSON dans
+data/beatport_token.json, chmod 600, expiration ~1 h re-copiable) ; app privée optionnelle
+(data/beatport_oauth.json → client_credentials/password) ; /v4/catalog/search/ → tracks (garde tokens
++ durée EXACTE length_ms via détail ±15 s → beatport_strict) puis releases (→ lax) ; cible le
+résidu via reform_targets() (1 396 clés none : 556 junk-artiste / 840 plausibles) ; reprise +
+erreurs re-jetables ; pool `beatport` intégré au consolidé (5ᵉ rideau : report_years,
+/years/preview, apply_years load_found) + 2 tests. **P3** fingerprint AcoustID/chromaprint
+sur le résiduel uniquement (clé app requise, couverture faible sur ce catalogue). Interdits
+inchangés : écriture auto de lax, heuristique dossier, re-requête identique déjà `none`.
+
+**P1bis — reform v2 (junk-artiste numérique, 2026-09-18)** : la passe v1 ne couvrait que
+« artiste vide / suffixes junk » ; le résidu garde des artistes ENTIÈREMENT
+numériques/symboliques (n° de matrice `204`, préfixe de série `2cb`, année en tête
+`2006 prodigy`, `#07 enzyme x`). `scripts/collect_discogs_reform2.py` : retrait du 1ᵉʳ
+token numérique/symbole (junk word = ≤ 4 caractères num/symboles ; garde 5+ — `006b1`
+conservé, limite documentée) ; fallback « artiste vide → titre porteur de l'info » hérité
+v1 ; **aperçu lecture-seule par défaut** (`--go` pour interroger), ciblage via v1_targets
++ interdit de re-requête identique + conclusifs v1 exclus — **aperçu réel : 29 requêtes
+v2 (~30 s à 57 req/min)**, ex. `#07 enzyme x — opbokken` → `enzyme x — opbokken`,
+`2006 prodigy — outta space` → `prodigy — outta space`. Pool `reform2` = 6ᵉ rideau du
+consolidé (report_years, /years/preview, apply_years) + 13 tests (suite **266 pytest**).
+
+**Exécutée le 2026-09-18** (`--go`) : 29 requêtes + 2 rejets (normalisation `=` — voir
++ bas) = **30 clés conclusives : 1 found / 4 lax / 8 ambiguës / 17 none**. Gain net sur
+les vagues : **1 443 certaines / 781 à revue / 1 474 introuvables** (vs 1 442 / 769 /
+1 487 avant la passe). Au passage : bug corrigé (chemin « artiste vide » de `reform2()`
+sans normalisation — `one phantasia=inner light` → 403 reproductible de Discogs ; '='
+→ espace, espaces réduits, `_norm()` sur TOUTES les sorties v2 ; ciblage « fait »=
+requête identique → les 2 clés avec '=' re-requêtées automatiquement). Suite **267 pytest**.
+Correctif robustesse `report_years.load_all()` : garde d'existence des caches (crash
+FileNotFoundError sur beatport_cache.jsonl absent — passe jamais lancée).

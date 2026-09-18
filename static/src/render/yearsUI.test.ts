@@ -9,22 +9,53 @@ const { api } = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../api.js', () => ({ api }));
 
 import { state } from '../state.js';
-import { closeYearsMode, openYearsMode, renderYears, yearsMoveFocus } from './yearsUI.js';
+import { closeYearsMode, exportChoices, openYearsMode, renderYears, yearsMoveFocus } from './yearsUI.js';
 
 const FIXTURE = {
   files_no_year: 6,
   certaines: [
-    { path: '/m/a.mp3', filename: 'a.mp3', artist: 'foo', title: 'bar',
-      status: 'found', source: 'musicbrainz', year: '1990', years: ['1990'] },
-    { path: '/m/a2.mp3', filename: 'a2.mp3', artist: 'foo', title: 'bar',
-      status: 'found', source: 'deezer', year: '1990', years: ['1990'] },
+    {
+      path: '/m/a.mp3',
+      filename: 'a.mp3',
+      artist: 'foo',
+      title: 'bar',
+      status: 'found',
+      source: 'musicbrainz',
+      year: '1990',
+      years: ['1990'],
+    },
+    {
+      path: '/m/a2.mp3',
+      filename: 'a2.mp3',
+      artist: 'foo',
+      title: 'bar',
+      status: 'found',
+      source: 'deezer',
+      year: '1990',
+      years: ['1990'],
+    },
   ],
   a_revue: [
-    { path: '/m/b.mp3', filename: 'b.mp3', artist: 'baz', title: 'qux',
-      status: 'ambiguous', source: 'musicbrainz', year: null,
-      years: ['2002', '2003'] },
-    { path: '/m/c.mp3', filename: 'c.mp3', artist: 'naems', title: 'follow me',
-      status: 'lax', source: 'itunes', year: '2024', years: ['2024'] },
+    {
+      path: '/m/b.mp3',
+      filename: 'b.mp3',
+      artist: 'baz',
+      title: 'qux',
+      status: 'ambiguous',
+      source: 'musicbrainz',
+      year: null,
+      years: ['2002', '2003'],
+    },
+    {
+      path: '/m/c.mp3',
+      filename: 'c.mp3',
+      artist: 'naems',
+      title: 'follow me',
+      status: 'lax',
+      source: 'itunes',
+      year: '2024',
+      years: ['2024'],
+    },
   ],
   introuvables: 2,
 };
@@ -90,13 +121,15 @@ describe('yearsUI (EPIC-033 T2/T4)', () => {
 
   it('choix d\u2019année : session locale, marque .chosen, pas de fetch écriture', async () => {
     await openYearsMode();
-    const cands = document.querySelectorAll('.years-card.years-review')[0]
+    const cands = document
+      .querySelectorAll('.years-card.years-review')[0]
       .querySelectorAll('.years-btn:not(.years-reject)');
-    (cands[1] as HTMLElement).click();           // choisir 2003
+    (cands[1] as HTMLElement).click(); // choisir 2003
     const chosen = document.querySelector('.years-btn.chosen');
     expect(chosen!.textContent).toBe('2003');
-    // Aucun appel d'écriture : api n'est appelé que pour /years/preview.
-    expect(api).toHaveBeenCalledTimes(1);
+    // Aucun appel d'écriture : preview + reprise des choix (2 GET), jamais de POST.
+    expect(api).toHaveBeenCalledTimes(2);
+    expect(api.mock.calls.every(([, o]) => (o as RequestInit | undefined)?.method !== 'POST')).toBe(true);
   });
 
   it('rejet : la carte est masquée pour la session', async () => {
@@ -114,11 +147,13 @@ describe('yearsUI (EPIC-033 T2/T4)', () => {
 
   it('yearsMoveFocus : borné au nombre de cartes à revue', async () => {
     await openYearsMode();
-    yearsMoveFocus(5);                       // borne haute
+    yearsMoveFocus(5); // borne haute
     expect(document.querySelectorAll('.years-card.years-review.focused').length).toBe(1);
-    yearsMoveFocus(-9);                      // borne basse
+    yearsMoveFocus(-9); // borne basse
     renderYears();
-    expect(document.querySelector('.years-card.years-review.focused')).toBeNull();
+    // clamp bas : le focus revient sur la première carte visible
+    const focused = document.querySelector('.years-card.years-review.focused') as HTMLElement;
+    expect(focused.dataset.index).toBe('0');
   });
 
   it('close : retour page sync exclusive', async () => {
@@ -126,5 +161,93 @@ describe('yearsUI (EPIC-033 T2/T4)', () => {
     closeYearsMode();
     expect(state.page).toBe('sync');
     expect(document.getElementById('years-layout')!.classList.contains('hidden')).toBe(true);
+  });
+});
+
+describe('yearsUI export (EPIC-033 P2)', () => {
+  /** Mock review GET → {} (session vierge) : la map de choix persiste entre
+   * tests (module-level), la reprise la vide à chaque openYearsMode. */
+  function mockFreshSession(): void {
+    api.mockImplementation((url: string) =>
+      url === '/years/review' ? Promise.resolve({}) : Promise.resolve(JSON.parse(JSON.stringify(FIXTURE))),
+    );
+  }
+
+  it('export : POST des choix (année + rejets) vers /years/review', async () => {
+    mockFreshSession();
+    await openYearsMode();
+    // choisir 2003 sur la 1re carte, rejeter la 2e
+    const cands = document
+      .querySelectorAll('.years-card.years-review')[0]
+      .querySelectorAll('.years-btn:not(.years-reject)');
+    (cands[1] as HTMLElement).click();
+    (document.querySelectorAll('.years-card.years-review')[1].querySelector('.years-reject') as HTMLElement).click();
+    api.mockResolvedValue({ ok: true, count: 2 });
+    const n = await exportChoices();
+    expect(n).toBe(2);
+    const [url, opts] = api.mock.calls[2]; // [0] preview, [1] reprise GET, [2] POST
+    expect(url).toBe('/years/review');
+    expect((opts as RequestInit).method).toBe('POST');
+    const body = JSON.parse((opts as { body: string }).body);
+    expect(body.choices).toEqual({ 'baz\tqux': '2003', 'naems\tfollow me': null });
+    expect(document.getElementById('status-text')!.textContent).toContain('2 choix exportés');
+  });
+
+  it('export sans choix : aucun appel, message', async () => {
+    mockFreshSession();
+    await openYearsMode();
+    const n = await exportChoices();
+    expect(n).toBe(0);
+    expect(api.mock.calls.every(([, o]) => (o as RequestInit | undefined)?.method !== 'POST')).toBe(true);
+    expect(document.getElementById('status-text')!.textContent).toContain('Aucun choix');
+  });
+
+  it("export échoué : statut d'erreur, pas de crash", async () => {
+    mockFreshSession();
+    await openYearsMode();
+    (document.querySelector('.years-card.years-review .years-btn') as HTMLElement).click();
+    api.mockRejectedValue(new Error('HTTP 500'));
+    const n = await exportChoices();
+    expect(n).toBe(-1);
+    expect(document.getElementById('status-text')!.textContent).toContain('Export impossible');
+  });
+
+  it('reprise : les choix persistés marquent .chosen au rendu', async () => {
+    api.mockImplementation((url: string) =>
+      url === '/years/review'
+        ? Promise.resolve({ 'baz\tqux': '2002', 'naems\tfollow me': null })
+        : Promise.resolve(JSON.parse(JSON.stringify(FIXTURE))),
+    );
+    await openYearsMode();
+    const chosen = document.querySelector('.years-btn.chosen');
+    expect(chosen!.textContent).toBe('2002');
+    // carte rejetée masquée à la reprise
+    const cards = document.querySelectorAll('.years-card.years-review');
+    expect(cards.length).toBe(1);
+  });
+
+  it("champ année libre : appliqué à la carte focusée à l'export (override)", async () => {
+    mockFreshSession();
+    await openYearsMode();
+    (document.querySelectorAll('.years-card.years-review')[1] as HTMLElement).click();
+    // clic = focus la carte lax (focusIndex = 1)
+    const input = document.getElementById('years-year-input') as HTMLInputElement;
+    input.value = '1999';
+    input.dispatchEvent(new Event('input'));
+    api.mockResolvedValue({ ok: true, count: 1 });
+    await exportChoices();
+    const body = JSON.parse((api.mock.calls[2][1] as { body: string }).body); // POST
+    expect(body.choices['naems\tfollow me']).toBe('1999');
+    expect(input.value).toBe(''); // champ vidé après usage
+  });
+
+  it("champ année sans focus : ignoré à l'export", async () => {
+    mockFreshSession();
+    await openYearsMode();
+    const input = document.getElementById('years-year-input') as HTMLInputElement;
+    input.value = '1999';
+    input.dispatchEvent(new Event('input'));
+    await exportChoices();
+    expect(api.mock.calls.every(([, o]) => (o as RequestInit | undefined)?.method !== 'POST')).toBe(true); // rien à exporter, pas de POST
   });
 });

@@ -2,11 +2,12 @@
 // Revue humaine des vagues à revue (ambiguïtés : bouton par candidate ; lax :
 // accepter/rejeter). Les « certaines » sont listées pour info — l'ÉCRITURE
 // réelle des tags reste faite par scripts/apply_years.py (jamais l'UI, pattern
-// preview → confirmation). Les choix faits ici ne sont que locaux (session) :
-// ils préfigurent la revue, ils ne modifient ni fichiers ni caches.
+// preview → confirmation). Les choix faits ici restent locaux tant qu'ils ne
+// sont pas EXPORTÉS (bouton 💾 ou touche e) : POST /years/review les persiste
+// dans data/year_review.json, consommé par scripts/apply_years.py --review.
 //
 // Données : GET /years/preview (app.py) — consolidation MB/Deezer → Discogs →
-// iTunes sans double comptage ; introuvables = simple compteur (aucune action).
+// iTunes → reform sans double comptage ; introuvables = compteur (aucune action).
 
 import { api } from '../api.js';
 import { goPage } from '../router.js';
@@ -36,6 +37,13 @@ let focusIndex = -1;
 /** Choix de revue (session) : clé → année choisie, ou null = rejeté. */
 const choices = new Map<string, string | null>();
 
+/** Endpoint de persistance des choix (EPIC-033 P2) — consommé ensuite par
+ * scripts/apply_years.py --review. */
+const REVIEW_URL = '/years/review';
+
+/** Année saisie dans le champ libre (appliquée à la carte focusée à l'export). */
+let replaceYear = '';
+
 function esc(s: string): string {
   const d = document.createElement('div');
   d.textContent = s;
@@ -45,6 +53,68 @@ function esc(s: string): string {
 /** Clé de cache (artiste\titre) d'un fichier — identifiant de choix. */
 function keyOf(f: YearFile): string {
   return `${f.artist ?? ''}\t${f.title}`;
+}
+
+function setStatus(msg: string): void {
+  const el = document.getElementById('status-text');
+  if (el) el.textContent = msg;
+}
+
+/** Reprise de session : charge les choix persistés (année ou rejet null).
+ * Entrées validées comme au POST (clé avec tabulation, valeur 'YYYY' ou
+ * null) ; échec silencieux : la revue reste utilisable sans reprise. */
+async function loadChoices(): Promise<void> {
+  try {
+    const saved = await api<Record<string, string | null>>(REVIEW_URL);
+    choices.clear();
+    for (const [k, v] of Object.entries(saved)) {
+      if (k.includes('\t') && (v === null || (typeof v === 'string' && /^\d{4}$/.test(v)))) {
+        choices.set(k, v);
+      }
+    }
+  } catch {
+    /* pas de reprise — la revue repart des choix courants */
+  }
+}
+
+/** Année de remplacement (champ libre) : si 4 chiffres sont saisis, l'appliquer
+ * à la clé de la carte à revue focusée — en écrasant un choix antérieur.
+ * Sans focus ou sans année valide : ne fait rien. */
+function applyReplaceYear(): void {
+  if (!/^\d{4}$/.test(replaceYear) || focusIndex < 0) return;
+  const f = data?.a_revue[focusIndex];
+  if (!f) return;
+  choices.set(keyOf(f), replaceYear);
+  replaceYear = '';
+}
+
+/** Exporte les choix courants (années choisies + rejets) vers
+ * POST /years/review : persistance → scripts/apply_years.py --review.
+ * Retourne le total de choix connus du backend, -1 si échec. */
+export async function exportChoices(): Promise<number> {
+  applyReplaceYear();
+  const input = document.getElementById('years-year-input') as HTMLInputElement | null;
+  if (input) input.value = replaceYear; // champ resynchronisé (année consommée)
+  if (choices.size === 0) {
+    setStatus('Aucun choix à exporter — choisissez une année ou rejetez d\u2019abord.');
+    return 0;
+  }
+  const payload: Record<string, string | null> = {};
+  for (const [k, v] of choices.entries()) payload[k] = v;
+  try {
+    const res = await api<{ ok: boolean; count: number }>(REVIEW_URL, {
+      method: 'POST',
+      body: JSON.stringify({ choices: payload }),
+    });
+    setStatus(
+      `💾 ${Object.keys(payload).length} choix exportés (${res.count} persistés) — ` +
+        'application : scripts/apply_years.py --review --apply',
+    );
+    return res.count;
+  } catch (err) {
+    setStatus(`Export impossible : ${err instanceof Error ? err.message : String(err)}`);
+    return -1;
+  }
 }
 
 async function refreshYears(): Promise<void> {
@@ -111,6 +181,39 @@ export function renderYears(): void {
   const revTitle = document.createElement('div');
   revTitle.className = 'years-section';
   revTitle.textContent = `? À revue — choisissez l'année ou rejetez (${data.a_revue.length.toLocaleString('fr')} fichiers)`;
+  // Année de remplacement (champ libre) : appliquée à la carte focusée avant
+  // export — utile pour trancher vite une ambiguïté hors candidates.
+  const input = document.createElement('input');
+  input.id = 'years-year-input';
+  input.className = 'years-export-input';
+  input.placeholder = 'année pour la carte focusée…';
+  input.title = 'Année (4 chiffres) appliquée à la carte focusée avant export';
+  input.setAttribute('inputmode', 'numeric');
+  input.setAttribute('maxlength', '4');
+  input.value = replaceYear;
+  input.onclick = (e): void => e.stopPropagation();
+  input.oninput = (): void => {
+    input.value = input.value.replace(/[^0-9]/g, '').slice(0, 4);
+    replaceYear = input.value;
+  };
+  input.onkeydown = (e): void => {
+    e.stopPropagation(); // saisie isolée du clavier de page
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void exportChoices();
+    }
+  };
+  revTitle.appendChild(input);
+  const exportBtn = document.createElement('button');
+  exportBtn.id = 'years-export';
+  exportBtn.className = 'years-btn years-export';
+  exportBtn.textContent = `💾 Exporter (${choices.size})`;
+  exportBtn.title = 'Persiste les choix dans data/year_review.json — consommé par scripts/apply_years.py --review';
+  exportBtn.onclick = (e): void => {
+    e.stopPropagation();
+    void exportChoices();
+  };
+  revTitle.appendChild(exportBtn);
   list.appendChild(revTitle);
   if (data.a_revue.length === 0) {
     list.insertAdjacentHTML(
@@ -196,13 +299,15 @@ export function yearsMoveFocus(delta: number): void {
 
 export async function openYearsMode(): Promise<void> {
   goPage('years');
+  focusIndex = -1; // ouverture = vue fraîche (pas de focus hérité)
   const statusText = document.getElementById('status-text');
   if (statusText) {
     statusText.textContent =
-      '📅 Vue Années — ↑↓ naviguer · clic = choisir/rejeter · Échap revenir. ' +
-      'Choix de session : l\u2019écriture des tags reste scripts/apply_years.py.';
+      '📅 Vue Années — ↑↓ naviguer · clic = choisir/rejeter · e = exporter · Échap revenir. ' +
+      'Export = choix persistés (year_review.json) → scripts/apply_years.py --review.';
   }
   await refreshYears();
+  await loadChoices();
   renderYears();
 }
 
