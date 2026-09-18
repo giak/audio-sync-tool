@@ -1,7 +1,7 @@
 // ─── Source Data panel: tree building, toggle, filtering, rendering ───────
 
 import { api } from '../api.js';
-import { focusItemByElement, revalidateFocus, setActivePanel } from '../focus.js';
+import { focusItemByElement, focusItemByPath, revalidateFocus, setActivePanel } from '../focus.js';
 import { getActivePlaylistName, getPendingTracks } from '../playlist.js';
 import { state, type TreeNode } from '../state.js';
 import { confirmDialog, showContextMenu, showError } from '../ui.js';
@@ -9,6 +9,7 @@ import { dirHasMatchingDescendant, dirHasMatchingFile, type FileStatus } from '.
 import { setBatchCopy } from './batchCopy.js';
 import { openCueEditor } from './cueEditor.js';
 import { doDragCopy } from './dragDrop.js';
+import { renderEpars } from './eparsUI.js';
 import { makeFileEl, makeFileTable } from './fileRow.js';
 import { ensureFilterChip, getFilterTerm, isFileFilter, updateFilterCount } from './filterChip.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
@@ -457,7 +458,9 @@ function renderFilteredDirNode(
     // Mode fichiers ON : auto-étendu MAIS table rendue, filtrée au terme
     // (le fichier cherché est visible). Mode dossiers : contenu COMPLET —
     // la vérification de doublon exige de voir tout ce que le dossier contient.
-    dirEl.appendChild(buildSourceChildren(node, fullPath, basePath, false, undefined, undefined, filesMode ? term : ''));
+    dirEl.appendChild(
+      buildSourceChildren(node, fullPath, basePath, false, undefined, undefined, filesMode ? term : ''),
+    );
   }
 }
 
@@ -537,6 +540,17 @@ export function renderSource(): void {
     onBlur: () => revalidateFocus(),
     tree: true,
   });
+
+  // Pastilles « déjà rangé » de l'épars : leur visibilité dépend du filtre
+  // source — si le panneau gauche est rendu, le rafraîchir (les pastilles
+  // périmées suivraient sinon un changement de terme du chip droit).
+  const eparsContainer = document.getElementById('epars-container');
+  if (eparsContainer && !eparsContainer.classList.contains('hidden')) {
+    renderEpars();
+    // Le rebuild efface .focused : réapplique la sélection épars persistée
+    // (et le twin-hint associé) — rien si aucune sélection.
+    if (state.eparsFocusPath) focusItemByPath(eparsContainer, state.eparsFocusPath);
+  }
 
   const allTrees: TreeAndDir[] = [];
   let totalCount = 0;

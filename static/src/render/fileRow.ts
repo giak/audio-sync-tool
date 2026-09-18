@@ -12,7 +12,8 @@ import { focusItemByElement, setActivePanel } from '../focus.js';
 import { getRating } from '../ratings.js';
 import { state } from '../state.js';
 import { showContextMenu } from '../ui.js';
-import { type FileStatus, formatDuration } from '../utils.js';
+import { type FileStatus, formatDuration, twinUnderFilteredDir } from '../utils.js';
+import { getFilterTerm, isFileFilter } from './filterChip.js';
 
 // Table vide (colgroup fixe + tbody) : chaque dossier expandé de la source /
 // éparpillé reçoit SA table — les lignes partagent les colonnes.
@@ -74,6 +75,22 @@ export function makeFileEl(
       e.preventDefault();
       void import('../actions.js').then(m => m.executeReplace(fullpath));
     };
+    // Pastille « déjà rangé » : le jumeau existe DEJA dans le dossier visé par
+    // le filtre source actif (épars sélectionné, cible à droite) — le rangement
+    // créerait un doublon. Sémantique identique à l'arbre (dossiers, ou fichiers
+    // en mode 📄) : ce que la pastille annonce est réellement consultable.
+    if (selectEparsFileFn) {
+      const seg = twinUnderFilteredDir(
+        dupMatch.sourceFullPath,
+        getFilterTerm('sync-source'),
+        isFileFilter('sync-source'),
+        state.sourceFiles,
+      );
+      if (seg) {
+        row.classList.add('dup-ranged');
+        label.title = `${label.title}\n⤷ déjà rangé : ${seg}${seg.includes(dupMatch.sourceFilename) ? '' : ` (${dupMatch.sourceFilename})`}`;
+      }
+    }
   }
 
   const ratingVal = getRating(fullpath);

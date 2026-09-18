@@ -1,6 +1,6 @@
 // Pure utility functions extracted from script.js for testability.
 
-import type { JournalEntry, SourceFiles } from './state.js';
+import type { FileIndex, JournalEntry, SourceFiles } from './state.js';
 
 interface TreeNode {
   [key: string]: TreeNode | Array<unknown> | undefined;
@@ -95,4 +95,31 @@ export function dirHasMatchingFile(node: TreeNode, term: string): boolean {
     if (dirHasMatchingFile(child as TreeNode, term)) return true;
   }
   return false;
+}
+
+/** Segment « déjà rangé » à afficher sur l'épars, ou null — le jumeau rangé
+ *  (dupMatches, EPIC-028) n'est signalé que s'il est CONSULTABLE à droite sous
+ *  le filtre sync-source actif : son dossier matche le terme (sémantique
+ *  identique à l'arbre : sous-chaîne insensible à la casse sur les noms de
+ *  dossiers), ou son nom de fichier en mode 📄 fichiers (auto-expansion).
+ *  Sans filtre → null : la pastille n'a de sens qu'en contexte de rangement. */
+export function twinUnderFilteredDir(
+  sourceFullPath: string,
+  term: string,
+  filesMode: boolean,
+  sourceFiles: Record<string, FileIndex>,
+): string | null {
+  const t = term.trim().toLowerCase();
+  if (!t) return null;
+  const root = Object.keys(sourceFiles).find(r => sourceFullPath.startsWith(`${r}/`));
+  if (!root) return null;
+  const segments = sourceFullPath
+    .slice(root.length + 1)
+    .split('/')
+    .filter(Boolean);
+  const filename = segments.pop();
+  if (!filename) return null;
+  const dir = segments.join('/');
+  if (filesMode && filename.toLowerCase().includes(t)) return dir ? `${dir}/${filename}` : filename;
+  return dir.toLowerCase().includes(t) ? dir : null;
 }

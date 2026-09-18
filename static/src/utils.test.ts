@@ -7,6 +7,7 @@ import {
   formatTime,
   getJournalFiles,
   type JournalEntry,
+  twinUnderFilteredDir,
 } from './utils.js';
 
 describe('formatTime', () => {
@@ -193,5 +194,44 @@ describe('dirHasMatchingDescendant', () => {
   it('skips __files__ keys', () => {
     const node = { __files__: [{ filename: 'jazzy.mp3' }] };
     expect(dirHasMatchingDescendant(node as any, 'jaz')).toBe(false);
+  });
+});
+
+describe('twinUnderFilteredDir', () => {
+  const SRC = {
+    '/src': { 'x.mp3': { path: 's/t.mp3', year: null, duration: 1, codec: 'MP3' } },
+  };
+
+  it('terme vide → null (pas de contexte de rangement)', () => {
+    expect(twinUnderFilteredDir('/src/techno_2020/x.mp3', '', false, SRC)).toBeNull();
+    expect(twinUnderFilteredDir('/src/techno_2020/x.mp3', '   ', false, SRC)).toBeNull();
+  });
+
+  it('dossier du jumeau matche le terme → segment renvoyé', () => {
+    expect(twinUnderFilteredDir('/src/techno_2020/x.mp3', 'techno', false, SRC)).toBe('techno_2020');
+  });
+
+  it('insensible à la casse', () => {
+    expect(twinUnderFilteredDir('/src/techno_2020/x.mp3', 'TECHNO', false, SRC)).toBe('techno_2020');
+  });
+
+  it('dossier hors filtre (mode dossiers) → null', () => {
+    expect(twinUnderFilteredDir('/src/house_2019/x.mp3', 'techno', false, SRC)).toBeNull();
+  });
+
+  it('mode fichiers : nom du jumeau matche → dir/filename même dossier hors filtre', () => {
+    expect(twinUnderFilteredDir('/src/house_2019/x.mp3', 'x', true, SRC)).toBe('house_2019/x.mp3');
+  });
+
+  it('mode fichiers : ni dossier ni fichier ne matche → null', () => {
+    expect(twinUnderFilteredDir('/src/house_2019/x.mp3', 'techno', true, SRC)).toBeNull();
+  });
+
+  it('chemin hors racines scannées → null', () => {
+    expect(twinUnderFilteredDir('/autre/techno_2020/x.mp3', 'techno', false, SRC)).toBeNull();
+  });
+
+  it('segments imbriqués : le chemin relatif complet est renvoyé', () => {
+    expect(twinUnderFilteredDir('/src/style/techno_2020/x.mp3', 'techno', false, SRC)).toBe('style/techno_2020');
   });
 });

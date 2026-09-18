@@ -269,6 +269,15 @@ td.file.focused     { background: var(--bg-focus);  outline: 1px solid var(--bor
 .file-row.dup-fuzzy td.file {
   outline: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
 }
+/* Pastille « déjà rangé » (fichier épars sous le filtre source actif) : le
+   jumeau existe déjà dans le dossier visé — texte discret après le nom. */
+.file-row.dup-ranged td.file::after {
+  content: '⤷ déjà rangé';
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--amber);
+  white-space: nowrap;
+}
 
 tr.file-row.twin-hint {
   outline: 2px solid var(--amber);

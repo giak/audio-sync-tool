@@ -31,14 +31,18 @@ vi.mock('../ratings.js', () => ({
   getRating: vi.fn(),
 }));
 
-vi.mock('../utils.js', () => ({
-  formatDuration: vi.fn((s: number | null | undefined) => {
-    if (!s || s <= 0) return '';
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, '0')}`;
-  }),
-}));
+vi.mock('../utils.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../utils.js')>();
+  return {
+    ...actual,
+    formatDuration: vi.fn((s: number | null | undefined) => {
+      if (!s || s <= 0) return '';
+      const m = Math.floor(s / 60);
+      const sec = Math.floor(s % 60);
+      return `${m}:${sec.toString().padStart(2, '0')}`;
+    }),
+  };
+});
 
 import { stopPlayer, togglePlay } from '../audio.js';
 import { focusItemByElement, setActivePanel } from '../focus.js';
@@ -46,6 +50,7 @@ import { getRating } from '../ratings.js';
 import { state } from '../state.js';
 import { showContextMenu } from '../ui.js';
 import { makeFileEl } from './fileRow.js';
+import { setFileFilter, setFilterTerm } from './filterChip.js';
 
 function makeRow(
   opts: {
@@ -91,6 +96,7 @@ function makeRow(
 beforeEach(() => {
   vi.clearAllMocks();
   state.dupMatches = new Map(); // EPIC-028 : isoler chaque test de la Map globale
+  state.filters = {}; // pastille « déjà rangé » : isoler les filtres de session
 });
 
 // ── Doublon fuzzy (EPIC-028 P1) : marqueur ambre ─────────────────────────
@@ -188,6 +194,76 @@ describe('doublon fuzzy (dup-fuzzy)', () => {
     expect(label.classList.contains('nouveau')).toBe(true);
     expect(label.classList.contains('led-nouveau')).toBe(true);
     expect(row.classList.contains('dup-fuzzy')).toBe(true);
+  });
+});
+
+// ── Pastille « déjà rangé » : jumeau sous le filtre source actif ─────────
+
+describe('pastille déjà rangé (dup-ranged)', () => {
+  const RANGED = {
+    eparsFullPath: '/media/usb/song.mp3',
+    sourceFullPath: '/src/techno_2020/song.mp3',
+    eparsFilename: 'song.mp3',
+    sourceFilename: 'song.mp3',
+    sim: 0.95,
+    delta: 0,
+    verdict: 'equal' as const,
+  };
+  const SOURCE_FILES = {
+    '/src': { 'song.mp3': { path: 'techno_2020/song.mp3', year: null, duration: 200, codec: 'MP3' } },
+  };
+
+  it('jumeau sous le dossier filtré → dup-ranged + tooltip ⤷', () => {
+    state.dupMatches = new Map([['/media/usb/song.mp3', RANGED]]);
+    state.sourceFiles = SOURCE_FILES;
+    setFilterTerm('sync-source', 'techno');
+    const row = makeRow({ fullpath: '/media/usb/song.mp3', selectEparsFileFn: vi.fn() });
+    expect(row.classList.contains('dup-fuzzy')).toBe(true);
+    expect(row.classList.contains('dup-ranged')).toBe(true);
+    const label = row.querySelector('.file') as HTMLElement;
+    expect(label.title).toContain('⤷ déjà rangé : techno_2020');
+  });
+
+  it('jumeau hors du dossier filtré → pas de pastille', () => {
+    state.dupMatches = new Map([['/media/usb/song.mp3', RANGED]]);
+    state.sourceFiles = {
+      '/src': { 'song.mp3': { path: 'house_2019/song.mp3', year: null, duration: 200, codec: 'MP3' } },
+    };
+    setFilterTerm('sync-source', 'techno');
+    const row = makeRow({ fullpath: '/media/usb/song.mp3' });
+    expect(row.classList.contains('dup-fuzzy')).toBe(true);
+    expect(row.classList.contains('dup-ranged')).toBe(false);
+  });
+
+  it('sans filtre → pas de pastille (hors contexte de rangement)', () => {
+    state.dupMatches = new Map([['/media/usb/song.mp3', RANGED]]);
+    state.sourceFiles = SOURCE_FILES;
+    setFilterTerm('sync-source', '');
+    const row = makeRow({ fullpath: '/media/usb/song.mp3' });
+    expect(row.classList.contains('dup-ranged')).toBe(false);
+  });
+
+  it('mode 📄 fichiers : le nom du jumeau suffit, même dossier hors filtre', () => {
+    state.dupMatches = new Map([['/media/usb/song.mp3', { ...RANGED, sourceFullPath: '/src/house_2019/song.mp3' }]]);
+    state.sourceFiles = {
+      '/src': { 'song.mp3': { path: 'house_2019/song.mp3', year: null, duration: 200, codec: 'MP3' } },
+    };
+    setFilterTerm('sync-source', 'song');
+    setFileFilter('sync-source', true);
+    const row = makeRow({ fullpath: '/media/usb/song.mp3', selectEparsFileFn: vi.fn() });
+    expect(row.classList.contains('dup-ranged')).toBe(true);
+    const label = row.querySelector('.file') as HTMLElement;
+    // suffixe (filename) omis : seg se termine déjà par le nom du jumeau
+    expect(label.title).toContain('⤷ déjà rangé : house_2019/song.mp3');
+  });
+
+  it('ligne rangée (arbre source) → jamais de pastille même si match', () => {
+    state.dupMatches = new Map([['/media/usb/song.mp3', RANGED]]);
+    state.sourceFiles = SOURCE_FILES;
+    setFilterTerm('sync-source', 'techno');
+    const row = makeRow({ fullpath: '/src/techno_2020/song.mp3' });
+    expect(row.classList.contains('dup-fuzzy')).toBe(false);
+    expect(row.classList.contains('dup-ranged')).toBe(false);
   });
 });
 

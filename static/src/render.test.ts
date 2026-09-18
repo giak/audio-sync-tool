@@ -1333,7 +1333,9 @@ describe('renderSource', () => {
     state.sourceFiles['/home/Music'] = { 'a.mp3': { path: 'Rock/a.mp3' } };
     renderSource();
 
-    const fileRows = document.querySelectorAll('.file-row');
+    // Périmètre source : le cross-render des pastilles « déjà rangé » peuple
+    // aussi #epars-container (lignes épars légitimes) — hors du contrat testé.
+    const fileRows = document.querySelectorAll('#source-container .file-row');
     expect(fileRows.length).toBe(0);
   });
 
