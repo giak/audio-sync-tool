@@ -235,9 +235,9 @@ Les résultats sont **mis en cache** (`data/year_cache.jsonl`, `data/discogs_cac
 collectées ne sont **jamais re-interrogées** ; une relance de collecte ne traite que
 l'incrément (reprise JSONL, erreurs re-jetables).
 
-**État au 2026-09-18** : vague « certaines » **appliquée** (1 349 écritures OK, journal =
-backup `data/year_apply_journal.jsonl`, `--undo` idempotent) — consolidation 6 sources :
-**1 443 certaines / 781 à revue / 1 474 introuvables** (+6 non parsables), dont les
+**État au 2026-09-18 — EPIC CLÔTURÉE** : vague « certaines » **appliquée** (1 349 écritures
+OK, journal = backup `data/year_apply_journal.jsonl`, `--undo` idempotent) — consolidation
+7 sources : **1 443 certaines / 782 à revue / 1 473 introuvables** (+6 non parsables), dont les
 apports **reformulé** (`collect_discogs_reform.py` : +15 certaines / +127 à revue) et
 **junk-artiste numérique** (`collect_discogs_reform2.py` : +1 certaine / +12 à revue sur
 les 556 artistes numériques/symboles — `#07 enzyme x`, `204`, `2006 prodigy`) — intégré au
@@ -300,7 +300,14 @@ artiste depuis 2025-2026 ; le garde-fou reste utile aux relances futures.
   exclu (non relu par `get_audio_meta`).
 - Dry-run par défaut, `--limit N` pour un échantillon de contrôle.
 
-Historique complet, chiffres détaillés et suite (revue des ambiguïtés) : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md).
+**Clôture de la revue (2026-09-18)** : 692 choix exportés (633 années + 59 rejets) — les
+782 à-revue sont **toutes soldées** (713 taggées, 59 rejetées, 9 échecs structurels
+connus, 1 fanfare tranchée → 1980) ; `apply_years --review --apply` final : ok=1,
+skip=2 152, idempotence vérifiée. Couverture finale au périmètre du scan : **76 %**
+(4 970 / 6 508, contre 43 % à l'ouverture) ; ~3 551 fichiers nouveaux sans année depuis
+le scan attendent un re-scan (collectes incrémentales, prêtes à relancer).
+
+Historique complet, chiffres détaillés et bilan de clôture : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md).
 
 ## Structure
 

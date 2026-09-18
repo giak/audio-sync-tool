@@ -1,6 +1,6 @@
 # EPIC-033 — Enrichissement des années ID3 (MusicBrainz → Deezer), preview → apply
 
-> **Statut** : 🟢 Livrée (T1–T7 : collectes, apply 1 349 tags, UI revue ; passe Discogs reformulée terminée — 14 found / 54 lax / 66 ambiguës sur 1 530 clés, intégrée au consolidé et vérifiée en direct)
+> **Statut** : 🏁 **CLÔTURÉE le 2026-09-18** — revue complète (692 choix exportés dont 59 rejets), apply final exécuté, **76 % du corpus avec année** (4 970 / 6 508 au périmètre du scan). Le stock nouveau apparu depuis le scan (~3 551 fichiers sans année sur 4 578 nouveaux) relève d'une passe future post-re-scan, pas de cette EPIC. Bilan final : mémoire Mnemolite `357e89d8`.
 > **Créée** : 2026-09-17 · **Dernière mise à jour** : 2026-09-17
 > **Priorité** : Haute
 > **Docs liées** : EPIC-028/032 (pattern preview → confirmation, jamais d'écriture automatique) · mémoire Mnemolite `9539d4ab` (veille APIs, 2026-09-17)
@@ -348,3 +348,30 @@ sans normalisation — `one phantasia=inner light` → 403 reproductible de Disc
 requête identique → les 2 clés avec '=' re-requêtées automatiquement). Suite **267 pytest**.
 Correctif robustesse `report_years.load_all()` : garde d'existence des caches (crash
 FileNotFoundError sur beatport_cache.jsonl absent — passe jamais lancée).
+
+## Clôture (2026-09-18)
+
+**La revue est terminée — il restait en réalité UNE carte à trancher.** Décompte exact des
+782 à-revue consolidées : **713 déjà taggées sur disque** (les 691 choix de la revue
+du matin + cohérences), **68 avec choix mais sans tag** (59 **rejets volontaires** —
+junk-clés `01 track 01`, `a1 - double face`… — + 9 échecs d'apply connus : 3 MP3 aux
+headers MPEG cassés, 2 FLAC invalides à ré-ripper, 2 `.ogg` et 2 `.wma` hors périmètre
+d'écriture), et **1 sans choix : `cd1 — 20th century fox fanfare`** (tier YouTube
+vérifié, art track John Williams). Décision utilisateur : **1980 accepté** — le tag est
+posé (journal `ok`, frame TDRC), dernière écriture de l'EPIC.
+
+**Apply final** : `--review --apply` → **ok=1, skip=2 152, err=5** (idempotence totale,
+les mêmes 5 erreurs structurelles). Journal : **2 161 entrées**, additif, `--undo` toujours
+calable. Revue : **692 choix** (633 années + 59 rejets) dans `data/year_review.json`.
+
+**État final du corpus** : au périmètre du scan (6 508 fichiers), **4 970 avec année
+(76 %)** — contre 43 % à l'ouverture ; sur disque complet (11 086 fichiers, 4 578
+nouveaux depuis le dernier scan dont 3 551 sans année), couverture 54 % — le nouveau
+stock attend un re-scan avant de pouvoir être collecté (les caches sont incrémentaux,
+les clés nouvelles seraient les seules interrogées).
+
+**Pourquoi clore** : rendement marginal des sources quasi nul (Discogs reform 9 %,
+reform2 41 % sur 29 clés, YouTube 1/84, Beatport fermé au public) ; le résidu (vinyles
+white-label/free-party, junk-artiste, 6 fichiers sans clé) est de la donnée inexistante
+en ligne — aucune source gratuite ne l'inventera. Tous les outils restent prêts et
+incrémentaux pour une passe future sur le stock nouveau.
