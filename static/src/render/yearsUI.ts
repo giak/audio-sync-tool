@@ -10,7 +10,9 @@
 // iTunes → reform sans double comptage ; introuvables = compteur (aucune action).
 
 import { api } from '../api.js';
+import { subjectFromName } from '../filterEngine.js';
 import { goPage } from '../router.js';
+import { ensureFilterChip, isFilterActive, subjectMatches, updateFilterCount } from './filterChip.js';
 
 export interface YearFile {
   path: string;
@@ -41,6 +43,10 @@ const choices = new Map<string, string | null>();
  * scripts/apply_years.py --review. */
 const REVIEW_URL = '/years/review';
 
+/** Scope du chip filtre de la page (F7/`, pattern EPIC-030) — mémorisé dans
+ * state.filters : ré-afficher la page restaure le filtre. */
+const YEARS_SCOPE = 'years';
+
 /** Année saisie dans le champ libre (appliquée à la carte focusée à l'export). */
 let replaceYear = '';
 
@@ -58,6 +64,12 @@ function keyOf(f: YearFile): string {
 function setStatus(msg: string): void {
   const el = document.getElementById('status-text');
   if (el) el.textContent = msg;
+}
+
+/** Une carte à revue passe-t-elle le filtre actif du scope years ?
+ * (artiste — titre, match tokens du filterEngine.) */
+function reviewMatches(f: YearFile): boolean {
+  return subjectMatches(YEARS_SCOPE, subjectFromName(`${f.artist ?? '?'} — ${f.title}`));
 }
 
 /** Reprise de session : charge les choix persistés (année ou rejet null).
@@ -132,6 +144,16 @@ async function refreshYears(): Promise<void> {
 export function renderYears(): void {
   const list = document.getElementById('years-list');
   if (!list) return;
+  // Chip filtre persistant (EPIC-030) : vit dans son slot AVANT la liste,
+  // hors du DOM effacé ci-dessus — le focus/caret survivent à la saisie.
+  ensureFilterChip(list, {
+    scope: YEARS_SCOPE,
+    placeholder: 'Filtrer artiste, titre, année…',
+    onChange: () => {
+      focusIndex = -1; // liste re-filtrée : le focus hérité n'a plus de sens
+      renderYears();
+    },
+  });
   list.innerHTML = '';
 
   const count = document.getElementById('years-count');
@@ -166,7 +188,10 @@ export function renderYears(): void {
   if (seen.size === 0) {
     list.insertAdjacentHTML('beforeend', '<p class="years-empty">Aucune année certaine dans les caches.</p>');
   }
+  let nVisible = 0; // cartes listées (certaines + à revue) sous filtre
   for (const { f, n } of seen.values()) {
+    if (!subjectMatches(YEARS_SCOPE, subjectFromName(`${f.artist ?? '?'} — ${f.title}`))) continue;
+    nVisible += 1;
     const card = document.createElement('div');
     card.className = 'years-card';
     const suffix = n > 1 ? ` · ${n} fichiers` : '';
@@ -180,7 +205,9 @@ export function renderYears(): void {
   // ── À revue : cartes interactives ──────────────────────────────────────
   const revTitle = document.createElement('div');
   revTitle.className = 'years-section';
-  revTitle.textContent = `? À revue — choisissez l'année ou rejetez (${data.a_revue.length.toLocaleString('fr')} fichiers)`;
+  revTitle.textContent = isFilterActive(YEARS_SCOPE)
+    ? `? À revue — filtré (${data.a_revue.length.toLocaleString('fr')} fichiers au total)`
+    : `? À revue — choisissez l'année ou rejetez (${data.a_revue.length.toLocaleString('fr')} fichiers)`;
   // Année de remplacement (champ libre) : appliquée à la carte focusée avant
   // export — utile pour trancher vite une ambiguïté hors candidates.
   const input = document.createElement('input');
@@ -224,6 +251,8 @@ export function renderYears(): void {
   data.a_revue.forEach((f, i) => {
     const k = keyOf(f);
     if (choices.get(k) === null) return; // rejeté → masqué (session)
+    if (!reviewMatches(f)) return; // hors filtre
+    nVisible += 1;
     const card = document.createElement('div');
     card.className = `years-card years-review${i === focusIndex ? ' focused' : ''}`;
     card.dataset.index = String(i);
@@ -273,6 +302,9 @@ export function renderYears(): void {
     };
     list.appendChild(card);
   });
+  // Compteur du chip : cartes listées / cartes totales (certaines dédupliquées
+  // + à revue) — les rejetés (masqués par design) restent comptés au total.
+  updateFilterCount(YEARS_SCOPE, nVisible, seen.size + data.a_revue.length);
 }
 
 function paintFocus(): void {
@@ -289,9 +321,18 @@ function paintFocus(): void {
 }
 
 export function yearsMoveFocus(delta: number): void {
-  const n = data?.a_revue.length ?? 0;
-  if (n === 0) return;
-  focusIndex = Math.min(Math.max(focusIndex + delta, 0), n - 1);
+  // Ordre VISIBLE : le focus saute les cartes hors filtre (et les rejetées,
+  // déjà absentes du DOM). Hors liste filtrée : entrer par le début (↓) ou
+  // la fin (↑).
+  const vis: number[] = [];
+  data?.a_revue.forEach((f, i) => {
+    if (choices.get(keyOf(f)) !== null && reviewMatches(f)) vis.push(i);
+  });
+  if (vis.length === 0) return;
+  let pos = vis.indexOf(focusIndex);
+  if (pos === -1) pos = delta > 0 ? -1 : vis.length;
+  pos = Math.min(Math.max(pos + delta, 0), vis.length - 1);
+  focusIndex = vis[pos];
   paintFocus();
 }
 
@@ -303,8 +344,8 @@ export async function openYearsMode(): Promise<void> {
   const statusText = document.getElementById('status-text');
   if (statusText) {
     statusText.textContent =
-      '📅 Vue Années — ↑↓ naviguer · clic = choisir/rejeter · e = exporter · Échap revenir. ' +
-      'Export = choix persistés (year_review.json) → scripts/apply_years.py --review.';
+      '📅 Vue Années — ↑↓ naviguer · clic = choisir/rejeter · e = exporter · F7 ou / = filtrer · ' +
+      'Échap revenir. Export = choix persistés (year_review.json) → scripts/apply_years.py --review.';
   }
   await refreshYears();
   await loadChoices();

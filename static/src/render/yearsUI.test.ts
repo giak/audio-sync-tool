@@ -9,6 +9,7 @@ const { api } = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../api.js', () => ({ api }));
 
 import { state } from '../state.js';
+import { setFilterTerm } from './filterChip.js';
 import { closeYearsMode, exportChoices, openYearsMode, renderYears, yearsMoveFocus } from './yearsUI.js';
 
 const FIXTURE = {
@@ -164,15 +165,15 @@ describe('yearsUI (EPIC-033 T2/T4)', () => {
   });
 });
 
-describe('yearsUI export (EPIC-033 P2)', () => {
-  /** Mock review GET → {} (session vierge) : la map de choix persiste entre
-   * tests (module-level), la reprise la vide à chaque openYearsMode. */
-  function mockFreshSession(): void {
-    api.mockImplementation((url: string) =>
-      url === '/years/review' ? Promise.resolve({}) : Promise.resolve(JSON.parse(JSON.stringify(FIXTURE))),
-    );
-  }
+/** Mock review GET → {} (session vierge) : la map de choix persiste entre
+ * tests (module-level), la reprise la vide à chaque openYearsMode. */
+function mockFreshSession(): void {
+  api.mockImplementation((url: string) =>
+    url === '/years/review' ? Promise.resolve({}) : Promise.resolve(JSON.parse(JSON.stringify(FIXTURE))),
+  );
+}
 
+describe('yearsUI export (EPIC-033 P2)', () => {
   it('export : POST des choix (année + rejets) vers /years/review', async () => {
     mockFreshSession();
     await openYearsMode();
@@ -249,5 +250,93 @@ describe('yearsUI export (EPIC-033 P2)', () => {
     input.dispatchEvent(new Event('input'));
     await exportChoices();
     expect(api.mock.calls.every(([, o]) => (o as RequestInit | undefined)?.method !== 'POST')).toBe(true); // rien à exporter, pas de POST
+  });
+});
+
+describe('yearsUI filtre (EPIC-030 : chip F7/` sur la page Années)', () => {
+  /** Pose un terme de filtre : state (source de vérité) + valeur de l'input.
+   * (Le chemin « event input → debounce 150 ms → setFilterTerm » est couvert
+   * par filterChip.test.ts — ici on teste le pipeline de rendu years.) */
+  function typeFilter(term: string): void {
+    setFilterTerm('years', term);
+    const input = document.querySelector('.filter-chip[data-scope="years"] .filter-input') as HTMLInputElement;
+    if (input) input.value = term;
+    renderYears();
+  }
+
+  it('chip créé dans son slot, persistant à travers les re-renders', async () => {
+    await openYearsMode();
+    const chip = document.querySelector('.filter-chip[data-scope="years"]');
+    expect(chip).not.toBeNull();
+    // slot voisin précédent de la liste (hors DOM effacé)
+    const slot = document.getElementById('filter-slot-years');
+    expect(slot?.contains(chip as Node)).toBe(true);
+    expect(slot?.nextElementSibling?.id).toBe('years-list');
+    // re-render : le chip SURVIT (même nœud)
+    renderYears();
+    expect(document.querySelector('.filter-chip[data-scope="years"]')).toBe(chip);
+  });
+
+  it('terme appliqué : cartes certaines ET à revue filtrées, compteur affiché', async () => {
+    mockFreshSession();
+    await openYearsMode();
+    typeFilter('foo');
+    const cert = document.querySelectorAll('.years-card:not(.years-review)');
+    const rev = document.querySelectorAll('.years-card.years-review');
+    expect(cert.length).toBe(1); // foo — bar seulement
+    expect(rev.length).toBe(0); // baz qux et naems follow me exclus
+    const count = document.querySelector('.filter-chip[data-scope="years"] .filter-count');
+    expect(count!.textContent).toBe('1/3'); // 1 certaine (dédupliquée) + 2 à revue
+  });
+
+  it('terme sans match : listes vides, compteur 0/N', async () => {
+    mockFreshSession();
+    await openYearsMode();
+    typeFilter('inexistant');
+    expect(document.querySelectorAll('.years-card').length).toBe(0);
+    const count = document.querySelector('.filter-chip[data-scope="years"] .filter-count');
+    expect(count!.textContent).toBe('0/3');
+  });
+
+  it('✕ efface et restaure la liste complète', async () => {
+    mockFreshSession();
+    await openYearsMode();
+    typeFilter('baz');
+    expect(document.querySelectorAll('.years-card.years-review').length).toBe(1);
+    (document.querySelector('.filter-chip[data-scope="years"] .filter-clear') as HTMLElement).click();
+    renderYears();
+    expect(document.querySelectorAll('.years-card.years-review').length).toBe(2);
+  });
+
+  it('terme mémorisé dans state.filters : openYearsMode restaure le filtre', async () => {
+    mockFreshSession();
+    setFilterTerm('years', 'baz');
+    await openYearsMode();
+    const chipInput = document.querySelector('.filter-chip[data-scope="years"] .filter-input') as HTMLInputElement;
+    expect(chipInput.value).toBe('baz');
+    expect(document.querySelectorAll('.years-card.years-review').length).toBe(1);
+    setFilterTerm('years', ''); // nettoyage inter-tests (state module-level)
+  });
+
+  it('yearsMoveFocus navigue dans l\u2019ordre VISIBLE (saute les hors-filtre)', async () => {
+    mockFreshSession();
+    await openYearsMode();
+    // FIXTURE a_revue : [0]=baz qux (ambigu), [1]=naems follow me (lax)
+    typeFilter('naems');
+    yearsMoveFocus(1); // hors liste filtrée → entre par le début
+    expect(document.querySelector('.years-card.years-review.focused')?.getAttribute('data-index')).toBe('1');
+    yearsMoveFocus(-3); // clamp bas → reste sur la seule visible
+    expect(document.querySelector('.years-card.years-review.focused')?.getAttribute('data-index')).toBe('1');
+    setFilterTerm('years', '');
+  });
+
+  it('terme appliqué puis effacé : les rejetés restent masqués (2 mécanismes indépendants)', async () => {
+    mockFreshSession();
+    await openYearsMode();
+    (document.querySelector('.years-card.years-review .years-reject') as HTMLElement).click();
+    typeFilter('zzz');
+    (document.querySelector('.filter-chip[data-scope="years"] .filter-clear') as HTMLElement).click();
+    renderYears();
+    expect(document.querySelectorAll('.years-card.years-review').length).toBe(1); // rejet toujours masqué
   });
 });

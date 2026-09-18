@@ -106,7 +106,8 @@ $  → scope/périmètre (était ⟐ dans source)
     ~normal: Tab↔panels, ↑↓nav, ←→columns, Enter play, Space select, F5 copy, R replace-homonyme, F7// filter-chip, Escape pile: menu→modale→filtre→dossier→audio, ? légende, Shift+F10 menu clavier (EPIC-031)
     ~playlist: Tab↔source/sidebar, ↑↓nav, Space toggle, Enter play, F7 filter, Delete remove, Ctrl+S save, Ctrl+E export, Ctrl+↑↓ reorder
     ~dups: ↑↓ groupes, clic membre = override gagnant, R applique plan (perdants rangés → _trash), Échap → sync
-    ~years: ↑↓ cartes à revue, clic = choisir année / rejeter (session locale — l'écriture reste scripts/apply_years.py), Échap → sync (EPIC-033)
+    ~years: ↑↓ cartes à revue (ordre VISIBLE : saute hors-filtre et rejetés), F7 ou / = chip filtre scope 'years' (pattern filterChip EPIC-030 — cartes certaines ET à revue, terme mémorisé), clic = choisir année / rejeter (session locale — l'écriture reste scripts/apply_years.py), e = export choix, Échap → sync (EPIC-033)
+    !years sticky scroll: #filter-slot-years (z3) + .years-section:not(.ok) (z2) collent chip filtre + barre Export en haut — fond opaque var(--bg-deep), espacement DANS le fond peint (top:24px = hauteur exacte du slot), .years-card.years-review en z-index:0 sinon elles peignent au-dessus des stickys
     !clavier scopé page via registry (ctx.page) + activeModal:null — modal dialogue bloque tout
     !menu contextuel ouvert = état registry (ctx.isContextMenuOpen, EPIC-031) — ↓↑Enter Échap isole comme une modale ; surbrillance .ctx-highlight, focus DOM intact
     !matrice clavier (commands/keyboardMatrix.test.ts) : 78 cellules + 5 invariants (mort/shadowé/Échap-pile/labels), IDX dérivés du registry — shuffle-proof

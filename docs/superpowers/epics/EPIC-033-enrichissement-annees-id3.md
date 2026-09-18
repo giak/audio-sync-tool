@@ -261,6 +261,17 @@ rideau, priorité report_years) — l'apply ne s'appuyait plus sur un socle part
 pytest (endpoint ×2, last-rideau apply, override review — suite **241**) +6 vitest (export,
 reprise, champ année — suite **941**) ; lint + build OK.
 
+**UI — recherche + actions accessibles (2026-09-18)** : chip filtre du pattern EPIC-030
+branché sur la page Années — **F7** ouvre/referme, **`/`** ouvre (vim), **Échap** ferme,
+terme mémorisé par scope `years` (restauré au retour) ; filtre cartes certaines ET à revue,
+compteur matchés/total, ↑↓ naviguent dans l'ordre VISIBLE (hors-filtre et rejetés sautés).
+Zéro nouveau binding (F7 et `/` étaient déjà globaux — matrice 83 cellules intacte). Barre
+d'actions accessible au scroll (option sticky, CSS pur) : le chip (via son slot) et le
+titre « à revue » (champ année + Export) se collent en haut du conteneur — fond opaque,
+espacement dans le fond peint (aucune fente), `z-index: 0` sur les cartes (sans quoi elles
+peignent au-dessus d'un sticky descendant). Suite **948 vitest** (+7), 267 pytest, vérifié
+en live sur données réelles.
+
 **P1bis — passe Beatport (2026-09-18, script écrit — ⏸️ EN PAUSE, décision utilisateur : accès OAuth fermé + token portail à recopier ~1 h = trop de friction ; reprise = token dans data/beatport_token.json puis run)** :
 suite au brainstorm/sondes (mémoire Mnemolite `ad9e92a8`) — YouTube « - Topic » validé comme
 source fiable UNIQUEMENT ère digitale (release_date yt-dlp, 3/3 d'accord, mais 0 couverture

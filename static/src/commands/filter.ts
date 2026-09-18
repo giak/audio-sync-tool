@@ -13,6 +13,7 @@ import { registry } from './registry.js';
 /** Scope du chip à focus selon la page et la liste focusée. */
 function currentFilterScope(): string {
   if (st.page === 'dups') return 'dups';
+  if (st.page === 'years') return 'years';
   if (st.playlistMode) return st.playlistFocus === 'sidebar' ? 'playlist-tracks' : 'playlist-source';
   return st.activePanel === 'source' ? 'sync-source' : 'sync-epars';
 }

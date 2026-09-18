@@ -244,10 +244,11 @@ les 556 artistes numériques/symboles — `#07 enzyme x`, `204`, `2006 prodigy`)
 consolidé (`scripts/report_years.py` + `/years/preview`) en dernier rideau, sans
 chevauchement avec les sources amont.
 
-**Revue industrialisée (P2)** : dans la vue Années, choisissez/rejetez puis **e** (ou bouton
-💾) → les choix sont persistés (`data/year_review.json`) ; `apply_years.py --review --apply`
-les applique par lot — un choix humain OVERRIDE toujours la consolidation, journal + `--undo`
-inchangés.
+**Revue industrialisée (P2)** : dans la vue Années, **F7** ou **/** filtre les cartes
+(artiste, titre, année — terme mémorisé), choisissez/rejetez puis **e** (ou bouton 💾) → les
+choix sont persistés (`data/year_review.json`) ; le chip filtre et la barre d'export se
+collent en haut pendant le scroll ; `apply_years.py --review --apply` applique le lot — un
+choix humain OVERRIDE toujours la consolidation, journal + `--undo` inchangés.
 
 **Passe Beatport** (techno digitale 2004+, complément des sources vinyle) : Beatport
 n'ouvre pas la création d'apps OAuth au public — méthode éprouvée (celle de beets-beatport4) :

@@ -362,13 +362,39 @@ tr.file-row.twin-hint > td {
 
 /* EPIC-033 : vue Années manquantes (4e page) */
 #years-layout { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
-#years-main { flex: 1; overflow-y: auto; padding: 10px; }
+/* padding-top: 0 — l'espacement haut vit DANS le slot collé (fond peint, le
+   contenu ne passe jamais derrière) ; gauche/droite/bas inchangés. */
+#years-main { flex: 1; overflow-y: auto; padding: 0 10px 10px; }
+/* Barre d'actions accessible pendant le scroll : le chip filtre (via son
+   slot, son vrai containing block) et le titre « à revue » (input + Export)
+   se collent en haut du conteneur quand on les dépasse — fond opaque (pas de
+   transparence sur le contenu qui défile). */
+#years-main > #filter-slot-years {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--bg-deep);
+  padding: 10px 0 4px;   /* espacement haut DANS le fond peint */
+}
+#years-main > #filter-slot-years .filter-chip {
+  background: var(--bg-deep);
+  margin-bottom: 0;
+}
+.years-section {
+  font-weight: 600; font-size: 13px; margin: 12px 0 6px;
+}
+.years-section:not(.ok) {
+  position: sticky; top: 24px; z-index: 2;   /* = hauteur exacte du slot collé */
+  background: var(--bg-deep);
+  /* espacement DANS le fond peint : aucune fente pour le contenu défilant */
+  margin-top: 0;
+  padding: 12px 0 6px;
+  border-bottom: 1px solid var(--border-panel);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
 #years-main h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border-panel); }
 #years-hint { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
 #years-count { color: var(--text-dim); font-weight: 400; }
 .years-empty { color: var(--text-dim); font-style: italic; padding: 14px 4px; }
 .years-section { font-weight: 600; font-size: 13px; margin: 12px 0 6px; }
-.years-section.ok { color: var(--led-green); }
 .years-card {
   border: 1px solid var(--border-panel);
   border-radius: 6px;
@@ -377,6 +403,10 @@ tr.file-row.twin-hint > td {
   font-family: monospace;
   font-size: 12px;
 }
+/* Les cartes défilent SOUS les stickys (slot filtre z3, barre à revue z2) :
+   sans position propre, elles peignent leur fond au-dessus d'un sticky
+   descendant de même racine (ordre du DOM). */
+.years-card.years-review { position: relative; z-index: 0; }
 .years-card.years-review { cursor: pointer; }
 .years-card.years-review.focused {
   outline: 2px solid var(--amber);
