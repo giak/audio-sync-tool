@@ -53,12 +53,24 @@
 | [EPIC-032](EPIC-032-matching-doublons-niveaux.md) | Doublons à deux niveaux : mêmes enregistrements (arbitrage/trash, v1) + **versions d'un même morceau** réunies par clé artiste/titre (parsing + inclusion de tokens, durées libres — jamais trashées automatiquement) | 🟢 Livrée (2026-09-17, prototype validé sur vraies données : 5 Energy Flash réunis, ~600 clusters, garde trash alignée sur la durée du gagnant) | Haute | EPIC-028 (moteur v1) |
 | [EPIC-031](EPIC-031-clavier-centralise-grammaire-catalogue.md) | Clavier : matrice de caractérisation (touches × contextes — bindings morts/shadowés = rouge CI), légende **générée** depuis les bindings labellisés (test bijection), grammaire des touches (Échap = pile de fermeture explicite), ergonomie sync (Space→M déplacer, écoute en chaîne, `?` aide). KISS : pas de nouveau sous-système — visibilité plutôt qu'architecture | 🟡 P0+P1 livrés (P0 `b66d091`, P1 2026-09-17) — matrice 78 cellules + 5 invariants (IDX dérivés du registry : shuffle-proof), 4 findings corrigés (Échap modale>filtre, fallback menu remplacé par l'état `isContextMenuOpen`, Alt+←/→ vivants, clavier dups déshadowé), pile Échap complète menu→modale→filtre→dossier→audio (invariant 4), légende générée + bijection, `?` légende, menu contextuel clavier (Shift+F10, ↑↓+Enter) ; P2 ergonomie à venir | Haute | bugs clavier 2026-09-16 (bindings morts, touches volées) |
 | [EPIC-033](EPIC-033-enrichissement-annees-id3.md) | Enrichissement des années ID3 manquantes (57 % du corpus) : 7 sources — MusicBrainz (1ʳᵉ sortie, 1 req/s) → Deezer → Discogs (token) → iTunes → Discogs reformulé ×2 (junk-artiste/marqueurs/suffixes) → YouTube (Topic + tier vérifié) — consolidation **1 443 certaines / 782 à revue / 1 473 introuvables**, apply mutagen par vagues de confiance (**2 161 écritures au journal**, backup additif, `--undo`) + vue « Années manquantes » (preview → confirmation, jamais écraser) + **P2** : export des choix (**e**/💾 → `POST /years/review`) consommé par `apply_years.py --review` (override humain) | 🏁 **Clôturée (2026-09-18)** — revue soldée (692 choix, 59 rejets), apply final idempotent, **76 % du corpus avec année** (vs 43 %) ; restes = données inexistantes en ligne (voir bilan de clôture dans l'epic) | Haute | mémoires Mnemolite `9539d4ab`, `32392db0`, `357e89d8` (bilan final) |
+| [EPIC-034](EPIC-034-ux-rangement-sync-player-pastille.md) | UX rangement Sync : player audio des cartes (Années/Doublons, ▶/⏹ player global), pastille « déjà rangé » sur les épars jumeaux sous le filtre source, auto-expansion mémoire du dossier destination après F5 | 🟢 Livrée (2026-09-19, `c6546a0`, `ca21e21`, `6e02f87`) | Haute | EPIC-030/028/033 (socles) |
 
 ## État actuel du projet (2026-09-19)
 
 - Tests : **979 vitest** (40 fichiers) / **237 pytest** (test_app 152, test_nml 29,
   test_analysis 15, test_apply_years 11, test_collect_discogs_reform 12,
   test_collect_itunes 10, test_report_years 8) — tous verts.
+- **EPIC-034 livrée** (2026-09-19, `c6546a0` `ca21e21` `6e02f87`) : trois frictions du
+  workflow de rangement soldées — player audio des cartes Années/Doublons (▶/⏹ réutilisant
+  le player global, `playingPath()` re-marque après chaque re-render), pastille « ⤷ déjà
+  rangé » sur les épars dont le jumeau est consultable sous le filtre source actif
+  (sémantique identique à l'arbre, refresh croisé — jamais périmée), auto-expansion
+  mémoire du dossier destination après F5 (`revealSourceDir` idempotent, zéro vol de
+  focus). Vérifié en live sur données réelles.
+- Filtre à deux niveaux des arbres source (2026-09-19, EPIC-030, `4f4eff2` + `87a1006`) :
+  le terme du chip ne matche que les **dossiers** par défaut — l'expansion (manuelle ou
+  auto) rend TOUS les fichiers (vérifier un doublon sous filtre) ; toggle 📄 fichiers
+  opt-in (recherche par nom de fichier, comportement historique préservé derrière).
 - **EPIC-033 livrée** (2026-09-17, `a1810d6`) : 3 704 fichiers sans année (57 %) → 4 passes
   sans clé (MB/Deezer/Discogs/iTunes), consolidation 1 427 certaines / 642 à revue /
   1 629 introuvables, **1 349 tags appliqués** (journal = backup, `--undo` idempotent),

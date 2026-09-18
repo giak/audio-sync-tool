@@ -15,7 +15,17 @@ manquants, les copie en un clic vers le bon sous-dossier, et intègre un
 - **Filtre rapide** (chips intégrés au-dessus des colonnes Sync) : F7 ou /
   focus le chip de la colonne focusée, filtre en direct insensible casse/accents
   sur nom + **année** + codec, mémorisé par liste (changer de colonne/page le
-  conserve), ✕/Backspace pour effacer.
+  conserve), ✕/Backspace pour effacer. Sur les arbres source : **filtre à deux
+  niveaux** — dossiers seuls par défaut (déplier montre TOUS les fichiers, pour
+  vérifier un doublon), toggle 📄 fichiers pour chercher aussi par nom de fichier.
+- **Rangement assisté** (EPIC-034) : pastille « ⤷ déjà rangé » sur les fichiers éparpillés
+  dont le jumeau existe déjà dans le dossier visé par le filtre source (tooltip
+  = chemin exact — copier créerait un doublon), et **auto-ouverture du dossier
+  destination après F5** : la copie est visible immédiatement, sans re-déplier,
+  focus épars conservé pour enchaîner.
+- **Lecture audio partout** : bouton ▶/⏹ sur les cartes Années et les membres
+  de groupe Doublons (réutilise le player global — écouter avant de trancher),
+  état « en lecture » re-marqué après chaque re-render.
 - **Doublons** : vue dédiée des groupes de versions d'un même morceau (épars
   et/ou rangés) — arbitrage automatique par qualité (FLAC > 320 > 128), override
   au clic, application du plan (gagnant rangé à droite, perdants rangés → trash).
@@ -95,7 +105,7 @@ disponibles dans les pages.
 | **Tab** | ↔ basculer de panneau | |
 | **Entrée** | Jouer le fichier | Déplier/replier un dossier |
 | **Espace** | Sélectionner le fichier | Déplier/replier un dossier |
-| **F5** | Copier vers le dossier survolé (avec confirmation) | |
+| **F5** | Copier vers le dossier survolé (avec confirmation) — le dossier destination s'ouvre automatiquement (auto-expansion mémoire) | |
 | **F7** / **/** | Focus le chip de filtre de la colonne focusée — tape pour filtrer (nom, année, codec) ; ✕ ou Backspace champ vide pour effacer | Même comportement sur l'arbre (auto-dépliage des branches matchées) |
 | **Échap** | Sortir du chip / fermer modale / stopper l'audio | |
 | **N** | Noter le fichier focusé (0-100, clic sur la zone de note aussi possible) | |
@@ -107,6 +117,7 @@ disponibles dans les pages.
 |--------|--------|
 | **↑ ↓** | Naviguer les groupes de versions |
 | **Clic sur un exemplaire** | Le désigner gagnant (override de l'arbitrage qualité) |
+| **▶ / ⏹ (bouton du membre)** | Écouter avant de trancher — ne désigne **jamais** le gagnant (clic isolé) |
 | **R** / bouton **✓ Appliquer** | Plan du groupe (confirmation) : gagnant rangé à droite, rangés perdants → `_trash/<date>/` |
 | **Échap** / **📦 Sync** | Revenir à la page Sync |
 
@@ -168,10 +179,13 @@ Chaque fichier affiche : **Année** — **Codec** — **Durée**
 
 ### Workflow F5
 
-1. Naviguer sur un fichier ● (panneau gauche)
+1. Naviguer sur un fichier ● (panneau gauche) — la pastille « ⤷ déjà rangé »
+   signale ceux dont le jumeau existe déjà dans le dossier filtré à droite
 2. **Tab** → panneau droit
 3. **↑↓** sur un dossier de destination
 4. **F5** → modale de confirmation (**Entrée** valide, **Échap** annule)
+5. Le dossier destination **s'ouvre automatiquement** et montre la copie —
+   le focus reste sur l'épars pour enchaîner
 
 ### Page Playlist
 
@@ -249,7 +263,9 @@ profils artiste — le garde-fou reste en place pour les relances futures (7ᵉ 
 **Revue industrialisée (P2)** : dans la vue Années, **F7** ou **/** filtre les cartes
 (artiste, titre, année — terme mémorisé), choisissez/rejetez puis **e** (ou bouton 💾) → les
 choix sont persistés (`data/year_review.json`) ; le chip filtre et la barre d'export se
-collent en haut pendant le scroll ; `apply_years.py --review --apply` applique le lot — un
+collent en haut pendant le scroll ; chaque carte porte un bouton **▶** pour écouter le
+fichier avant de trancher (player global, état conservé à travers les re-renders) ;
+`apply_years.py --review --apply` applique le lot — un
 choix humain OVERRIDE toujours la consolidation, journal + `--undo` inchangés.
 
 **Passe Beatport** (techno digitale 2004+, complément des sources vinyle) : Beatport

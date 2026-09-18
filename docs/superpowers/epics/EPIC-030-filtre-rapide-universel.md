@@ -147,6 +147,7 @@ par le matcher : les chiffres matchent aussi l'année).
 |---|---|---|
 | P0 | `850584a` | filterEngine + filterChip + scopes sync-epars/sync-source + F7// + retrait palette (29 fichiers, +455/−399) |
 | Filtre 2 niveaux | `4f4eff2` | toggle 📄 fichiers dans le chip des arbres (sync-source + playlist-source) : dossiers seuls par défaut (expansion rend TOUS les fichiers), fichiers opt-in (dirHasMatchingFile + table filtrée à la source dans buildSourceChildren) — 9 fichiers, +298/−15 |
+| Pastille « déjà rangé » (→ EPIC-034) | `ca21e21` | le helper `twinUnderFilteredDir` reprend la sémantique exacte du filtre 2 niveaux (dossiers, ou nom de fichier en mode 📄) : la pastille sur l'épars n'annonce que ce que l'arbre montre réellement |
 
 Découvertes P0 documentées : `domPatches.ts` lit désormais `state.filters['sync-source']`
 (compteur header après copy) ; le registry ne porte plus `filterActive` (les bindings
