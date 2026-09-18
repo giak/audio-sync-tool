@@ -19,6 +19,11 @@ export interface FilterChipOptions {
   onChange: () => void;
   /** Appelé quand l'input perd le focus volontairement (Backspace vide). */
   onBlur?: () => void;
+  /** Arbre de dossiers : ajoute le toggle « 📄 fichiers » (deux niveaux).
+   *  Défaut : le terme ne filtre que les NOMS de dossiers (dépliables pour
+   *  consulter les fichiers — doublon-check après rangement) ; opt-in : il
+   *  matche aussi les fichiers (auto-expansion, comportement historique). */
+  tree?: boolean;
 }
 
 const DEBOUNCE_MS = 150;
@@ -57,6 +62,10 @@ export function ensureFilterChip(listContainer: HTMLElement, opts: FilterChipOpt
       input.value = term;
       existing.classList.toggle('active', term.length > 0);
     }
+    if (opts.tree && input instanceof HTMLInputElement) {
+      existing.querySelector('.filter-files')?.classList.toggle('on', isFileFilter(opts.scope));
+      input.placeholder = isFileFilter(opts.scope) ? (opts.placeholder ?? 'Filtrer…') : 'Filtrer les dossiers…';
+    }
     return existing;
   }
 
@@ -76,6 +85,28 @@ export function ensureFilterChip(listContainer: HTMLElement, opts: FilterChipOpt
 
   input.value = state.filters[opts.scope] ?? '';
   chip.classList.toggle('active', input.value.length > 0);
+
+  // Toggle « fichiers » (arbres uniquement) — deux niveaux de filtre :
+  // dossiers seuls par défaut, fichiers opt-in (comportement historique).
+  if (opts.tree) {
+    const filesBtn = document.createElement('button');
+    filesBtn.type = 'button';
+    filesBtn.className = 'filter-files';
+    filesBtn.title =
+      'Le filtre cherche aussi dans les FICHIERS (sinon : dossiers uniquement, dépliables pour les consulter)';
+    filesBtn.textContent = '📄 fichiers';
+    chip.insertBefore(filesBtn, clearBtn);
+    filesBtn.classList.toggle('on', isFileFilter(opts.scope));
+    input.placeholder = isFileFilter(opts.scope) ? (opts.placeholder ?? 'Filtrer…') : 'Filtrer les dossiers…';
+    filesBtn.addEventListener('click', () => {
+      const on = !isFileFilter(opts.scope);
+      setFileFilter(opts.scope, on);
+      filesBtn.classList.toggle('on', on);
+      input.placeholder = on ? (opts.placeholder ?? 'Filtrer…') : 'Filtrer les dossiers…';
+      opts.onChange();
+      filesBtn.focus(); // l'input n'était pas focusé : garde l'interaction vivante
+    });
+  }
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   input.addEventListener('input', () => {
@@ -122,6 +153,21 @@ export function setFilterTerm(scope: string, term: string): void {
 /** Le scope a-t-il un filtre actif ? */
 export function isFilterActive(scope: string): boolean {
   return getFilterTerm(scope).length > 0;
+}
+
+// ── Mode fichiers des arbres (deux niveaux, opt-in) ─────────────────────
+// Stocké dans state.filters sous 'files:<scope>' (mêmoire de session, même
+// durée de vie que le terme). Un terme actif reste requis : le toggle seul
+// ne filtre rien (comportement hors filtre inchangé).
+
+/** L'arbre du scope traque-t-il aussi les fichiers ? (terme actif requis) */
+export function isFileFilter(scope: string): boolean {
+  return getFilterTerm(scope).length > 0 && state.filters[`files:${scope}`] === '1';
+}
+
+/** Écrit le mode fichiers du scope (bouton 📄 des arbres). */
+export function setFileFilter(scope: string, on: boolean): void {
+  state.filters = { ...state.filters, [`files:${scope}`]: on ? '1' : '' };
 }
 
 /** Focus l'input du chip du scope ; l'AFFICHE s'il était caché (F7 toggle).

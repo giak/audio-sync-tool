@@ -51,7 +51,7 @@ vi.mock('./state.js', async importOriginal => {
   return { ...mod, on: vi.fn() };
 });
 
-import { setFilterTerm } from './render/filterChip.js';
+import { setFileFilter, setFilterTerm } from './render/filterChip.js';
 import {
   patchEparsFileAfterCopy,
   patchSourceFileAfterCopy,
@@ -753,15 +753,28 @@ describe('toggleSourceDir', () => {
       expect(dirEl.querySelector('.children')).toBeNull();
     });
 
-    it('passes isFiltered=true to buildSourceChildren when filter term set', () => {
+    it('filtre dossiers (défaut) : expansion rend TOUS les fichiers (consultation possible)', () => {
       setupToggleDOM();
       setFilterTerm('sync-source', 'rock');
+      setFileFilter('sync-source', false);
 
       toggleSourceDir('/home/Music/Rock');
 
       const children = document.querySelector('#source-container .children')!;
       const subDirs = children.querySelectorAll('.directory');
       expect(subDirs.length).toBe(2);
+      const fileRows = children.querySelectorAll('.file-row');
+      expect(fileRows.length).toBe(3);
+    });
+
+    it('toggle fichiers ON : expansion masque les fichiers non matchés (comportement historique)', () => {
+      setupToggleDOM();
+      setFilterTerm('sync-source', 'rock');
+      setFileFilter('sync-source', true);
+
+      toggleSourceDir('/home/Music/Rock');
+
+      const children = document.querySelector('#source-container .children')!;
       const fileRows = children.querySelectorAll('.file-row');
       expect(fileRows.length).toBe(0);
     });

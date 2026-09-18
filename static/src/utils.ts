@@ -82,3 +82,17 @@ export function dirHasMatchingDescendant(node: TreeNode, term: string): boolean 
   }
   return false;
 }
+
+/** Un fichier du nœud (ou d'un sous-dossier) matche-t-il le terme ? —
+ *  complément « 📄 fichiers » du filtre à deux niveaux des arbres : étend la
+ *  visibilité et l'auto-expansion aux dossiers contenant le fichier cherché. */
+export function dirHasMatchingFile(node: TreeNode, term: string): boolean {
+  for (const f of (node.__files__ as Array<{ filename: string }> | undefined) ?? []) {
+    if (f.filename.toLowerCase().includes(term)) return true;
+  }
+  for (const [key, child] of Object.entries(node)) {
+    if (key === '__files__') continue;
+    if (dirHasMatchingFile(child as TreeNode, term)) return true;
+  }
+  return false;
+}

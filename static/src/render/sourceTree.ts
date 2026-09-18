@@ -5,12 +5,12 @@ import { focusItemByElement, revalidateFocus, setActivePanel } from '../focus.js
 import { getActivePlaylistName, getPendingTracks } from '../playlist.js';
 import { state, type TreeNode } from '../state.js';
 import { confirmDialog, showContextMenu, showError } from '../ui.js';
-import { dirHasMatchingDescendant, type FileStatus } from '../utils.js';
+import { dirHasMatchingDescendant, dirHasMatchingFile, type FileStatus } from '../utils.js';
 import { setBatchCopy } from './batchCopy.js';
 import { openCueEditor } from './cueEditor.js';
 import { doDragCopy } from './dragDrop.js';
 import { makeFileEl, makeFileTable } from './fileRow.js';
-import { ensureFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
+import { ensureFilterChip, getFilterTerm, isFileFilter, updateFilterCount } from './filterChip.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
 
 // ── Internal types ────────────────────────────────────────────────────────
@@ -106,6 +106,7 @@ function buildSourceChildren(
   isFiltered: boolean,
   _inPlaylistPaths?: Set<string> | null,
   toggleFn?: ToggleFn,
+  fileTerm = '',
 ): HTMLDivElement {
   const toggle = toggleFn || toggleSourceDir;
   const childContainer = document.createElement('div');
@@ -187,7 +188,11 @@ function buildSourceChildren(
     const status: FileStatus = inPlaylistPaths ? 'nouveau' : 'doublon';
     const fileTable = makeFileTable(true);
     const tbody = fileTable.querySelector('tbody');
-    for (const f of (node.__files__ || []) as FileEntry[]) {
+    const lowerTerm = fileTerm.toLowerCase();
+    const entries = (node.__files__ || []) as FileEntry[];
+    // Mode fichiers (toggle 📄) : seuls les fichiers matchant le terme sont rendus.
+    const visible = lowerTerm ? entries.filter(f => f.filename.toLowerCase().includes(lowerTerm)) : entries;
+    for (const f of visible) {
       const fullFilePath = `${baseDir}/${f.relPath}`;
       const row = makeFileEl(
         f.filename,
@@ -242,7 +247,14 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
         info.node as TreeNode,
         dirPath,
         info.baseDir,
-        getFilterTerm('sync-source').length > 0 || getFilterTerm('playlist-source').length > 0,
+        // Fichiers masqués UNIQUEMENT si le filtre traque les fichiers
+        // (toggle 📄 actif). En mode dossiers seuls (défaut), l'expansion —
+        // manuelle ou auto — montre TOUS les fichiers du dossier : consulter
+        // le contenu sous filtre est le moyen de vérifier un doublon.
+        isFileFilter('sync-source') || isFileFilter('playlist-source'),
+        undefined,
+        undefined,
+        fileTermForTrees(),
       );
       dirEl.appendChild(childrenEl);
       requestAnimationFrame(() => {
@@ -259,6 +271,14 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
 
 export function togglePlaylistSourceDir(dirPath: string): void {
   toggleSourceDir(dirPath, '#playlist-source-container');
+}
+
+/** Terme de recherche fichier des arbres (mode 📄 uniquement) : le terme du
+ *  scope en mode fichiers, sinon chaîne vide (tous les fichiers rendus). */
+function fileTermForTrees(): string {
+  if (isFileFilter('sync-source')) return getFilterTerm('sync-source');
+  if (isFileFilter('playlist-source')) return getFilterTerm('playlist-source');
+  return '';
 }
 
 function updateSourceHeaderCount(): void {
@@ -347,14 +367,21 @@ export function renderDirTree(node: TreeNode, container: HTMLElement, basePath: 
 export function renderFilteredSource(container: HTMLElement, allTrees: TreeAndDir[], scope: string): number {
   let visibleCount = 0;
   const term = getFilterTerm(scope).toLowerCase();
+  const filesMode = isFileFilter(scope);
   for (const { tree, dirPath } of allTrees) {
     const dirNames = Object.keys(tree)
       .filter(k => k !== '__files__')
       .sort();
     for (const name of dirNames) {
-      if (!name.toLowerCase().includes(term) && !dirHasMatchingDescendant(tree[name] as TreeNode, term)) continue;
+      const node = tree[name] as TreeNode;
+      if (
+        !name.toLowerCase().includes(term) &&
+        !dirHasMatchingDescendant(node, term) &&
+        !(filesMode && dirHasMatchingFile(node, term))
+      )
+        continue;
       visibleCount++;
-      renderFilteredDirNode(tree[name] as TreeNode, container, dirPath, name, scope);
+      renderFilteredDirNode(node, container, dirPath, name, scope);
     }
   }
   return visibleCount;
@@ -368,11 +395,14 @@ function renderFilteredDirNode(
   scope: string,
 ): void {
   const term = getFilterTerm(scope).toLowerCase();
+  const filesMode = isFileFilter(scope);
   const fullPath = `${basePath}/${name}`;
-  if (!name.toLowerCase().includes(term) && !dirHasMatchingDescendant(node, term)) return;
+  const dirMatch = dirHasMatchingDescendant(node, term);
+  const fileMatch = filesMode && dirHasMatchingFile(node, term);
+  if (!name.toLowerCase().includes(term) && !dirMatch && !fileMatch) return;
 
   const manualExpand = state.sourceExpanded.has(fullPath);
-  const isExpanded = dirHasMatchingDescendant(node, term) || manualExpand;
+  const isExpanded = dirMatch || fileMatch || manualExpand;
   const files = (node.__files__ || []) as FileEntry[];
 
   const dirEl = document.createElement('div');
@@ -424,7 +454,10 @@ function renderFilteredDirNode(
   state.sourceNodeMap = new Map([...state.sourceNodeMap, [fullPath, { node, baseDir: basePath }]]);
 
   if (isExpanded) {
-    dirEl.appendChild(buildSourceChildren(node, fullPath, basePath, !manualExpand));
+    // Mode fichiers ON : auto-étendu MAIS table rendue, filtrée au terme
+    // (le fichier cherché est visible). Mode dossiers : contenu COMPLET —
+    // la vérification de doublon exige de voir tout ce que le dossier contient.
+    dirEl.appendChild(buildSourceChildren(node, fullPath, basePath, false, undefined, undefined, filesMode ? term : ''));
   }
 }
 
@@ -499,9 +532,10 @@ export function renderSource(): void {
   // mémorisé scope 'sync-source') — la saisie survit aux re-renders.
   ensureFilterChip(container, {
     scope: 'sync-source',
-    placeholder: 'Filtrer dossiers / fichiers…',
+    placeholder: 'Filtrer dossiers + fichiers…',
     onChange: renderSource,
     onBlur: () => revalidateFocus(),
+    tree: true,
   });
 
   const allTrees: TreeAndDir[] = [];

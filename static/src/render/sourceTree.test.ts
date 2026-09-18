@@ -51,7 +51,13 @@ vi.mock('../focus.js', () => ({ focusItemByElement, setActivePanel }));
 vi.mock('../ui.js', () => ({ showContextMenu, confirmDialog, showError }));
 vi.mock('../api.js', () => ({ api }));
 vi.mock('../playlist.js', () => ({ getActivePlaylistName, getPendingTracks }));
-vi.mock('../utils.js', () => ({ dirHasMatchingDescendant }));
+vi.mock('../utils.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils.js')>();
+  return {
+    ...actual,
+    dirHasMatchingDescendant, // spy contrôlable ; dirHasMatchingFile reste réel
+  };
+});
 vi.mock('./fileRow.js', () => ({
   makeFileEl,
   makeFileTable: () => {
@@ -69,7 +75,7 @@ vi.mock('./cueEditor.js', () => ({ openCueEditor: vi.fn() }));
 
 // ── Import the module under test ──────────────────────────────────────────
 
-import { ensureFilterChip, setFilterTerm } from './filterChip.js';
+import { ensureFilterChip, setFileFilter, setFilterTerm } from './filterChip.js';
 import { renderDirTree, renderSource, togglePlaylistSourceDir, toggleSourceDir } from './sourceTree.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -560,6 +566,110 @@ describe('render/sourceTree', () => {
       const empties = document.querySelectorAll('#source-container .panel-empty');
       expect(empties.length).toBe(1);
       expect(empties[0].textContent).toBe('Aucun dossier trouvé pour ce filtre.');
+    });
+
+    it('filtre dossiers (défaut) : le dossier auto-étendu rend TOUS ses fichiers (doublon-check)', () => {
+      setupContainer();
+      state.sourceFiles = {
+        '/base': {
+          'a1.mp3': { path: 'techno_2020/a1.mp3', year: null, duration: 180, codec: 'MP3' },
+          'b1.mp3': { path: 'techno_2020/b1.mp3', year: null, duration: 181, codec: 'MP3' },
+        },
+      };
+      setFilterTerm('sync-source', 'techno'); // mode dossiers seuls (toggle OFF explicite — état partagé entre tests)
+      setFileFilter('sync-source', false);
+      // Le filtre matche le NOM du dossier (comportement réel de la garde)
+      (dirHasMatchingDescendant as ReturnType<typeof vi.fn>).mockReturnValue(true);
+
+      renderSource();
+
+      // Auto-étendu, mais fichiers présents (makeFileEl mocké → .file-row mocked)
+      const rows = document.querySelectorAll('#source-container .file-row');
+      expect(rows.length).toBe(2);
+      state.sourceExpanded.clear();
+    });
+
+    it('toggle fichiers ON : mêmes données → fichiers filtrés à lauto-expansion', () => {
+      setupContainer();
+      state.sourceFiles = {
+        '/base': {
+          'a1.mp3': { path: 'techno_2020/a1.mp3', year: null, duration: 180, codec: 'MP3' },
+          'b1.mp3': { path: 'techno_2020/b1.mp3', year: null, duration: 181, codec: 'MP3' },
+        },
+      };
+      setFilterTerm('sync-source', 'techno');
+      setFileFilter('sync-source', true);
+      (dirHasMatchingDescendant as ReturnType<typeof vi.fn>).mockReturnValue(true);
+
+      renderSource();
+
+      // Comportement historique : l'auto-expansion n'affiche pas les fichiers
+      // (filtrage par makeFileEl, mocké ici) → table tbody vide
+      const rows = document.querySelectorAll('#source-container .file-row');
+      expect(rows.length).toBe(0);
+      state.sourceExpanded.clear();
+    });
+
+    it('toggle fichiers ON : un terme de fichier rend le dossier et auto-étend (recherche fichier)', () => {
+      setupContainer();
+      state.sourceFiles = {
+        '/base': {
+          'omen.mp3': { path: 'techno_2020/omen.mp3', year: null, duration: 180, codec: 'MP3' },
+          'autre.mp3': { path: 'techno_2020/autre.mp3', year: null, duration: 181, codec: 'MP3' },
+        },
+      };
+      setFilterTerm('sync-source', 'omen');
+      setFileFilter('sync-source', true);
+      (dirHasMatchingDescendant as ReturnType<typeof vi.fn>).mockReturnValue(false); // aucun nom de dossier ne matche
+
+      renderSource();
+
+      // dirHasMatchingFile (réel) trouve omen.mp3 → dossier visible ET auto-étendu
+      const dir = document.querySelector<HTMLElement>('#source-container .directory');
+      expect(dir).not.toBeNull();
+      expect(dir!.classList.contains('expanded')).toBe(true);
+      state.sourceExpanded.clear();
+    });
+
+    it('mode dossiers (défaut) : un terme de fichier seul ne fait ressortir aucun dossier', () => {
+      setupContainer();
+      state.sourceFiles = {
+        '/base': {
+          'omen.mp3': { path: 'techno_2020/omen.mp3', year: null, duration: 180, codec: 'MP3' },
+          'autre.mp3': { path: 'techno_2020/autre.mp3', year: null, duration: 181, codec: 'MP3' },
+        },
+      };
+      setFilterTerm('sync-source', 'omen');
+      setFileFilter('sync-source', false);
+      (dirHasMatchingDescendant as ReturnType<typeof vi.fn>).mockReturnValue(false);
+
+      renderSource();
+
+      expect(document.querySelector('#source-container .directory')).toBeNull();
+      expect(document.querySelector('#source-container .panel-empty')).not.toBeNull();
+      state.sourceExpanded.clear();
+    });
+
+    it('expansion manuelle sous filtre dossiers : fichiers rendus (le bug signalé)', () => {
+      setupContainer();
+      state.sourceFiles = {
+        '/base': {
+          'a1.mp3': { path: 'techno_2020/a1.mp3', year: null, duration: 180, codec: 'MP3' },
+          'b1.mp3': { path: 'techno_2020/b1.mp3', year: null, duration: 181, codec: 'MP3' },
+        },
+      };
+      setFilterTerm('sync-source', 'techno');
+      setFileFilter('sync-source', false); // le ON du test précédent fuiterait sinon
+      (dirHasMatchingDescendant as ReturnType<typeof vi.fn>).mockReturnValue(false); // nom du dossier matche seul
+
+      renderSource();
+      const dir = document.querySelector<HTMLElement>('#source-container .directory')!;
+      expect(dir.classList.contains('expanded')).toBe(false); // replié : clic requis
+      dir.click(); // toggleSourceDir → buildSourceChildren
+
+      const rows = document.querySelectorAll('#source-container .file-row');
+      expect(rows.length).toBe(2);
+      state.sourceExpanded.clear();
     });
   });
 

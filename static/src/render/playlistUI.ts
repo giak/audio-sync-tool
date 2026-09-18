@@ -379,9 +379,10 @@ export function renderPlaylistSource(): void {
   // mémorisé scope 'playlist-source') — la saisie survit aux re-renders.
   ensureFilterChip(container, {
     scope: 'playlist-source',
-    placeholder: 'Filtrer dossiers / fichiers…',
+    placeholder: 'Filtrer dossiers + fichiers…',
     onChange: renderPlaylistSource,
     onBlur: revalidateFocus,
+    tree: true,
   });
 
   const allTrees: TreeAndDir[] = [];

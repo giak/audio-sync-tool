@@ -700,6 +700,21 @@ tr.file-row.twin-hint > td {
 .filter-chip.active .filter-clear { display: inline; }
 .filter-chip .filter-clear:hover { color: var(--led-red); }
 
+/* Toggle « 📄 fichiers » (arbres sync-source / playlist-source) : filtre à
+   deux niveaux — dossiers seuls par défaut (dépliables pour consulter),
+   fichiers opt-in (auto-expansion, comportement historique). */
+.filter-chip .filter-files {
+  background: none; border: 1px solid transparent; cursor: pointer;
+  color: var(--text-muted); font-size: 11px;
+  padding: 0 4px; border-radius: 3px; white-space: nowrap;
+}
+.filter-chip .filter-files:hover { color: var(--text-primary); border-color: var(--border-panel); }
+.filter-chip .filter-files.on {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
 /* ===== Modal System ================================================== */
 .modal {
   position: fixed; inset: 0; z-index: 100;

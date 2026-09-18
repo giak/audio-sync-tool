@@ -11,6 +11,8 @@ import {
   focusFilterChip,
   getFilterTerm,
   hideFilterChip,
+  isFileFilter,
+  setFileFilter,
   setFilterTerm,
   updateFilterCount,
 } from './filterChip.js';
@@ -71,6 +73,53 @@ describe('filterChip (persistant)', () => {
     ensureFilterChip(list, { scope: 'sync-epars', onChange: () => {} });
     ensureFilterChip(list, { scope: 'sync-epars', onChange: () => {} });
     expect(document.querySelectorAll('.filter-chip[data-scope="sync-epars"]').length).toBe(1);
+  });
+
+  it('tree chip : bouton 📄 fichiers avec état par défaut OFF', () => {
+    const list = document.createElement('div');
+    document.body.appendChild(list);
+    const chip = ensureFilterChip(list, { scope: 'sync-source', onChange: () => {}, tree: true });
+    const btn = chip.querySelector<HTMLButtonElement>('.filter-files');
+    expect(btn).not.toBeNull();
+    expect(btn!.classList.contains('on')).toBe(false);
+    expect(isFileFilter('sync-source')).toBe(false);
+    // Sans toggle, pas de bouton (chips plats : epars, years…)
+    const plain = ensureFilterChip(list, { scope: 'sync-epars', onChange: () => {} });
+    expect(plain.querySelector('.filter-files')).toBeNull();
+  });
+
+  it('tree chip : toggle ON matche aussi les fichiers (isFileFilter) + placeholder', () => {
+    const list = document.createElement('div');
+    document.body.appendChild(list);
+    const chip = ensureFilterChip(list, {
+      scope: 'sync-source',
+      onChange: () => {},
+      tree: true,
+      placeholder: 'Filtrer dossiers + fichiers…',
+    });
+    setFilterTerm('sync-source', 'techno');
+    const btn = chip.querySelector<HTMLButtonElement>('.filter-files')!;
+    const input = chip.querySelector<HTMLInputElement>('.filter-input')!;
+    expect(input.placeholder).toBe('Filtrer les dossiers…');
+    btn.click();
+    expect(isFileFilter('sync-source')).toBe(true);
+    expect(state.filters['files:sync-source']).toBe('1');
+    expect(input.placeholder).toBe('Filtrer dossiers + fichiers…');
+    // Toggle OFF sans terme : le state bascule mais le mode reste inactif
+    btn.click();
+    expect(isFileFilter('sync-source')).toBe(false);
+    expect(state.filters['files:sync-source']).toBe('');
+  });
+
+  it('tree chip : idempotence préserve le bouton et re-synchronise son état', () => {
+    const list = document.createElement('div');
+    document.body.appendChild(list);
+    const chip = ensureFilterChip(list, { scope: 'sync-source', onChange: () => {}, tree: true });
+    setFilterTerm('sync-source', 'techno');
+    setFileFilter('sync-source', true);
+    ensureFilterChip(list, { scope: 'sync-source', onChange: () => {}, tree: true });
+    expect(document.querySelectorAll('.filter-chip[data-scope="sync-source"]').length).toBe(1);
+    expect(chip.querySelector('.filter-files.on')).not.toBeNull();
   });
 
   it('focus and caret SURVIVE list re-renders (the reported bug)', () => {
