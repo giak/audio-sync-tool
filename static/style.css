@@ -294,8 +294,16 @@ tr.file-row.twin-hint > td {
 
 /* ===== EPIC-028 P2 : vue dédiée « Doublons » (modal dups) ============ */
 #dups-layout { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
-#dups-main { flex: 1; overflow-y: auto; padding: 10px; }
-#dups-main h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border-panel); }
+/* padding-top: 0 — l'espacement vit DANS l'en-tête collé (fond peint). */
+#dups-main { flex: 1; overflow-y: auto; padding: 0 10px 10px; }
+/* En-tête (compteur + hint) collé pendant le scroll — fond opaque, le
+   contenu défile dessous (même pattern que la page Années). */
+#dups-head {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--bg-deep);
+  padding: 10px 0 8px;
+}
+#dups-head h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border-panel); }
 #dups-hint { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
 #dups-count { color: var(--text-dim); font-weight: 400; }
 .dups-empty { color: var(--text-dim); font-style: italic; padding: 14px 4px; }
@@ -353,6 +361,13 @@ tr.file-row.twin-hint > td {
 .dup-member.epars .dup-side { color: var(--text-dim); }
 .dup-side { font-size: 11px; }
 .dup-card-actions { margin-top: 6px; }
+/* Le bouton « Appliquer » reste épinglé en bas du conteneur tant que sa
+   carte est visible : accessible sans scroller jusqu'à son pied de carte. */
+.dup-card-actions {
+  position: sticky; bottom: 0; z-index: 2;
+  background: var(--bg-deep);
+  padding: 6px 0 2px;
+}
 .dup-apply {
   font-size: 12px; padding: 3px 10px; cursor: pointer;
   border: 1px solid var(--border-panel); border-radius: 4px;
@@ -886,6 +901,14 @@ tr.file-row.twin-hint > td {
   #playlist-sidebar { min-height: 40vh; }
 }
 #playlist-source { flex: 1; overflow-y: auto; padding: 10px; border-right: 1px solid var(--border-panel); }
+/* Chip filtre collé pendant le scroll de l'arbre source (slot = containing
+   block du chip, même pattern que la page Années). */
+#playlist-source > #filter-slot-playlist-source {
+  position: sticky; top: -10px; z-index: 3;   /* -10 = padding du panneau */
+  background: var(--bg-panel);
+  margin: -10px -10px 8px;   /* couvre le padding latéral : aucune fente */
+  padding: 10px 10px 6px;
+}
 #playlist-source h2 { font-size: 15px; font-weight: 600; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-panel); }
 #playlist-sidebar { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; padding: 10px; border-left: 1px solid var(--border-panel); }
 
