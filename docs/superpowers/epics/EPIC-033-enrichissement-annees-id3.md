@@ -174,6 +174,7 @@ l'API renvoie tout simplement rarement ce catalogue.
 | `ee9e8a3` | `feat(years): EPIC-033 — passe Discogs reformulée intégrée au consolidé (5ᵉ source)` |
 | `5a178ec` | `feat(years): EPIC-033 — revue industrialisée (export choix → apply --review), passe junk-artiste numérique, Beatport prêt (en pause)` |
 | `25c38ab` | `feat(years): recherche F7 sur la vue Années + barre d'actions accessible au scroll` |
+| `289f759` | `feat(years): EPIC-033 — passe YouTube « - Topic » + tier vérifié (art tracks fusionnés)` |
 
 Phase dry-run : script + JSONL hors dépôt (`/tmp`, à persister en T1) — chiffres consignés ici.
 
