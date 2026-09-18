@@ -6,6 +6,7 @@ const {
   api,
   revalidateFocus,
   setActivePanel,
+  focusItemByElement,
   getBatchCopy,
   patchEparsFileAfterCopy,
   patchSourceFileAfterCopy,
@@ -38,6 +39,7 @@ const {
     api: vi.fn(),
     revalidateFocus: vi.fn(),
     setActivePanel: vi.fn(),
+    focusItemByElement: vi.fn(),
     getBatchCopy: vi.fn(() => ({ target: '', files: [] })),
     patchEparsFileAfterCopy: vi.fn(),
     patchSourceFileAfterCopy: vi.fn(() => true),
@@ -63,7 +65,12 @@ const {
 });
 
 vi.mock('./api.js', () => ({ api }));
-vi.mock('./focus.js', () => ({ revalidateFocus, setActivePanel }));
+vi.mock('./focus.js', () => ({ revalidateFocus, setActivePanel, focusItemByElement }));
+// Polyfill CSS.escape (jsdom) — requis par sourceTree.revealSourceDir (le vrai
+// module est chargé via la chaîne actions → sourceTree, pour l'auto-expansion
+// mémoire du dossier destination après copie).
+if (typeof CSS === 'undefined') (globalThis as any).CSS = {};
+if (!(CSS as any).escape) (CSS as any).escape = (val: string): string => String(val).replace(/[^\w-]/g, '\\$&');
 vi.mock('./render.js', () => ({ getBatchCopy, patchEparsFileAfterCopy, patchSourceFileAfterCopy, renderSource }));
 // domPatches est mocké : en jsdom CSS.escape n'existe pas (utilisé par les
 // querySelector de patchEparsFileAfterCopy) → le flux executeReplace serait
@@ -434,6 +441,26 @@ describe('actions', () => {
 
       executeCopy();
       expect(openModal).toHaveBeenCalledWith('dialog');
+    });
+
+    it('confirmation → auto-expansion mémoire du dossier destination (reveal)', async () => {
+      setupEparsFile();
+      setupSourceDir(); // dossier /source/music focusé, replié (pas de .children)
+      setupDialog();
+      state.eparsFiles = { '/epars': { 'song.mp3': { path: 'song.mp3', year: null, duration: null, codec: null } } };
+      state.sourceExpanded = new Set();
+      // Le vrai toggleSourceDir lit sourceNodeMap : nœud vide suffit.
+      state.sourceNodeMap.set('/source/music', { node: { __files__: [] } as any, baseDir: '/source' });
+      api.mockResolvedValue({ ok: true });
+
+      executeCopy();
+      document.getElementById('dialog-confirm')!.click();
+      await new Promise(r => setTimeout(r, 0)); // draine les awaits du handler
+
+      const dirEl = document.querySelector('#source-container .directory[data-dirpath="/source/music"]')!;
+      expect(dirEl.classList.contains('expanded')).toBe(true);
+      expect(state.sourceExpanded.has('/source/music')).toBe(true);
+      state.sourceNodeMap.clear();
     });
   });
 

@@ -51,7 +51,7 @@ vi.mock('../focus.js', () => ({ focusItemByElement, setActivePanel }));
 vi.mock('../ui.js', () => ({ showContextMenu, confirmDialog, showError }));
 vi.mock('../api.js', () => ({ api }));
 vi.mock('../playlist.js', () => ({ getActivePlaylistName, getPendingTracks }));
-vi.mock('../utils.js', async (importOriginal) => {
+vi.mock('../utils.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../utils.js')>();
   return {
     ...actual,
@@ -76,7 +76,13 @@ vi.mock('./cueEditor.js', () => ({ openCueEditor: vi.fn() }));
 // ── Import the module under test ──────────────────────────────────────────
 
 import { ensureFilterChip, setFileFilter, setFilterTerm } from './filterChip.js';
-import { renderDirTree, renderSource, togglePlaylistSourceDir, toggleSourceDir } from './sourceTree.js';
+import {
+  renderDirTree,
+  renderSource,
+  revealSourceDir,
+  togglePlaylistSourceDir,
+  toggleSourceDir,
+} from './sourceTree.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -241,6 +247,69 @@ describe('render/sourceTree', () => {
       togglePlaylistSourceDir('/base/sub');
 
       expect(dirEl.classList.contains('expanded')).toBe(true);
+      c.remove();
+    });
+  });
+
+  // ── revealSourceDir (auto-expansion mémoire post-copie) ─────────────
+
+  describe('revealSourceDir', () => {
+    it('déplie le dossier destination après copie (état persisté)', () => {
+      const c = setupContainer();
+      const rawNode = dirNode([{ filename: 'new.mp3' }]);
+      state.sourceNodeMap.set('/base/sub', { node: rawNode as any, baseDir: '/base' });
+      const dirEl = document.createElement('div');
+      dirEl.className = 'directory';
+      dirEl.dataset.dirpath = '/base/sub';
+      c.appendChild(dirEl);
+
+      revealSourceDir('/base/sub');
+
+      expect(dirEl.classList.contains('expanded')).toBe(true);
+      expect(state.sourceExpanded.has('/base/sub')).toBe(true);
+      expect(state.sourceManuallyExpanded.has('/base/sub')).toBe(true);
+      expect(dirEl.querySelector('.children')).not.toBeNull();
+      c.remove();
+    });
+
+    it('dossier déjà déplié → no-op (jamais de repli accidentel)', () => {
+      const c = setupContainer();
+      const rawNode = dirNode([{ filename: 'a.mp3' }]);
+      state.sourceNodeMap.set('/base/sub', { node: rawNode as any, baseDir: '/base' });
+      const dirEl = document.createElement('div');
+      dirEl.className = 'directory expanded';
+      dirEl.dataset.dirpath = '/base/sub';
+      dirEl.appendChild(Object.assign(document.createElement('div'), { className: 'children' }));
+      c.appendChild(dirEl);
+
+      revealSourceDir('/base/sub');
+
+      expect(dirEl.classList.contains('expanded')).toBe(true);
+      expect(dirEl.querySelectorAll('.children').length).toBe(1); // pas de doublon
+      c.remove();
+    });
+
+    it('dossier absent du DOM → no-op sans erreur', () => {
+      expect(() => revealSourceDir('/nowhere')).not.toThrow();
+    });
+
+    it('ne vole PAS le focus (focusFirstChild=false) — la sélection reste', async () => {
+      // Draine les rAF pendants des tests antérieurs (délaisés ~16 ms) : leurs
+      // callbacks focusItemByElement ne doivent pas polluer l'assertion.
+      await new Promise(r => setTimeout(r, 25));
+      vi.mocked(focusItemByElement).mockClear();
+      const c = setupContainer();
+      const rawNode = dirNode([{ filename: 'a.mp3' }]);
+      state.sourceNodeMap.set('/base/sub', { node: rawNode as any, baseDir: '/base' });
+      const dirEl = document.createElement('div');
+      dirEl.className = 'directory';
+      dirEl.dataset.dirpath = '/base/sub';
+      c.appendChild(dirEl);
+
+      revealSourceDir('/base/sub');
+      await new Promise(r => setTimeout(r, 30)); // laisse le rAF du toggle s'exécuter
+
+      expect(focusItemByElement).not.toHaveBeenCalled();
       c.remove();
     });
   });

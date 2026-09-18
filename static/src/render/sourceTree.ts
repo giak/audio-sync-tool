@@ -222,7 +222,11 @@ function buildSourceChildren(
 
 // ── Toggle ─────────────────────────────────────────────────────────────────
 
-export function toggleSourceDir(dirPath: string, containerSelector = '#source-container'): void {
+export function toggleSourceDir(
+  dirPath: string,
+  containerSelector = '#source-container',
+  focusFirstChild = true,
+): void {
   const dirEl = document.querySelector(
     `${containerSelector} .directory[data-dirpath="${CSS.escape(dirPath)}"]`,
   ) as HTMLElement | null;
@@ -259,6 +263,9 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
       );
       dirEl.appendChild(childrenEl);
       requestAnimationFrame(() => {
+        // focusFirstChild=false (revealSourceDir post-copie) : ne pas voler la
+        // sélection de l'utilisateur — la copie s'affiche, le focus reste.
+        if (!focusFirstChild) return;
         const cont = dirEl.closest('#source-container, #playlist-source-container') as HTMLElement | null;
         const firstChild = dirEl.querySelector(
           '.children > .directory, .children > .file-table .file-row',
@@ -272,6 +279,19 @@ export function toggleSourceDir(dirPath: string, containerSelector = '#source-co
 
 export function togglePlaylistSourceDir(dirPath: string): void {
   toggleSourceDir(dirPath, '#playlist-source-container');
+}
+
+/** Ouvre le dossier destination après une copie (auto-expansion mémoire) :
+ *  le fichier copié est visible immédiatement, sans re-déplier. L'expansion
+ *  passe par le toggle standard → elle persiste dans sourceExpanded comme un
+ *  clic utilisateur, tous les re-renders suivants la conservent. Idempotent :
+ *  dossier déjà déplié → no-op (JAMAIS de repli accidentel). */
+export function revealSourceDir(dirPath: string, containerSelector = '#source-container'): void {
+  const dirEl = document.querySelector(
+    `${containerSelector} .directory[data-dirpath="${CSS.escape(dirPath)}"]`,
+  ) as HTMLElement | null;
+  if (!dirEl || dirEl.classList.contains('expanded')) return;
+  toggleSourceDir(dirPath, containerSelector, false);
 }
 
 /** Terme de recherche fichier des arbres (mode 📄 uniquement) : le terme du

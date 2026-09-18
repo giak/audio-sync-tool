@@ -6,6 +6,7 @@ import { detectDuplicates } from './dupDetect.js';
 import { durationCompatible, type VersionGroup } from './dupGroups.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
 import { loadRatings } from './ratings.js';
+import { revealSourceDir } from './render/sourceTree.js';
 import { getBatchCopy } from './render.js';
 import { type FileIndex, state } from './state.js';
 import { closeAllModals, confirmDialog, openModal, promptDialog, showError } from './ui.js';
@@ -260,6 +261,9 @@ export function executeCopy(): void {
         state.sourceFiles = { ...state.sourceFiles };
         state.journal = await api('/journal');
         state.selectedEparsFiles = new Map();
+        // Auto-expansion mémoire : le dossier destination s'ouvre (s'il était
+        // replié) pour montrer la copie — l'expansion persiste ensuite.
+        revealSourceDir(destDir);
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
         if (statusText)
           statusText.textContent = `✓ ${copied}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}`;
@@ -343,6 +347,8 @@ export function executeCopy(): void {
         state.sourceFiles = { ...state.sourceFiles };
         refreshDupMatches(); // l'index droit vient de muter → la Map peut être périmée
         state.selectedEparsFiles = new Map();
+        // Auto-expansion mémoire : montrer la copie sans re-déplier.
+        revealSourceDir(destDir);
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
         if (statusText) statusText.textContent = `✓ ${filename} copié vers ${destDir}`;
       } catch (err) {
