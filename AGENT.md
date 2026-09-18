@@ -124,6 +124,7 @@ $  → scope/périmètre (était ⟐ dans source)
     !consolidation: scripts/report_years.py + GET /years/preview (app.py) — priorité par clé MB/Deezer > Discogs > iTunes > reform > reform2 > beatport > youtube (chaque pool d'appoint ne cible que des 'none' amont → zéro chevauchement) ; caches ABSENTS tolérés (passe jamais lancée) ; lignes 'error' re-jetables ; consensus fenêtre ≤ 2 ans = year_cache UNIQUEMENT
     !YouTube « - Topic » = source HONNÊTE seulement ère digitale ≥ ~2015 (biais réédition sur le vieux vinyle, mémoire ad9e92a8) — jamais automatique sur l'ère vinyle
     !revue humaine (EPIC-033 P2): vue Années → choix session → e/💾 POST /years/review → data/year_review.json → scripts/apply_years.py --review (choix OVERRIDE consolidation, source 'review') ; champ année libre = tranche hors candidates à la carte focusée ; jamais d'écriture depuis l'UI
+    !player audio sur les pages à cartes (Années + Doublons) : boutons ▶/⏹ réutilisant togglePlay (audio.js) + player bar globale + GET /audio — NE PAS dupliquer un player ; bouton = data-path + classe 'playing' re-marquée après CHAQUE re-render via playingPath() (les cartes sont re-rendues à chaque choix) ; clic ▶ ne doit JAMAIS déclencher l'action de la carte (stopPropagation : override gagnant dups / focus years)
     !Discogs « lax » + ambiguës + reform lax/ambigu = revue humaine (vue Années, ~years) — jamais d'application automatique
 
 %SURGERY [12 règles numérotées S1-S12]

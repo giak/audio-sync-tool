@@ -4,9 +4,21 @@
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { api } = vi.hoisted(() => ({ api: vi.fn() }));
+const { api, togglePlay, playingPath } = vi.hoisted(() => ({
+  api: vi.fn(),
+  togglePlay: vi.fn(),
+  playingPath: vi.fn<[], string | null>(() => null),
+}));
 
 vi.mock('../api.js', () => ({ api }));
+vi.mock('../audio.js', () => ({
+  togglePlay,
+  playingPath,
+  stopPlayer: vi.fn(),
+  seekAudio: vi.fn(),
+  isAudioPlaying: vi.fn(() => false),
+  initAudioUI: vi.fn(),
+}));
 
 import { state } from '../state.js';
 import { setFilterTerm } from './filterChip.js';
@@ -338,5 +350,33 @@ describe('yearsUI filtre (EPIC-030 : chip F7/` sur la page Années)', () => {
     (document.querySelector('.filter-chip[data-scope="years"] .filter-clear') as HTMLElement).click();
     renderYears();
     expect(document.querySelectorAll('.years-card.years-review').length).toBe(1); // rejet toujours masqué
+  });
+});
+
+describe('yearsUI player audio', () => {
+  it('chaque carte (certaine + à revue) a un bouton ▶ vers togglePlay(path)', async () => {
+    playingPath.mockReturnValue(null);
+    await openYearsMode();
+    const plays = document.querySelectorAll('.years-play');
+    expect(plays.length).toBe(3); // 1 carte certaine dédupliquée + 2 cartes à revue (ambigu + lax)
+    // la carte à revue porte le path du premier fichier de la clé
+    const revBtn = document.querySelector('.years-card.years-review .years-play') as HTMLButtonElement;
+    expect(revBtn.dataset.path).toBe('/m/b.mp3');
+    // clic → togglePlay(filename, path, btn), sans focus de carte
+    revBtn.click();
+    expect(togglePlay).toHaveBeenCalledTimes(1);
+    const [fn, path, btn] = togglePlay.mock.calls[0];
+    expect(path).toBe('/m/b.mp3');
+    expect(btn).toBe(revBtn);
+    expect(fn).toMatch(/\.mp3$/);
+  });
+
+  it("bouton re-marqué ⏹ après re-render si c'est ce chemin qui joue", async () => {
+    playingPath.mockReturnValue('/m/c.mp3');
+    await openYearsMode();
+    const btn = document.querySelector('.years-play[data-path="/m/c.mp3"]') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.classList.contains('playing')).toBe(true);
+    expect(btn.textContent).toBe('⏹');
   });
 });

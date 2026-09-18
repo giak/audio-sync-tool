@@ -140,6 +140,12 @@ export function isAudioPlaying(): boolean | null {
   return val as boolean | null;
 }
 
+/** Chemin en lecture (ou null) — les pages à cartes re-rendues (Années,
+ * Doublons) ré-marquent leur bouton ▶ après chaque render. */
+export function playingPath(): string | null {
+  return currentAudio ? playerFullpath : null;
+}
+
 export function initAudioUI(): void {
   const stopBtn = document.getElementById('player-stop');
   if (stopBtn) stopBtn.onclick = stopPlayer;

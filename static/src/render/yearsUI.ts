@@ -10,6 +10,7 @@
 // iTunes → reform sans double comptage ; introuvables = compteur (aucune action).
 
 import { api } from '../api.js';
+import { playingPath, togglePlay } from '../audio.js';
 import { subjectFromName } from '../filterEngine.js';
 import { goPage } from '../router.js';
 import { ensureFilterChip, isFilterActive, subjectMatches, updateFilterCount } from './filterChip.js';
@@ -54,6 +55,26 @@ function esc(s: string): string {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+/** Bouton ▶ attaché à un fichier (player bar globale, cf. sync) — les cartes
+ * Années/Doublons écoutent avant de trancher. Re-render safe : re-marque si
+ * c'est ce chemin qui joue (playingPath). */
+function playBtn(fullpath: string, filename: string): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.className = 'years-play play-btn';
+  b.textContent = '▶';
+  b.title = `Écouter ${filename}`;
+  b.dataset.path = fullpath;
+  b.onclick = (e): void => {
+    e.stopPropagation(); // ne pas focus/sélectionner la carte
+    togglePlay(filename, fullpath, b);
+  };
+  if (playingPath() === fullpath) {
+    b.classList.add('playing');
+    b.textContent = '⏹';
+  }
+  return b;
 }
 
 /** Clé de cache (artiste\titre) d'un fichier — identifiant de choix. */
@@ -199,6 +220,7 @@ export function renderYears(): void {
       `<span class="years-year">✓ ${esc(f.year ?? '?')}</span> — ` +
       `${esc(f.artist ?? '?')} — ${esc(f.title)}${suffix}`;
     card.title = f.path;
+    card.prepend(playBtn(f.path, f.filename));
     list.appendChild(card);
   }
 
@@ -262,6 +284,7 @@ export function renderYears(): void {
     const badge = f.status === 'lax' ? 'lax' : 'ambigu';
     head.innerHTML = `? ${esc(f.artist ?? '?')} — ${esc(f.title)} ` + `<span class="years-badge">${badge}</span>`;
     head.title = `${f.path} — source : ${f.source ?? '?'}`;
+    head.prepend(playBtn(f.path, f.filename));
     card.appendChild(head);
 
     const cands = document.createElement('div');

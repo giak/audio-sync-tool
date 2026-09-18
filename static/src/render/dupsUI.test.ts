@@ -4,14 +4,24 @@
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { revalidateFocus, applyGroupPlan, refreshDupMatches } = vi.hoisted(() => ({
+const { revalidateFocus, applyGroupPlan, refreshDupMatches, togglePlay, playingPath } = vi.hoisted(() => ({
   revalidateFocus: vi.fn(),
   applyGroupPlan: vi.fn(),
   refreshDupMatches: vi.fn(),
+  togglePlay: vi.fn(),
+  playingPath: vi.fn<[], string | null>(() => null),
 }));
 
 vi.mock('../focus.js', () => ({ revalidateFocus }));
 vi.mock('../actions.js', () => ({ applyGroupPlan, refreshDupMatches }));
+vi.mock('../audio.js', () => ({
+  togglePlay,
+  playingPath,
+  stopPlayer: vi.fn(),
+  seekAudio: vi.fn(),
+  isAudioPlaying: vi.fn(() => false),
+  initAudioUI: vi.fn(),
+}));
 
 import { state } from '../state.js';
 import { closeDupsMode, dupsApplyFocused, dupsMoveFocus, openDupsMode, renderDups } from './dupsUI.js';
@@ -170,5 +180,37 @@ describe('dupsUI v2 (groupes)', () => {
     state.sourceFiles = { '/s': {} };
     renderDups();
     expect(document.querySelector('.dups-empty')).not.toBeNull();
+  });
+});
+
+describe('dupsUI player audio', () => {
+  it('chaque membre a un bouton ▶ ; clic = togglePlay SANS override du gagnant', () => {
+    playingPath.mockReturnValue(null);
+    openDupsMode();
+    // 2 groupes × 2 membres = 4 boutons ▶
+    expect(document.querySelectorAll('.dup-play').length).toBe(4);
+    const songCard = [...document.querySelectorAll('.dup-card')].find(c => c.textContent?.includes('song'))!;
+    const mp3Row = [...songCard.querySelectorAll('.dup-member')].find(r => r.textContent?.includes('song.mp3'))!;
+    const btn = mp3Row.querySelector('.dup-play') as HTMLButtonElement;
+    btn.click();
+    expect(togglePlay).toHaveBeenCalledTimes(1);
+    const [fn, path] = togglePlay.mock.calls[0];
+    expect(fn).toBe('song.mp3');
+    expect(path).toBe('/s/song.mp3');
+    // le clic ▶ ne change PAS le gagnant (stopPropagation)
+    renderDups();
+    const winner = [...document.querySelectorAll('.dup-card')]
+      .find(c => c.textContent?.includes('song'))!
+      .querySelector('.dup-member.winner')!;
+    expect(winner.textContent).toContain('song.flac');
+  });
+
+  it('bouton du membre en lecture re-marqué ⏹ après re-render', () => {
+    playingPath.mockReturnValue('/e/song.flac');
+    openDupsMode();
+    const btn = document.querySelector('.dup-play[data-path="/e/song.flac"]') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.classList.contains('playing')).toBe(true);
+    expect(btn.textContent).toBe('⏹');
   });
 });

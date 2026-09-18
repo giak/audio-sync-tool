@@ -429,6 +429,15 @@ tr.file-row.twin-hint > td {
   background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
 .years-card-title { font-weight: 600; }
+/* Boutons ▶ des cartes Années/Doublons — réutilisent togglePlay (player bar
+   globale, endpoint /audio). Indépendants des td.play-btn du tableau sync. */
+.years-play, .dup-play {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-family: inherit; font-size: 12px;
+  padding: 0 6px 0 0; line-height: 1;
+}
+.years-play:hover, .dup-play:hover { color: var(--accent-green); }
+.years-play.playing, .dup-play.playing { color: var(--accent-green); }
 .years-year { color: var(--led-green); font-weight: 600; }
 .years-badge {
   color: var(--text-dim);

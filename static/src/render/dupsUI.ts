@@ -8,6 +8,7 @@
 // membre, application du plan (gagnant épars → copié, rangés perdants → trash).
 
 import { applyGroupPlan, refreshDupMatches } from '../actions.js';
+import { playingPath, togglePlay } from '../audio.js';
 import { buildVersionGroups, type VersionGroup } from '../dupGroups.js';
 import { revalidateFocus } from '../focus.js';
 import { goPage } from '../router.js';
@@ -33,6 +34,25 @@ function memberLabel(m: VersionGroup['members'][number]): string {
     ? ''
     : ' <span class="dup-version" title="Autre version du même morceau (durée différente) — jamais déplacée automatiquement">≡ version</span>';
   return `${esc(m.filename)} <span class="dup-side">(${side} · ${esc(m.codec ?? 'codec ?')})</span>${version}`;
+}
+
+/** Bouton ▶ d'un membre (player bar globale, cf. sync) — écouter avant de
+ * trancher. stopPropagation : un clic ▶ ne désigne JAMAIS le gagnant. */
+function memberPlayBtn(m: VersionGroup['members'][number]): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.className = 'dup-play play-btn';
+  b.textContent = '▶';
+  b.title = `Écouter ${m.filename}`;
+  b.dataset.path = m.fullPath;
+  b.onclick = (e): void => {
+    e.stopPropagation();
+    togglePlay(m.filename, m.fullPath, b);
+  };
+  if (playingPath() === m.fullPath) {
+    b.classList.add('playing');
+    b.textContent = '⏹';
+  }
+  return b;
 }
 
 function groupTitle(g: VersionGroup): string {
@@ -89,6 +109,7 @@ export function renderDups(): void {
         overrides.set(g.key, m.fullPath);
         renderDups();
       };
+      row.prepend(memberPlayBtn(m));
       ul.appendChild(row);
     }
     card.appendChild(ul);
