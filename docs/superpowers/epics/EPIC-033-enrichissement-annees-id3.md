@@ -172,6 +172,7 @@ l'API renvoie tout simplement rarement ce catalogue.
 |---|---|
 | `a1810d6` | `feat(years): EPIC-033 — 57 % du corpus sans année : 4 passes sans clé (MB/Deezer/Discogs/iTunes), 1 349 tags appliqués, vue Années pour la revue` |
 | `ee9e8a3` | `feat(years): EPIC-033 — passe Discogs reformulée intégrée au consolidé (5ᵉ source)` |
+| `5a178ec` | `feat(years): EPIC-033 — revue industrialisée (export choix → apply --review), passe junk-artiste numérique, Beatport prêt (en pause)` |
 
 Phase dry-run : script + JSONL hors dépôt (`/tmp`, à persister en T1) — chiffres consignés ici.
 
