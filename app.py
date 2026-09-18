@@ -855,6 +855,7 @@ ITUNES_CACHE_PATH = os.path.join(DATA_DIR, 'itunes_cache.jsonl')
 REFORM_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_reform_cache.jsonl')
 REFORM2_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_reform2_cache.jsonl')
 BEATPORT_CACHE_PATH = os.path.join(DATA_DIR, 'beatport_cache.jsonl')
+YOUTUBE_CACHE_PATH = os.path.join(DATA_DIR, 'youtube_topic_cache.jsonl')
 
 # Miroir de scripts/collect_years.py (NOISE + artist_title) : le parse des clés
 # de cache doit être identique au collecteur, sans importer scripts/.
@@ -911,7 +912,8 @@ def _load_years_caches():
     périmées des runs corrigés), priorité ENTRE fichiers ensuite."""
     pools = []
     for path in (YEAR_CACHE_PATH, DISCOGS_CACHE_PATH, ITUNES_CACHE_PATH,
-                 REFORM_CACHE_PATH, REFORM2_CACHE_PATH, BEATPORT_CACHE_PATH):
+                 REFORM_CACHE_PATH, REFORM2_CACHE_PATH, BEATPORT_CACHE_PATH,
+                 YOUTUBE_CACHE_PATH):
         if not os.path.exists(path):
             continue
         pool = {}

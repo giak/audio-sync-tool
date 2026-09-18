@@ -54,6 +54,7 @@ IT_CACHE = os.path.join(ROOT, 'data', 'itunes_cache.jsonl')
 RF_CACHE = os.path.join(ROOT, 'data', 'discogs_reform_cache.jsonl')
 RF2_CACHE = os.path.join(ROOT, 'data', 'discogs_reform2_cache.jsonl')
 BP_CACHE = os.path.join(ROOT, 'data', 'beatport_cache.jsonl')
+YT_CACHE = os.path.join(ROOT, 'data', 'youtube_topic_cache.jsonl')
 REVIEW_PATH = os.path.join(ROOT, 'data', 'year_review.json')
 JOURNAL = os.path.join(ROOT, 'data', 'year_apply_journal.jsonl')
 # Formats dont l'écriture est gérée ET relue par get_audio_meta (app.py).
@@ -154,6 +155,7 @@ def load_found():
     add_pool(RF_CACHE, 'reform_strict')
     add_pool(RF2_CACHE, 'reform2_strict')
     add_pool(BP_CACHE, 'beatport_strict')
+    add_pool(YT_CACHE, 'youtube_topic_strict')
     return found
 
 

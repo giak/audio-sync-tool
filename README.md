@@ -230,8 +230,8 @@ avec deux points d'entrée `startRatingEdit()` (sidebar tracks) et
 (mise à part l'option Discogs) : MusicBrainz (1ʳᵉ sortie du morceau, 1 req/s) → Deezer (sans
 clé) → Discogs (60 req/min, token dans `data/discogs_token`, git-ignoré chmod 600).
 Les résultats sont **mis en cache** (`data/year_cache.jsonl`, `data/discogs_cache.jsonl`,
-`data/itunes_cache.jsonl`, `data/discogs_reform_cache.jsonl`, `data/discogs_reform2_cache.jsonl`
-— git-ignorés) : les clés déjà
+`data/itunes_cache.jsonl`, `data/discogs_reform_cache.jsonl`, `data/discogs_reform2_cache.jsonl`,
+`data/youtube_topic_cache.jsonl` — git-ignorés) : les clés déjà
 collectées ne sont **jamais re-interrogées** ; une relance de collecte ne traite que
 l'incrément (reprise JSONL, erreurs re-jetables).
 
@@ -242,7 +242,9 @@ apports **reformulé** (`collect_discogs_reform.py` : +15 certaines / +127 à re
 **junk-artiste numérique** (`collect_discogs_reform2.py` : +1 certaine / +12 à revue sur
 les 556 artistes numériques/symboles — `#07 enzyme x`, `204`, `2006 prodigy`) — intégré au
 consolidé (`scripts/report_years.py` + `/years/preview`) en dernier rideau, sans
-chevauchement avec les sources amont.
+chevauchement avec les sources amont. La passe **YouTube « - Topic »** a été **exécutée
+sans trouvaille (0/84)** : les chaînes Topic sont fusionnées depuis 2025-2026 dans les
+profils artiste — le garde-fou reste en place pour les relances futures (7ᵉ rideau).
 
 **Revue industrialisée (P2)** : dans la vue Années, **F7** ou **/** filtre les cartes
 (artiste, titre, année — terme mémorisé), choisissez/rejetez puis **e** (ou bouton 💾) → les
@@ -257,6 +259,13 @@ copier la réponse JSON du POST `/v4/auth/o/token/` dans `data/beatport_token.js
 (chmod 600, git-ignoré). Le token expire (~1 h) : recommencer la copie quand le script le
 demande.
 
+**Passe YouTube « - Topic »** (dernier rideau, sans compte) : `collect_youtube_topic.py`
+cible les clés `none` plausibles ≥ 2015 (année dans le chemin des dossiers), et exige la
+chaîne « - Topic », tous les tokens artiste + titre dans le titre vidéo, la durée ± 15 s
+d'un fichier de la clé et la `release_date` (l'upload_date n'est jamais utilisé).
+Exécutée le 2026-09-18 : **0/84** — YouTube fusionne les chaînes Topic dans les profils
+artiste depuis 2025-2026 ; le garde-fou reste utile aux relances futures.
+
 ```bash
 # Collecte (incrémentale — inutile tant qu'aucun nouveau fichier n'arrive)
 ./venv/bin/python scripts/collect_years.py --report        # MB → Deezer (1 req/s)
@@ -265,6 +274,8 @@ demande.
 ./venv/bin/python scripts/collect_discogs_reform.py        # Discogs requêtes reformulées
 ./venv/bin/python scripts/collect_discogs_reform2.py --go  # junk-artiste numérique (aperçu sans --go)
 ./venv/bin/python scripts/collect_beatport.py              # Beatport (EN PAUSE — token portail requis)
+./venv/bin/python scripts/collect_youtube_topic.py         # YouTube « - Topic » (exécutée : 0/84, relançable)
+./venv/bin/python scripts/collect_youtube_topic.py --go --verified  # tier chaînes vérifiées (tout en lax)
 
 # Rapport consolidé (toutes sources, sans double comptage)
 ./venv/bin/python scripts/report_years.py --files
