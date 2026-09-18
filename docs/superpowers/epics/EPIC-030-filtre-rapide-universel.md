@@ -146,6 +146,7 @@ par le matcher : les chiffres matchent aussi l'année).
 | Étape | Commit | Contenu |
 |---|---|---|
 | P0 | `850584a` | filterEngine + filterChip + scopes sync-epars/sync-source + F7// + retrait palette (29 fichiers, +455/−399) |
+| Filtre 2 niveaux | `4f4eff2` | toggle 📄 fichiers dans le chip des arbres (sync-source + playlist-source) : dossiers seuls par défaut (expansion rend TOUS les fichiers), fichiers opt-in (dirHasMatchingFile + table filtrée à la source dans buildSourceChildren) — 9 fichiers, +298/−15 |
 
 Découvertes P0 documentées : `domPatches.ts` lit désormais `state.filters['sync-source']`
 (compteur header après copy) ; le registry ne porte plus `filterActive` (les bindings
