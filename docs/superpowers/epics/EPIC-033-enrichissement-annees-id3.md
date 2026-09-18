@@ -171,9 +171,9 @@ l'API renvoie tout simplement rarement ce catalogue.
 | Commit | Message |
 |---|---|
 | `a1810d6` | `feat(years): EPIC-033 — 57 % du corpus sans année : 4 passes sans clé (MB/Deezer/Discogs/iTunes), 1 349 tags appliqués, vue Années pour la revue` |
+| `ee9e8a3` | `feat(years): EPIC-033 — passe Discogs reformulée intégrée au consolidé (5ᵉ source)` |
 
 Phase dry-run : script + JSONL hors dépôt (`/tmp`, à persister en T1) — chiffres consignés ici.
-Intégration post-passe reform (rapport + endpoint + tests + docs) : non commitée à ce jour.
 
 ## Découverte bonus (dry-run utilisateur, 2026-09-17)
 
