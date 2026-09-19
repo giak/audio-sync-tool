@@ -151,5 +151,28 @@ describe('render/eparsUI', () => {
       const filenames = calls.map(c => c[0]);
       expect(filenames).toEqual(['a.mp3', 'z.mp3']);
     });
+
+    it('le filtre matche le sous-dossier épars (EPIC-035 : F7 _schranz → lot)', () => {
+      const c = document.createElement('div');
+      c.id = 'epars-container';
+      document.body.appendChild(c);
+      state.eparsFiles = {
+        '/music': {
+          'x.mp3': { path: '_schranz/x.mp3', year: null, duration: null, codec: null },
+          'y.mp3': { path: '2008_08/y.mp3', year: null, duration: null, codec: null },
+        },
+      };
+      state.filters = { 'sync-epars': '_schranz' };
+      countAllEparsFiles.mockReturnValue(2); // explicite : clearAllMocks ne réinitialise pas les implémentations
+      try {
+        renderEpars();
+        const filenames = (makeFileEl as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+        expect(filenames).toEqual(['x.mp3']);
+        expect(document.querySelector('.filter-chip[data-scope="sync-epars"] .filter-count')?.textContent).toBe('1/2');
+      } finally {
+        state.filters = {};
+        document.querySelector('#filter-slot-sync-epars')?.remove();
+      }
+    });
   });
 });

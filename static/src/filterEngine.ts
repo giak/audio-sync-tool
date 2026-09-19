@@ -10,11 +10,15 @@ export function foldText(s: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
-/** Sujet de filtrage d'un fichier : nom, année, codec (tous pliés). */
+/** Sujet de filtrage d'un fichier : nom, année, codec (tous pliés).
+ *  `path` (optionnel, EPIC-035) : chemin relatif dans le dossier épars — permet
+ *  de filtrer par sous-dossier (`_schranz`). Absent côté source/playlist :
+ *  la sémantique des arbres (noms de dossiers) est inchangée. */
 export interface FilterSubject {
   name: string;
   year: string | null;
   codec: string | null;
+  path?: string;
 }
 
 /** Sujet minimal pour un dossier/groupe : nom seul (plié). */
@@ -31,7 +35,8 @@ export function matchesTokens(foldedTerm: string, subject: FilterSubject): boole
   const foldedName = foldText(subject.name);
   const foldedYear = subject.year ? foldText(subject.year) : '';
   const foldedCodec = subject.codec ? foldText(subject.codec) : '';
-  const haystack = `${foldedName} ${foldedYear} ${foldedCodec}`.trim();
+  const foldedPath = subject.path ? foldText(subject.path) : '';
+  const haystack = `${foldedName} ${foldedYear} ${foldedCodec} ${foldedPath}`.trim();
   if (!haystack) return false;
   return foldedTerm
     .split(/\s+/)

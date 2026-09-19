@@ -42,6 +42,17 @@ describe('filterEngine', () => {
       expect(matchesTokens('   ', song)).toBe(true);
     });
 
+    it('matche le chemin relatif quand il est fourni (EPIC-035 : sous-dossier épars)', () => {
+      const inSub = { name: 'a.mp3', year: null, codec: null, path: '_schranz/a.mp3' };
+      expect(matchesTokens(foldTerm('schranz'), inSub)).toBe(true);
+      expect(matchesTokens(foldTerm('_schranz'), inSub)).toBe(true);
+      // Sans path : comportement historique (nom seul) — non-régression côté source
+      expect(matchesTokens(foldTerm('schranz'), { name: 'a.mp3', year: null, codec: null })).toBe(false);
+      // AND mixte chemin + année
+      expect(matchesTokens(foldTerm('schranz 1995'), { ...inSub, year: '1995' })).toBe(true);
+      expect(matchesTokens(foldTerm('schranz 1995'), inSub)).toBe(false);
+    });
+
     it('subjectFromName gives name-only subject', () => {
       expect(matchesTokens(foldTerm('rock'), subjectFromName('Rock Classics'))).toBe(true);
       expect(matchesTokens(foldTerm('jazz'), subjectFromName('Rock Classics'))).toBe(false);

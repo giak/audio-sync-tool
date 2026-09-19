@@ -142,7 +142,7 @@ export function renderEpars(): void {
       const fullpath = `${dirPath}/${relPath}`;
       if (
         eparsActive &&
-        !matchesTokens(eparsTerm, { name: filename, year: data.year ?? null, codec: data.codec ?? null })
+        !matchesTokens(eparsTerm, { name: filename, year: data.year ?? null, codec: data.codec ?? null, path: relPath })
       )
         continue;
       const status = computeStatus(filename, state.sourceFiles, state.journal as any);
@@ -185,7 +185,15 @@ export function renderEpars(): void {
     let matched = 0;
     for (const files of Object.values(state.eparsFiles)) {
       for (const [filename, data] of Object.entries(files)) {
-        if (matchesTokens(eparsTerm, { name: filename, year: data.year ?? null, codec: data.codec ?? null })) matched++;
+        if (
+          matchesTokens(eparsTerm, {
+            name: filename,
+            year: data.year ?? null,
+            codec: data.codec ?? null,
+            path: data.path,
+          })
+        )
+          matched++;
       }
     }
     updateFilterCount('sync-epars', matched, countAllEparsFiles(state.eparsFiles));
