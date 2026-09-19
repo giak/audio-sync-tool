@@ -143,6 +143,11 @@ describe('render/sourceTree', () => {
     state.sourceFiles = {};
     state.filterActive = false;
     state.sourceFilter = '';
+    // Fuite connue : setFilterTerm/setFileFilter écrivent state.filters (état
+    // module) et certains tests le laissent pollué (« le ON du test précédent
+    // fuiterait sinon »). Sans reset, en shuffle, renderSource prend la branche
+    // filtrée → 0 dossier rendu → 3-6 échecs selon la graine.
+    state.filters = {};
     state.playlistMode = false;
     state.selectedEparsFiles = new Map();
     state.sourceExtraDirs = new Set();

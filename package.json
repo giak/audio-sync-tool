@@ -5,6 +5,7 @@
   "scripts": {
     "test": "vitest run",
     "test:shuffle": "vitest run --sequence.shuffle",
+    "test:shuffle:gate": "vitest run --sequence.shuffle --sequence.seed=1 && vitest run --sequence.shuffle --sequence.seed=2 && vitest run --sequence.shuffle --sequence.seed=3",
     "test:watch": "vitest",
     "build": "node build.js && node scripts/validate-build.js",
     "start": "fuser -k 8765/tcp 2>/dev/null; npm run build && ./venv/bin/python app.py",
@@ -17,6 +18,7 @@
     "format": "biome format --write static/src/",
     "format:check": "biome format static/src/",
     "coverage": "npm run coverage:clean && vitest run --coverage && npm run build",
+    "audit:css": "node scripts/audit-css.mjs",
     "coverage:clean": "rm -rf static/dist"
   },
   "devDependencies": {
@@ -24,6 +26,7 @@
     "@vitest/coverage-v8": "^1.6.1",
     "esbuild": "^0.28.1",
     "jsdom": "^28.1.0",
+    "purgecss": "^7.0.2",
     "typescript": "^6.0.3",
     "vitest": "^1.6.0"
   },

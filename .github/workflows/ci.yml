@@ -45,8 +45,16 @@ jobs:
 
       # Ordre d'exécution aléatoire : détecte les fuites d'état entre tests
       # (flakiness) que le run séquentiel ne voit pas. Cf. review EPICs 2026-08-08.
-      - name: Vitest (shuffle)
+      - name: Vitest (shuffle, graine aléatoire — exploration)
         run: npm run test:shuffle
+
+      # 3 graines FIXES : un échec est reproductible localement via
+      # `npx vitest run --sequence.shuffle --sequence.seed=N` (l'échec en
+      # graine aléatoire n'est pas rejouable). Phase 0 refactoring 2026-09-19 :
+      # le shuffle global y a révélé 2 fichiers flaky (state.filters non
+      # réinitialisé) invisibles en séquentiel.
+      - name: Vitest (shuffle, 3 graines fixes)
+        run: npm run test:shuffle:gate
 
       - name: Pytest
         run: python -m pytest -q

@@ -97,6 +97,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   setupDom();
   state.page = 'sync';
+  // Fuite connue : les tests filtre écrivent state.filters['years'] (état
+  // module) — certains ne nettoient pas en fin de test. En shuffle, le terme
+  // résiduel filtre les cartes → 0 carte rendue → échecs en cascade.
+  state.filters = {};
   api.mockResolvedValue(JSON.parse(JSON.stringify(FIXTURE)));
 });
 
