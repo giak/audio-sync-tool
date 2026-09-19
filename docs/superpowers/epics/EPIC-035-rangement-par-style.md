@@ -1,6 +1,6 @@
 # EPIC-035 — Rangement par style : palette `g`, destination `style_tranche` calculée, suggestions locales, écriture TCON
 
-> **Statut** : 🟡 **P1+P2 livrés (2026-09-19)** — socle clavier (palette `g`, colonne Style, aperçu `e`, filtre par sous-dossier) testé en live headless sur données réelles ; suggestions locales P2 (genre ID3, voisinage artiste, segments de chemin, session) ; P3 (TCON) / P4 en backlog
+> **Statut** : 🟢 **P1+P2+P3 livrés (2026-09-19)** — socle clavier (palette `g`, colonne Style, aperçu `e`, filtre par sous-dossier) testé en live headless ; suggestions locales P2 (genre ID3, voisinage artiste, segments de chemin, session) ; écriture TCON P3 (export → `apply_styles.py`, journal `old_genre`, `--undo`, chip « écrit ») ; P4 en backlog
 > **Créée** : 2026-09-19 · **Dernière mise à jour** : 2026-09-19
 > **Priorité** : Haute (goulot du workflow de rangement : 5 092 épars pour 1 430 rangés)
 > **Docs liées** : spec `specs/2026-09-19-rangement-par-style-design.md` · **plan P1** `plans/2026-09-19-rangement-par-style.md` · EPIC-030 (chips) · EPIC-031 (registry/matrice clavier) · EPIC-033 (pattern preview → apply, journal, undo) · EPIC-034 (pastille « déjà rangé », reveal post-copie)
@@ -98,16 +98,28 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
       `pick` → étape tranche si nécessaire) ; la hotkey d'un autre style prime toujours
       ; lot → pas de suggestion (hint standard)
 
-### P3 — Écriture TCON (pattern EPIC-033 P2 : export → script)
-- [ ] `POST /styles/review` → `data/style_review.json` (pattern `/years/review`, 400 hors
-      taxonomie) ; export depuis l'aperçu
-- [ ] `scripts/apply_styles.py` : dry-run défaut, `--review`, journal
-      `data/style_apply_journal.jsonl` avec `old_genre`, `--undo` (restaure / retire la
-      frame), formats MP3 v2.3/v2.4 · FLAC · WAV · M4A, double check, idempotent `skip` ;
-      tag l'épars **et** la copie rangée
-- [ ] État « écrit ✓ » = genre lu au scan == style
-- [ ] Tests pytest sur fichiers audio minimaux réels (pattern `test_apply_years.py`) :
-      écriture, undo restaure l'ancienne valeur, idempotence, hors zone refusé
+### P3 — Écriture TCON (pattern EPIC-033 P2 : export → script) ✅ livré 2026-09-19 (`e6dfa82`)
+- [x] `POST /styles/review` (app.py, pattern `/years/review`) : `data/style_review.json`,
+      clé = fullpath épars, valeur = `{style, tranche|null}` ou `null` (retrait) ;
+      fusion ; **style hors taxonomie (dérivée des dossiers du cache par
+      `_known_styles()`) → 400, rien n'est écrit** ; GET lit
+- [x] `scripts/apply_styles.py` (**14 pytest**) : dry-run défaut, `--apply`, `--undo`,
+      `--report` ; écrit **TCON** (MP3/WAV, version du tag conservée), **GENRE**
+      (FLAC/Vorbis), **©gen** (M4A) ; journal `data/style_apply_journal.jsonl` additif
+      avec **`old_genre`** (TCON est un tag remplacé — le journal EST le backup) ;
+      double check post-écriture ; idempotent (genre lu == style → skip, `DEJA STYLE`) ;
+      `--undo` restaure l'old (retire le tag si absent avant, idempotent, la dernière
+      écriture d'un chemin gagne) ; **tague l'épars ET sa copie rangée** (retrouvée dans
+      le cache par nom de fichier, `twin: true` au journal) ; formats non gérés
+      (.wma/.ogg) et fichiers absents du disque exclus en amont (stats)
+- [x] Export depuis l'aperçu : `applyRangementPlan` POST `/styles/review` des choix
+      copiés (échec **non bloquant** — message d'état, la copie reste réussie ; testé)
+- [x] État « écrit ✓ » : chip **vert `✓`** quand le genre lu au scan (P2) == style
+      choisi ; tooltip « · écrit dans le tag » ; visible au scan suivant l'apply
+- [x] Tests pytest sur fichiers audio minimaux réels (fabriques de
+      `test_apply_years.py`) : écriture/restore par format, remplace l'ancien genre,
+      jumeau + `old_genre` journalisé, idempotence, undo deux exemplaires, dernière
+      écriture gagne, dry-run n'écrit rien
 
 ### P4 — Confort (non engagé)
 - [ ] Reprise `style_review.json` au chargement ; `Backspace` retire un choix
@@ -132,7 +144,7 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
 | `static/src/commands/keyboardMatrix.test.ts` | Cellules nouvelles `g`/`e` |
 | `static/src/filterEngine.ts` | `FilterSubject.path` optionnel |
 | `app.py` | `get_audio_meta` + `genre` (P2) ; `GET /styles` ou champ dans `/load` (P1) ; `POST /styles/review` (P3) |
-| `scripts/apply_styles.py` (+`test_apply_styles.py`) | **Nouveau** (P3) — seul écrivain TCON, journal `old_genre`, undo |
+| `scripts/apply_styles.py` (+`test_apply_styles.py`) | **Nouveau (P3 livré)** — seul écrivain TCON, journal `old_genre`, undo |
 | `data/styles.json`, `data/style_review.json`, `data/style_apply_journal.jsonl` | **Nouveaux** (git-ignorés, `data/` déjà dans `.gitignore`) |
 | `static/style.css` | Chips de style (3 états), palette, barre récap |
 | `README.md`, `AGENT.md` | Section « Rangement par style » |
@@ -168,7 +180,13 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
       lint 0 · build OK · **pytest 302** (298 → +4 : 2 genre, 2 source_index, 1 fix
       `/load` vide). Live P2 non fait (suggestions visibles au prochain usage réel —
       calibration des poids = critère de réussite, pas les tests unitaires)
-- [ ] P3 : à venir
+- [x] **P3 (2026-09-19, gate complet)** : typecheck 0 · **1 095 vitest** (+4 : 2
+      styleCell « écrit », 2 stylePreview export/échec) · lint 0 · build OK ·
+      **pytest 317** (302 → +15 : 1 route `/styles/review`, 14 `apply_styles`) —
+      **317 = 302 + 1 route + 14 script** (les fabriques réutilisent celles d'
+      `test_apply_years.py`)
+- [ ] Live P3 (dry-run réel sur data/style_review.json après un premier usage de P1/P2)
+      + P4 : à venir
 
 ## Traçabilité (commits)
 
@@ -185,6 +203,8 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
 | `890cfab` | fix(styles): destination jointe en `racine/nom` (convention sourceTree/dupDetect/copyFilesTo) + refresh en une passe, pending-year depuis la destination, accords |
 | `cd12601` | fix(palette): preventDefault systématique palette ouverte — F5 non annulé rechargeait la page |
 | `09705b3` | feat(P2): suggestions locales — genre ID3, voisinage artiste, segments de chemin, session history |
+| `fab7394` | docs(epic): EPIC-035 P2 livré — as-built (poids réels, écarts spec documentés) |
+| `e6dfa82` | feat(P3): écriture TCON via export → apply_styles.py (journal old_genre, --undo, tag épars + copie) |
 
 ## Décisions
 
@@ -245,6 +265,26 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
   occurrences de fixtures `path/year/duration/codec` dans les tests n'a dû être touchée
   (choix délibéré contre un champ requis qui aurait généré un diff de 84 lignes sans valeur).
 
+## Constats de session (2026-09-19, P3)
+
+- **La copie rangée est retrouvée par nom de fichier** (pas par fullpath calculé) :
+  `_twin_copy_path_from` cherche dans le cache source un fichier de même nom sous un
+  dossier d'un style quelconque. Un nom de fichier rangé à deux endroits (doublon de
+  nom dans deux dossiers styles différents) → le premier trouvé gagne ; accepté P3
+  (les noms doublés sont rares dans la collection, le journal permet l'audit).
+- **L'export ne couvre que les fichiers COPIÉS** (`applyRangementPlan` → `done`) : les
+  exclus (sans année, jumeau déjà là) restent en session sans être persistés. Cohérent
+  avec la sémantique « la donnée écrite suit la copie » ; un export des exclus serait
+  P4 si l'usage le demande.
+- **`_known_styles()` dérive du cache disque**, pas des dossiers ➕ vides : un style
+  créé uniquement via ➕ (aucun fichier) est refusé par la route tant qu'aucune copie
+  n'a eu lieu. Cas d'angle acceptable : l'export suit la copie, donc le dossier existe
+  déjà au moment de l'export.
+- **Undo multi-passes** : le journal est append-only ; `--undo` restaure la dernière
+  écriture par chemin puis, à la passe suivante, l'écriture précédente (testé : la
+  dernière gagne, idempotent). Un `old_genre` non-null est réécrit, un `old_genre`
+  null retire le tag.
+
 ## Notes / Risques
 
 - Le voisinage artiste utilise le portage TS **simplifié** de `artist_title()`
@@ -258,5 +298,7 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
 - 5 092 lignes : moteur mémoïsé et paresseux (lignes visibles seulement), index artiste
   reconstruit sur `sourceFiles:changed` uniquement.
 - `.wma`/`.ogg` hors périmètre d'écriture TCON (comme EPIC-033) : copiés, listés au récap.
+  **P3 confirmé** : `SUPPORTED_EXTS = (.mp3, .flac, .wav, .m4a, .mp4)` dans
+  `apply_styles.py` — les `.wma` choisis sont comptés `unsupported` et jamais touchés.
 - Persistance des choix de session perdue au reload jusqu'à P4 (`style_review.json`) —
   même politique que la revue Années avant sa P2.

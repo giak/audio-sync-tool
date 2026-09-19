@@ -300,11 +300,20 @@ Ordre proposé et décisions déjà prises (spec) — as-built ci-dessous :
 Gate P2 : typecheck 0 · 1 091 vitest / 46 fichiers (+25) · lint 0 · build OK ·
 pytest 302 (+4).
 
-## P3 — Écriture TCON (export → script, pattern EPIC-033 P2)
+## P3 — Écriture TCON (export → script, pattern EPIC-033 P2) — ✅ livré 2026-09-19 (commit `e6dfa82`)
 
-1. `POST /styles/review` → `data/style_review.json` (fusion, 400 hors taxonomie) + bouton/`touche` d'export depuis l'aperçu.
-2. `scripts/apply_styles.py` : `--dry-run` défaut, `--review`, MP3 `TCON` (v2.3/v2.4), FLAC `GENRE`, WAV chunk ID3, M4A `©gen` ; journal `data/style_apply_journal.jsonl` avec `old_genre` ; `--undo` restaure (ou retire la frame si absente avant) ; idempotent ; tag l'épars **et** la copie rangée. Tests sur fichiers minimaux réels (fabriques de `test_apply_years.py`).
-3. État « écrit ✓ » = `genre` du scan == style.
+1. ✅ `POST /styles/review` → `data/style_review.json` (fusion, 400 hors taxonomie —
+   dérivée du cache disque via `_known_styles()`) + export automatique depuis l'aperçu
+   (`applyRangementPlan` POST les choix copiés ; échec non bloquant).
+2. ✅ `scripts/apply_styles.py` : dry-run défaut, `--apply`, `--undo`, `--report` ;
+   MP3 `TCON` (v2.3/v2.4), FLAC `GENRE`, WAV chunk ID3, M4A `©gen` ; journal
+   `data/style_apply_journal.jsonl` avec `old_genre` ; `--undo` restaure (ou retire le
+   tag si absent avant) ; idempotent ; tag l'épars **et** la copie rangée (retrouvée
+   par nom de fichier dans le cache). 14 tests sur fichiers minimaux réels (fabriques
+   de `test_apply_years.py` + `make_m4a`).
+3. ✅ État « écrit ✓ » = `genre` du scan == style → chip vert `✓` (`style-chip.written`).
+
+Gate P3 : typecheck 0 · 1 095 vitest (+4) · lint 0 · build OK · pytest 317 (+15).
 
 ## Risques suivis pendant P1
 

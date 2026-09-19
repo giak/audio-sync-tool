@@ -1,7 +1,7 @@
 # Design — Rangement par style : palette clavier `g`, destination calculée, suggestions locales, écriture TCON
 
-> **Date** : 2026-09-19 · **Statut** : design validé (brainstorm session 2026-09-19) — **fact-checké contre le cache et le code le 2026-09-19** (8 corrections, voir « Errata du fact-check » en fin de document) · **P1 et P2 implémentés** (`c6fcfdf` → `09705b3`) — écarts as-built dans l'annexe « As-built P2 »
-> **EPIC liée** : EPIC-035 (🟡 P1+P2 livrés) · **Plan P1** : `plans/2026-09-19-rangement-par-style.md`
+> **Date** : 2026-09-19 · **Statut** : design validé (brainstorm session 2026-09-19) — **fact-checké contre le cache et le code le 2026-09-19** (8 corrections, voir « Errata du fact-check » en fin de document) · **P1, P2 et P3 implémentés** (`c6fcfdf` → `e6dfa82`) — écarts as-built dans les annexes « As-built P2 » et « As-built P3 »
+> **EPIC liée** : EPIC-035 (🟢 P1+P2+P3 livrés) · **Plan P1** : `plans/2026-09-19-rangement-par-style.md`
 > **Socles** : EPIC-030 (filtre chips), EPIC-031 (registry clavier + matrice), EPIC-033 (pattern
 > preview → apply, journal additif, `--undo`), EPIC-034 (pastille « déjà rangé », reveal post-copie)
 
@@ -422,3 +422,26 @@ ex æquo → null, alias hors taxonomie, seuils) · chip testé dans `styleCell.
 · `Enter` = accepter testé dans `stylePalette.test.ts` · pytest genre + source_index.
 **Non fait** : live P2 + calibration des poids (critère de réussite réel du moteur —
 prochaine étape après un premier usage).
+
+## As-built P3 (2026-09-19, commit `e6dfa82`)
+
+L'écriture TCON suit la spec (export → script, pattern EPIC-033 P2) avec ces précisions
+as-built :
+
+| Point de spec | As-built |
+|---|---|
+| `POST /styles/review` (fusion, 400 hors taxonomie) | **Fait** — taxonomie dérivée **du cache disque** (`_known_styles()` parse les dossiers source du cache, même grammaire que le client) ; un style créé via ➕ sans fichier est refusé jusqu'à la première copie (cas d'angle accepté : l'export suit la copie, donc le dossier existe) |
+| `scripts/apply_styles.py` (dry-run, journal `old_genre`, undo, double check, idempotent) | **Fait** — journal append-only JSONL `{path, old, new, style, tag, ok, twin, ts}` ; `--undo` restaure la **dernière** écriture par chemin (null → retire le tag, valeur → réécrit), idempotent, plusieurs passes remontent l'historique ; double check `current_genre()` post-écriture (lecture par mutagen, mêmes frames que `get_audio_meta`) |
+| Tag l'épars **et** la copie rangée | **Fait** — la copie est retrouvée **par nom de fichier** dans le cache source (pas par calcul de fullpath) ; homonymes de noms dans deux dossiers styles → premier trouvé gagne (rare, journal `twin: true` permet l'audit) |
+| Ordre : copie d'abord, tag ensuite | **Respecté par construction** — l'export n'écrit que les choix **copiés** (`done` de `applyRangementPlan`) ; l'apply script tourne ensuite, hors navigateur ; les exclus (sans année, jumeau déjà là) ne sont pas persistés (P4 si l'usage le demande) |
+| Formats MP3 v2.3/v2.4 · FLAC · WAV · M4A | **Fait** — `SUPPORTED_EXTS = (.mp3, .flac, .wav, .m4a, .mp4)` ; MP3 conserve la version du tag existant (TCON TYER→v2.3 ? non : TCON existe en v2.3 et v2.4, mutagen gère) ; `.wma`/`.ogg` comptés `unsupported`, jamais touchés |
+| État « écrit ✓ » = genre lu au scan == style | **Fait** — chip `style-chip.written` (✓ vert, `--accent-green`), tooltip « · écrit dans le tag » ; nécessite un scan APRÈS l'apply (le cache porte alors le nouveau genre via `get_audio_meta` P2) |
+| Tests pytest sur fichiers minimaux réels | **Fait** — 14 tests, fabriques `make_mp3/make_flac/make_wav` réutilisées + `make_m4a` (boîtes ftyp+moov minimales) ; écriture/restore par format, remplace l'ancien genre, jumeau + `old_genre`, idempotence, undo 2 exemplaires, dernière écriture gagne, dry-run byte-identique |
+
+Ajout hors spec : **échec de l'export non bloquant** — si `POST /styles/review` échoue
+réseau, les copies restent réussies, un message d'état signale l'export manqué (les
+choix restent en session, ré-exportables au prochain aperçu réussi).
+
+Validation as-built : gate complet (typecheck 0 · 1 095 vitest · lint 0 · build OK ·
+317 pytest). **Non fait** : dry-run réel sur données (aucun choix persisté avant un
+premier usage de P1/P2).
