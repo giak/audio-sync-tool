@@ -105,15 +105,16 @@
   journal `old_genre` = backup, `--undo` idempotent, tag épars + copie rangée), chip
   « écrit ✓ » quand le genre du scan == style. Gate P3 : 1 095 vitest / 317 pytest.
   Reste P4 (confort) + live P3 sur données réelles après un premier usage.
-- **EPIC-036 Phase 0 livrée** (2026-09-19, `e623dd0`) : hygiène avant refactoring —
-  2 flaky corrigés (tests filtre laissaient `state.filters` pollué :
-  `sourceTree.test.ts` + `yearsUI.test.ts` ; 5 graines shuffle × 1 095 verts),
-  3 graines fixes shuffle ajoutées à la CI (la CI tirait déjà une graine aléatoire,
-  mais un échec n'était pas reproductible), audit listeners `document`/`window`
-  (7 sites : zéro fuite réelle, consigné), audit PurgeCSS (`npm run audit:css`)
-  → 1 famille morte confirmée supprimée (ancienne table doublons EPIC-028, 21 lignes).
-- Prochains chantiers : **EPIC-036 Phase 1** (modules `core/` : format, feedback,
-  dom, subscribe — cf. `docs/refactoring/2026-09-19-refactoring-architecture.md`),
+- **EPIC-036 Phases 0+1 livrées** (2026-09-19, `e623dd0` + `a5e2e08`) : Phase 0 —
+  hygiène (2 flaky corrigés, shuffle 3 graines fixes en CI, audit listeners : zéro
+  fuite, PurgeCSS : ancienne table doublons supprimée). Phase 1 — noyau `core/`
+  (format / feedback / subscribe / dom) : 0 site `toLocaleString('fr')` et 0 accès
+  direct `#status-text` hors core, 6 gardes hidden centralisés, save/restore scroll
+  en un point, doublon local yearsUI éliminé, cueEditor exclu (setStatus slot-scopé).
+  Gate P1 : 1 117 vitest (+22 core, 0 test existant modifié) / 317 pytest. Doc dev :
+  `static/src/README.md` + `AGENT.md` %ARCHITECTURE.core.
+- Prochains chantiers : **EPIC-036 Phase 2** (squelette de liste commun aux 5 pages,
+  fusion double passe de filtre — le gain LOC net y est reporté),
   **EPIC-035 P4** (confort : reprise `style_review.json`, onglet
   Config Styles, dossier pré-surligné), **EPIC-033-bis** (re-scan du corpus puis collectes incrémentales sur les ~3 551 nouveaux fichiers sans année), **EPIC-031 P2**
   (ergonomie sync : M déplacer, écoute en chaîne), reprise **EPIC-030 P1**

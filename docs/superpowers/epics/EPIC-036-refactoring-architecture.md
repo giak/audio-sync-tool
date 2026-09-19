@@ -1,6 +1,6 @@
 # EPIC-036 — Refactoring architecture : dette Phase 0, noyau `core/`, squelette de liste, CSS en couches
 
-> **Statut** : 🟡 **Phase 0 livrée (2026-09-19, `e623dd0`)** — Phases 1-4 en backlog
+> **Statut** : 🟡 **Phases 0+1 livrées (2026-09-19, `e623dd0` + `a5e2e08`)** — Phases 2-4 en backlog
 > **Créée** : 2026-09-19 · **Dernière mise à jour** : 2026-09-19
 > **Priorité** : Moyenne (dette mesurée, pas urgente ; chaque phase découle de la mesure, pas de l'intuition)
 > **Docs liées** : **étude complète** `docs/refactoring/2026-09-19-refactoring-architecture.md` (mesures, verdicts, plan 5 phases, refus argumentés, annexes honnêteté)
@@ -55,12 +55,37 @@ actif du projet est sa suite ; une migration la détruirait)._
 **Critère de sortie atteint** : gate shuffle-proof (3 graines fixes en CI),
 zéro listener suspect non tracé, CSS mort tranché par outil + main.
 
-### ⬜ Phase 1 — Noyau `core/` (~1 jour)
+### ✅ Phase 1 — Noyau `core/` (2026-09-19, commit `a5e2e08`)
 
-Extraire : `core/format.ts` (27 sites `toLocaleString('fr')`), `core/feedback.ts`
-(27 sites `statusText`, pattern 3 arguments), `core/subscribe.ts` (4 instanciations
-EventEmitter), `core/dom.ts` (helpers). Fraîcheur : simple déplacement + ré-import,
-tests d'assertion diff = zéro. Voir étude §Phase 1 pour les signatures.
+1. ✅ **`core/format.ts`** : `fmtCount` (27 sites `toLocaleString('fr')` → 0 restant,
+   9 fichiers), `plural` (remplace le doublon local de `stylePreview.ts`, sorties
+   identiques), `byCountThenId` (2 sites : `styles.ts` + `stylePalette.ts`).
+2. ✅ **`core/feedback.ts`** : `setStatus` — 0 accès direct `#status-text` hors core.
+   **Découverte** : `yearsUI.ts` avait sa propre réimplémentation locale de `setStatus`
+   (contrat identique, non comptée dans les 27 de l'étude) — supprimée, unifiée via core.
+   `cueEditor` **exclu volontairement** : son `setStatus` local est slot-scopé
+   (`statusEl()`, 33 appels) — cible différente, pas le même canal.
+3. ✅ **`core/subscribe.ts`** : `subscribeVisible(event, containerId, render)` — les 6
+   gardes `hidden` de `setupRenderSubscriptions` (render.ts) en un seul point commenté.
+4. ✅ **`core/dom.ts`** : `beginRender(container) → restore(el)` (signature différente
+   du `renderList(container, build)` de l'étude : moins invasif, le build reste dans
+   la page). Migrés : les **3 sites** avec save/restore complet (epars, source,
+   playlist-tracks — la variante playlist à assignation directe incluse).
+   **Écart assumé** : les 3 wipes SANS restore (playlist-source, years, dups) ne
+   migrent pas en P1 — les convertir ajoutait un comportement nouveau (restore d'un
+   scroll jamais sauvé) → Phase 2 avec le squelette de liste, iso-comportement respecté.
+5. ✅ **22 tests core nouveaux** (format 9, feedback 3, subscribe 5, dom 5) —
+   **0 test existant modifié** (critère « diff zéro » tenu).
+6. ✅ **Doc dev** : `static/src/README.md` (contrats + règle d'extraction + exemple),
+   `AGENT.md` `%ARCHITECTURE.core`.
+
+**Gate P1** : typecheck 0 · lint 0 · **1 117 vitest** (+22) · 3 graines shuffle ·
+build OK · **317 pytest**.
+**Écart consigné** : `wc -l` net **+22** hors tests (10 425 → 10 447) — la suppression
+nette sur fichiers existants est −39 (−161/+122) mais les 4 modules (93 LOC) + doc
+la dépassent. Le critère « net négatif » de l'étude est atteignable en Phase 2
+(squelette de liste, −40 à −60 LOC annoncés) ; le gain P1 est la déduplication
+(0 site restant) et le contrat testé, pas le volume.
 
 ### ⬜ Phase 2 — Squelette de liste commun (~2-3 jours)
 

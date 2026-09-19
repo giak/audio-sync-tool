@@ -339,10 +339,19 @@ Phase 0 (dette) ──► Phase 1 (core utils) ──► Phase 2 (listes) ──
 **Critère de sortie — atteint** : 5 graines shuffle × 1 095 verts (local, avant branchement CI)
 puis gate CI à graines fixes ; zéro listener suspect non tracé ; audit CSS rejouable en 1 commande.
 
-### Phase 1 — Extraction `core/` (1 jour, ~10 commits)
-Créer `core/format.ts`, `core/feedback.ts`, `core/subscribe.ts`, `core/dom.ts` (dans cet ordre de risque croissant) en **remplaçant les usages existants** (27 + 27 + 6 + 6 sites de listes) page par page.
-**Critère de sortie** : 0 duplication restante des motifs §1.4 ; `wc -l` net négatif ; tests d'assertion inchangés (diff vérifié au commit).
-**Risque** : faible — chaque substitution est mécanique et couverte par les tests existants.
+### Phase 1 — Extraction `core/` — ✅ LIVRÉE 2026-09-19 (`a5e2e08`)
+Les 4 modules créés dans l'ordre de risque prévu, substitutions mécaniques, **0 test
+d'assertion existant modifié** (22 tests core ajoutés). Écarts as-built, consignés :
+- `core/dom.ts` : signature `beginRender(container) → restore(el)` plutôt que
+  `renderList(container, build)` — le build reste dans la page, migration moins invasive.
+  3 sites migrés (les seuls avec save/restore complet) ; les 3 wipes sans restore →
+  Phase 2 (les convertir aurait introduit un comportement nouveau, contre iso-comportement).
+- `core/feedback.ts` : la vraie duplication était 27 sites **+ 1 doublon local**
+  (`yearsUI.ts`, non compté par l'étude) ; `cueEditor` exclu (setStatus slot-scopé).
+- « wc -l net négatif » **non atteint en P1** : net +22 hors tests (−39 sur fichiers
+  existants, +61 modules+doc) — reporté sur la Phase 2, le gain P1 est la déduplication.
+**Critère de sortie** : 0 duplication restante des motifs §1.4 ✅ (fmtCount/setStatus/hidden) ;
+tests d'assertion inchangés ✅.
 
 ### Phase 2 — Squelette de liste commun (2-3 jours)
 Extraire le pattern complet « liste filtrée + compteur + ligne d'état + sélection » partagé par eparsUI/sourceTree/playlistUI/yearsUI/dupsUI — en **paramétrant** (fonction `buildRow`, prédicat de filtre, hook post-render), pas en héritant.
