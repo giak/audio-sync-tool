@@ -157,6 +157,18 @@ describe('render/stylePalette', () => {
     expect(isStylePaletteOpen()).toBe(false);
   });
 
+  it('le défaut navigateur est annulé palette ouverte (F5 = rechargement !, Espace = scroll, Tab) sauf avec modificateur', () => {
+    openStylePalette([A], rowA);
+    for (const k of ['F5', ' ', 'Tab', 'ArrowDown', 'z']) {
+      expect(key(k).defaultPrevented, k).toBe(true);
+      expect(isStylePaletteOpen(), k).toBe(true);
+    }
+    const ctrlL = new KeyboardEvent('keydown', { key: 'l', ctrlKey: true, bubbles: true, cancelable: true });
+    palette().dispatchEvent(ctrlL);
+    expect(ctrlL.defaultPrevented).toBe(false); // Ctrl+L, F12… restent au navigateur
+    expect(docSpy).not.toHaveBeenCalled();
+  });
+
   it('les touches de la palette n’atteignent jamais document (registry isolé)', () => {
     openStylePalette([B], rowB);
     for (const k of ['z', 'ArrowDown', ' ', 'F5', 't', 'Tab', '4']) key(k);

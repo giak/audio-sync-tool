@@ -80,40 +80,27 @@ function pick(styleId: string): void {
 
 function onKeydown(e: KeyboardEvent): void {
   e.stopPropagation(); // le registry ne doit rien voir tant que la palette est ouverte
-  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return; // raccourcis navigateur (Ctrl+L, F12…) intacts
+  // preventDefault SYSTÉMATIQUE : le registry le fait pour ses touches (F5 =
+  // copie) ; ici F5 non annulé = RECHARGEMENT de la page (constaté en live
+  // headless), Espace = scroll, Tab = sortie de focus.
+  e.preventDefault();
   if (e.key === 'Escape') {
-    e.preventDefault();
     closeStylePalette();
     return;
   }
   if (e.key === 'Backspace') {
-    e.preventDefault();
     removeChoices();
     return;
   }
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    return;
-  }
   if (_pending) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      commit(_pending, null, _pendingNeeding);
-      return;
-    }
-    if (/^[1-9]$/.test(e.key)) {
-      e.preventDefault();
-      commit(_pending, TRANCHES[Number(e.key) - 1], _pendingNeeding);
-      return;
-    }
+    if (e.key === 'Enter') commit(_pending, null, _pendingNeeding);
+    else if (/^[1-9]$/.test(e.key)) commit(_pending, TRANCHES[Number(e.key) - 1], _pendingNeeding);
     return;
   }
   if (e.key.length === 1) {
     const styleId = _hotkeyToStyle.get(e.key.toLowerCase());
-    if (styleId) {
-      e.preventDefault();
-      pick(styleId);
-    }
+    if (styleId) pick(styleId);
   }
 }
 
