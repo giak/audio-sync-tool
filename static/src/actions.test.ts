@@ -81,6 +81,7 @@ vi.mock('./ui.js', () => ({ closeAllModals, openModal, promptDialog, showError, 
 
 import {
   configData,
+  copyFilesTo,
   createSourceFolder,
   executeCopy,
   executeReplace,
@@ -465,6 +466,60 @@ describe('actions', () => {
   });
 
   // ── Init ───────────────────────────────────────────────────────────
+
+  describe('copyFilesTo (EPIC-035 — extrait du batch F5, iso-comportement)', () => {
+    it('copie, patch l’index source sous le sous-dossier cible, révèle la destination, renvoie le nombre copié', async () => {
+      const c = document.createElement('div');
+      c.id = 'source-container';
+      const dir = document.createElement('div');
+      dir.className = 'directory';
+      dir.dataset.dirpath = '/source/techno_1995';
+      c.appendChild(dir);
+      document.body.appendChild(c);
+      state.eparsFiles = {
+        '/epars': { 'f.mp3': { path: '_techno/f.mp3', year: '1996', duration: null, codec: null } },
+      };
+      state.sourceFiles = { '/source': {} };
+      state.sourceExpanded = new Set();
+      state.sourceNodeMap.set('/source/techno_1995', { node: { __files__: [] } as any, baseDir: '/source' });
+      api.mockImplementation(async (url: string) =>
+        url === '/journal' ? [] : { ok: true, year: '1996', codec: 'MP3' },
+      );
+
+      const n = await copyFilesTo('/source/techno_1995', [
+        { filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/_techno/f.mp3' },
+      ]);
+
+      expect(n).toBe(1);
+      expect(api).toHaveBeenCalledWith('/copy', expect.objectContaining({ method: 'POST' }));
+      expect(JSON.parse((api.mock.calls[0][1] as { body: string }).body)).toEqual({
+        source_path: '/epars/_techno/f.mp3',
+        dest_dir: '/source/techno_1995',
+        filename: 'f.mp3',
+      });
+      expect(state.sourceFiles['/source']['f.mp3']).toEqual({
+        path: 'techno_1995/f.mp3',
+        year: '1996',
+        duration: null,
+        codec: 'MP3',
+      });
+      expect(patchEparsFileAfterCopy).toHaveBeenCalledWith('f.mp3', '/epars');
+      expect(state.sourceExpanded.has('/source/techno_1995')).toBe(true);
+      state.sourceNodeMap.clear();
+    });
+
+    it('/copy KO ou fichier inconnu → 0, index source intact', async () => {
+      state.eparsFiles = { '/epars': { 'f.mp3': { path: 'f.mp3', year: null, duration: null, codec: null } } };
+      state.sourceFiles = { '/source': {} };
+      api.mockImplementation(async (url: string) => (url === '/journal' ? [] : { ok: false }));
+      const n = await copyFilesTo('/source/x', [
+        { filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/f.mp3' },
+        { filename: 'ghost.mp3', eparDir: '/epars', fullpath: '/epars/ghost.mp3' },
+      ]);
+      expect(n).toBe(0);
+      expect(Object.keys(state.sourceFiles['/source'])).toEqual([]);
+    });
+  });
 
   describe('initApp + dupMatches (EPIC-028)', () => {
     it('peuple dupMatches depuis le cache /load (marqueurs ambre après reload)', async () => {

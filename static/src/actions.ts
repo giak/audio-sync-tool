@@ -193,6 +193,68 @@ export function refreshDupMatches(): void {
 }
 
 // ── Copy (F5) ─────────────────────────────────────────────────────────────
+
+/** Copie `files` (épars) vers `destDir`, patch l'index + le DOM, recharge le
+ *  journal, vide la sélection et révèle le dossier destination. Renvoie le
+ *  nombre de copies réussies. Extrait du handler batch de F5 (EPIC-035) pour
+ *  être enchaîné par dossier cible depuis l'aperçu de rangement — corps
+ *  iso-comportement, aucune confirmation ici (l'appelant l'a déjà obtenue). */
+export async function copyFilesTo(
+  destDir: string,
+  files: Array<{ filename: string; eparDir: string; fullpath: string }>,
+): Promise<number> {
+  let copied = 0;
+  for (const f of files) {
+    const relPath = state.eparsFiles[f.eparDir]?.[f.filename]?.path;
+    if (!relPath) continue;
+    const fullSrc = `${f.eparDir}/${relPath}`;
+    try {
+      const res = await api<{
+        ok: boolean;
+        year?: string | null;
+        duration?: number | null;
+        codec?: string | null;
+      }>('/copy', {
+        method: 'POST',
+        body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename: f.filename }),
+      });
+      if (!res.ok) continue;
+      copied++;
+      let relPathNew = f.filename;
+      const sourceDir = Object.keys(state.sourceFiles).find(dir => destDir === dir || destDir.startsWith(`${dir}/`));
+      if (sourceDir && destDir.startsWith(sourceDir)) {
+        const rel = destDir.substring(sourceDir.length).replace(/^\/+/, '');
+        relPathNew = rel ? `${rel}/${f.filename}` : f.filename;
+        if (!state.sourceFiles[sourceDir]) state.sourceFiles[sourceDir] = {};
+        state.sourceFiles[sourceDir][f.filename] = {
+          path: relPathNew,
+          year: res.year ?? null,
+          duration: res.duration ?? null,
+          codec: res.codec ?? null,
+        };
+      }
+      patchEparsFileAfterCopy(f.filename, f.eparDir);
+      patchSourceFileAfterCopy(destDir, f.filename, {
+        path: relPathNew,
+        year: res.year ?? null,
+        duration: res.duration ?? null,
+        codec: res.codec ?? null,
+      });
+    } catch (_) {
+      /* continue */
+    }
+  }
+  // Trigger EventEmitter for nested sourceFiles mutations
+  state.sourceFiles = { ...state.sourceFiles };
+  state.journal = await api('/journal');
+  state.selectedEparsFiles = new Map();
+  // Auto-expansion mémoire : le dossier destination s'ouvre (s'il était
+  // replié) pour montrer la copie — l'expansion persiste ensuite.
+  revealSourceDir(destDir);
+  requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
+  return copied;
+}
+
 export function executeCopy(): void {
   const statusText = document.getElementById('status-text');
 
@@ -214,57 +276,7 @@ export function executeCopy(): void {
     if (confirmBtn) {
       confirmBtn.onclick = async () => {
         closeAllModals();
-        let copied = 0;
-        for (const f of files) {
-          const relPath = state.eparsFiles[f.eparDir]?.[f.filename]?.path;
-          if (!relPath) continue;
-          const fullSrc = `${f.eparDir}/${relPath}`;
-          try {
-            const res = await api<{
-              ok: boolean;
-              year?: string | null;
-              duration?: number | null;
-              codec?: string | null;
-            }>('/copy', {
-              method: 'POST',
-              body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename: f.filename }),
-            });
-            if (!res.ok) continue;
-            copied++;
-            let relPathNew = f.filename;
-            const sourceDir = Object.keys(state.sourceFiles).find(
-              dir => destDir === dir || destDir.startsWith(`${dir}/`),
-            );
-            if (sourceDir && destDir.startsWith(sourceDir)) {
-              const rel = destDir.substring(sourceDir.length).replace(/^\/+/, '');
-              relPathNew = rel ? `${rel}/${f.filename}` : f.filename;
-              if (!state.sourceFiles[sourceDir]) state.sourceFiles[sourceDir] = {};
-              state.sourceFiles[sourceDir][f.filename] = {
-                path: relPathNew,
-                year: res.year ?? null,
-                duration: res.duration ?? null,
-                codec: res.codec ?? null,
-              };
-            }
-            patchEparsFileAfterCopy(f.filename, f.eparDir);
-            patchSourceFileAfterCopy(destDir, f.filename, {
-              path: relPathNew,
-              year: res.year ?? null,
-              duration: res.duration ?? null,
-              codec: res.codec ?? null,
-            });
-          } catch (_) {
-            /* continue */
-          }
-        }
-        // Trigger EventEmitter for nested sourceFiles mutations
-        state.sourceFiles = { ...state.sourceFiles };
-        state.journal = await api('/journal');
-        state.selectedEparsFiles = new Map();
-        // Auto-expansion mémoire : le dossier destination s'ouvre (s'il était
-        // replié) pour montrer la copie — l'expansion persiste ensuite.
-        revealSourceDir(destDir);
-        requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
+        const copied = await copyFilesTo(destDir, files);
         if (statusText)
           statusText.textContent = `✓ ${copied}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}`;
       };
