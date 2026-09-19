@@ -320,11 +320,24 @@ Phase 0 (dette) ──► Phase 1 (core utils) ──► Phase 2 (listes) ──
    1-2 h               1 jour                  2-3 jours            1-2 jours              1 jour
 ```
 
-### Phase 0 — Dette urgente (EPIC à ouvrir, priorité haute)
-1. Corriger le flaky `sourceTree.test.ts` (isolation `beforeEach`) + activer **`--sequence.shuffle` sur 3 graines dans le gate CI** (garde anti-régression du gate lui-même).
-2. Audit des 7 listeners `document`/`window` (fuites réelles ?) — corriger si trouvé, sinon consigner.
-3. Classes CSS mortes : **inconnu à ce jour** — le grep brut trouve 66 candidates mais l'échantillon vérifié de 8 classes a donné 8/8 faux positifs (template literals : `class="filter-clear"`, `class="scanned"`, etc.). Le premier document annonçait « ~12 mortes » : c'était une estimation infirmée par la vérification. knip/PurgeCSS tranchera en Phase 0 ; s'il en trouve peu, la phase CSS perd ce poste (et c'est très bien).
-**Critère de sortie** : gate shuffle-proof 3 graines × 2 runs ; zéro listener suspect non tracé.
+### Phase 0 — Dette urgente — ✅ LIVRÉE 2026-09-19 (`e623dd0`, EPIC-036)
+1. ✅ Flaky : cause racine = tests filtre laissant `state.filters` pollué entre tests (le
+   `beforeEach` ne le réinitialisait pas) — corrigé dans **2 fichiers** : `sourceTree.test.ts`
+   **et `yearsUI.test.ts`** (second flaky dormants découvert par le shuffle des 5 graines).
+   Shuffle ajouté au gate **CI** (3 graines fixes reproductibles). Précision honnête : la CI
+   shuffle **déjà** en aléatoire (revue 2026-08-08) — l'écart réel n'était pas l'absence de
+   shuffle mais l'absence de graine fixe → échec jamais reproductible.
+2. ✅ Audit listeners `document`/`window` (7 sites) : **zéro fuite réelle** — singletons module
+   (vie = vie de l'app), `{once:true}`, ou appariés add/remove avec garde idempotent. Les 45
+   `addEventListener` sans remove correspondant sont des `onclick=` sur nœuds éphémères
+   détruits avec leur `innerHTML`. Consigné, rien à corriger.
+3. ✅ Classes CSS mortes : tranché par **PurgeCSS** (`npm run audit:css`, script réutilisable
+   Phase 3) — 1 famille morte confirmée et supprimée (ancienne table doublons EPIC-028,
+   21 lignes, preuve git `731cc24` : l'UI actuelle est en cartes `dup-card`, le CSS table
+   n'a jamais été retiré, aucun test ne les référence). Le reste (9 candidates dont 2 familles
+   « demo » hors app) consigné dans le rapport, décision à l'EPIC CSS Phase 3.
+**Critère de sortie — atteint** : 5 graines shuffle × 1 095 verts (local, avant branchement CI)
+puis gate CI à graines fixes ; zéro listener suspect non tracé ; audit CSS rejouable en 1 commande.
 
 ### Phase 1 — Extraction `core/` (1 jour, ~10 commits)
 Créer `core/format.ts`, `core/feedback.ts`, `core/subscribe.ts`, `core/dom.ts` (dans cet ordre de risque croissant) en **remplaçant les usages existants** (27 + 27 + 6 + 6 sites de listes) page par page.
