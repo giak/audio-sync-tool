@@ -7,6 +7,8 @@
 // voit rien — même pattern qu'un input (ratingEdit), sans champ de contexte
 // ni binding modifié (la matrice EPIC-031 reste intacte).
 
+import { setStatus } from '../core/feedback.js';
+import { byCountThenId } from '../core/format.js';
 import { focusItemByElement, navigateFocus } from '../focus.js';
 import { state } from '../state.js';
 import { parseArtistTitle, type Suggestion, suggestStyle } from '../styleSuggest.js';
@@ -137,8 +139,7 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
   closeStylePalette();
   const tax = currentTaxonomy();
   if (!tax || tax.styles.size === 0) {
-    const statusText = document.getElementById('status-text');
-    if (statusText) statusText.textContent = 'Aucun dossier style_année à droite — lance un scan.';
+    setStatus('Aucun dossier style_année à droite — lance un scan.');
     return;
   }
   _targets = [...targets];
@@ -181,7 +182,7 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
 
   const grid = document.createElement('div');
   grid.className = 'sp-styles';
-  const ordered = [...tax.styles.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+  const ordered = [...tax.styles.values()].sort(byCountThenId);
   for (const def of ordered) {
     const b = document.createElement('button');
     b.type = 'button';

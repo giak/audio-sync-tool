@@ -1,5 +1,6 @@
 // ─── Audio player + player bar UI ──────────────────────────────────────────
 
+import { setStatus } from './core/feedback.js';
 import { emit } from './state.js';
 import { formatTime } from './utils.js';
 
@@ -117,14 +118,11 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
       btn.classList.remove('playing');
       btn.textContent = '▶';
       if (playerBar) playerBar.classList.add('hidden');
-      const statusText = document.getElementById('status-text');
-      if (statusText) {
-        const msg =
-          err instanceof DOMException && err.name === 'NotAllowedError'
-            ? "🔇 Son bloqué — clique d'abord sur la page pour débloquer l'audio."
-            : `🔇 Erreur lecture : ${err instanceof Error ? err.message : String(err)}`;
-        statusText.textContent = msg;
-      }
+      const msg =
+        err instanceof DOMException && err.name === 'NotAllowedError'
+          ? "🔇 Son bloqué — clique d'abord sur la page pour débloquer l'audio."
+          : `🔇 Erreur lecture : ${err instanceof Error ? err.message : String(err)}`;
+      setStatus(msg);
     });
 }
 

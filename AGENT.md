@@ -97,6 +97,13 @@ $  → scope/périmètre (était ⟐ dans source)
   $export: os.link ← fallback shutil.copy2 (EXDEV)
   $journal: append-only, horodaté (statuses: copied, moved, moved-to-trash, deleted, scan)
 
+  %ARCHITECTURE.core (EPIC-036 P1 — helpers partagés, doc de contrat : static/src/README.md)
+    $core/format.ts: fmtCount(n) (fr-FR — Node ICU = espace fine U+202F), plural(n, word, pl?) (pluriel si n > 1, 0 = singulier : comportement historique), byCountThenId(a, b) (tri volume desc puis id alpha) — pures, zéro dépendance ; JAMAIS de x.toLocaleString('fr') ni de pluriel fait main hors core/
+    $core/feedback.ts: setStatus(msg) — barre #status-text, no-op sûr si absente ; sémantique : status = guidage, toast = confirmation d'action, dialog = décision (ne pas croiser les canaux)
+    $core/subscribe.ts: subscribeVisible(event, containerId, render) — abonnement :changed + garde hidden en un point ; désabonnement renvoyé (contrat on())
+    $core/dom.ts: beginRender(container) → restore(el) — wipe + save/restore scrollTop (rAF), restore no-op si nœud détaché ; variante directe acceptée (renderPlaylistTracks)
+    !règle d'extraction: un module core/ n'est créé que s'il remplace ≥ 2 implémentations existantes écrites, tests verts avant ET après (YAGNI — pas d'abstraction anticipée) ; tout nouveau module passe par une EPIC
+
   %ARCHITECTURE.pages
     $router: state.page ('sync'|'playlist'|'dups'|'years') ← router.js goPage()
     #layouts et boutons nav mutuellement exclusifs (source de vérité unique)

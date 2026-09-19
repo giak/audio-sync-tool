@@ -1,6 +1,9 @@
 // ─── Source Data panel: tree building, toggle, filtering, rendering ───────
 
 import { api } from '../api.js';
+import { beginRender } from '../core/dom.js';
+import { setStatus } from '../core/feedback.js';
+import { fmtCount } from '../core/format.js';
 import { focusItemByElement, focusItemByPath, revalidateFocus, setActivePanel } from '../focus.js';
 import { getActivePlaylistName, getPendingTracks } from '../playlist.js';
 import { state, type TreeNode } from '../state.js';
@@ -74,8 +77,7 @@ function removeSourceExtraDir(dirPath: string): void {
         next.delete(dirPath);
         state.sourceExtraDirs = next; // EventEmitter → re-render
         state.journal = await api<typeof state.journal>('/journal');
-        const statusText = document.getElementById('status-text');
-        if (statusText) statusText.textContent = `✓ « ${name} » retiré de l'index (dossier conservé sur le disque).`;
+        setStatus(`✓ « ${name} » retiré de l'index (dossier conservé sur le disque).`);
       } catch (err) {
         showError(`Échec du retrait : ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -547,8 +549,7 @@ function renderExtraDirs(container: HTMLElement, allTrees: TreeAndDir[]): void {
 export function renderSource(): void {
   const container = document.getElementById('source-container');
   if (!container) return;
-  const savedScrollTop = container.scrollTop;
-  container.innerHTML = '';
+  const restore = beginRender(container); // EPIC-036 : wipe + save/restore scroll centralisés
   state.sourceNodeMap = new Map();
 
   // EPIC-030 : chip de filtre persistant (slot dédié hors du DOM effacé,
@@ -616,8 +617,7 @@ export function renderSource(): void {
   const sourceFilterActive = getFilterTerm('sync-source').length > 0;
   if (sourceFilterActive) {
     const filteredCount = renderFilteredSource(container, allTrees, 'sync-source');
-    if (headerCount)
-      headerCount.textContent = `(${filteredCount.toLocaleString('fr')} / ${totalCount.toLocaleString('fr')})`;
+    if (headerCount) headerCount.textContent = `(${fmtCount(filteredCount)} / ${fmtCount(totalCount)})`;
     updateFilterCount('sync-source', filteredCount, totalCount);
     if (filteredCount === 0) {
       const empty = document.createElement('div');
@@ -630,10 +630,8 @@ export function renderSource(): void {
       renderDirTree(tree, container, dirPath);
     }
     renderExtraDirs(container, allTrees);
-    if (headerCount) headerCount.textContent = totalCount > 0 ? `(${totalCount.toLocaleString('fr')})` : '';
+    if (headerCount) headerCount.textContent = totalCount > 0 ? `(${fmtCount(totalCount)})` : '';
   }
 
-  requestAnimationFrame(() => {
-    container.scrollTop = savedScrollTop;
-  });
+  restore(container);
 }

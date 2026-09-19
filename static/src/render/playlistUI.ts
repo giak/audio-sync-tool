@@ -1,6 +1,9 @@
 // ─── Playlist mode rendering: tabs, tracks, source tree, manager ──────────
 
 import { togglePlay } from '../audio.js';
+import { beginRender } from '../core/dom.js';
+import { setStatus } from '../core/feedback.js';
+import { fmtCount } from '../core/format.js';
 import { revalidateFocus } from '../focus.js';
 import { getMatchStatus, matchBadgeParts } from '../matchStatus.js';
 import {
@@ -115,7 +118,7 @@ function renderPlaylistTabs(): void {
 function renderPlaylistTracks(): void {
   const container = document.getElementById('playlist-panel');
   if (!container) return;
-  const savedScrollTop = container.scrollTop;
+  const restore = beginRender(container); // EPIC-036 : wipe + save/restore scroll centralisés
   const name = getActivePlaylistName();
   const tracks = getPendingTracks(name) || [];
   const savedPl = state.playlists.find(p => p.name === name);
@@ -292,9 +295,7 @@ function renderPlaylistTracks(): void {
     };
   });
 
-  requestAnimationFrame(() => {
-    container.scrollTop = savedScrollTop;
-  });
+  restore(container);
 }
 
 // ── Badges de match NML (EPIC-016) ──────────────────────────────────────
@@ -418,8 +419,7 @@ export function renderPlaylistSource(): void {
   const filterActive = getFilterTerm('playlist-source').length > 0;
   if (filterActive) {
     const filteredCount = renderFilteredSource(container, allTrees, 'playlist-source');
-    if (headerCount)
-      headerCount.textContent = `(${filteredCount.toLocaleString('fr')} / ${totalCount.toLocaleString('fr')})`;
+    if (headerCount) headerCount.textContent = `(${fmtCount(filteredCount)} / ${fmtCount(totalCount)})`;
     updateFilterCount('playlist-source', filteredCount, totalCount);
     if (filteredCount === 0) {
       const empty = document.createElement('div');
@@ -431,7 +431,7 @@ export function renderPlaylistSource(): void {
     for (const { tree, dirPath } of allTrees) {
       renderDirTree(tree, container, dirPath, togglePlaylistSourceDir);
     }
-    if (headerCount) headerCount.textContent = totalCount > 0 ? `(${totalCount.toLocaleString('fr')})` : '';
+    if (headerCount) headerCount.textContent = totalCount > 0 ? `(${fmtCount(totalCount)})` : '';
   }
 }
 
@@ -494,9 +494,7 @@ export function renderPlaylistManager(): void {
       renderPlaylistPanel();
       if (justEntered) {
         document.getElementById('playlist-source')?.classList.add('panel-active');
-        const statusText = document.getElementById('status-text');
-        if (statusText)
-          statusText.textContent = '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.';
+        setStatus('🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.');
       }
     };
   });

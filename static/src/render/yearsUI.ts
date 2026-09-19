@@ -11,6 +11,8 @@
 
 import { api } from '../api.js';
 import { playingPath, togglePlay } from '../audio.js';
+import { setStatus } from '../core/feedback.js';
+import { fmtCount } from '../core/format.js';
 import { subjectFromName } from '../filterEngine.js';
 import { goPage } from '../router.js';
 import { ensureFilterChip, isFilterActive, subjectMatches, updateFilterCount } from './filterChip.js';
@@ -80,11 +82,6 @@ function playBtn(fullpath: string, filename: string): HTMLButtonElement {
 /** Clé de cache (artiste\titre) d'un fichier — identifiant de choix. */
 function keyOf(f: YearFile): string {
   return `${f.artist ?? ''}\t${f.title}`;
-}
-
-function setStatus(msg: string): void {
-  const el = document.getElementById('status-text');
-  if (el) el.textContent = msg;
 }
 
 /** Une carte à revue passe-t-elle le filtre actif du scope years ?
@@ -180,10 +177,10 @@ export function renderYears(): void {
   const count = document.getElementById('years-count');
   if (count) {
     count.textContent = data
-      ? `(${data.certaines.length.toLocaleString('fr')} certaines · ` +
-        `${data.a_revue.length.toLocaleString('fr')} à revue · ` +
-        `${data.introuvables.toLocaleString('fr')} introuvables · ` +
-        `${data.files_no_year.toLocaleString('fr')} sans année)`
+      ? `(${fmtCount(data.certaines.length)} certaines · ` +
+        `${fmtCount(data.a_revue.length)} à revue · ` +
+        `${fmtCount(data.introuvables)} introuvables · ` +
+        `${fmtCount(data.files_no_year)} sans année)`
       : '';
   }
 
@@ -204,7 +201,7 @@ export function renderYears(): void {
   }
   const certTitle = document.createElement('div');
   certTitle.className = 'years-section ok';
-  certTitle.textContent = `✓ Certaines — prêtes pour scripts/apply_years.py (${seen.size.toLocaleString('fr')} morceaux)`;
+  certTitle.textContent = `✓ Certaines — prêtes pour scripts/apply_years.py (${fmtCount(seen.size)} morceaux)`;
   list.appendChild(certTitle);
   if (seen.size === 0) {
     list.insertAdjacentHTML('beforeend', '<p class="years-empty">Aucune année certaine dans les caches.</p>');
@@ -228,8 +225,8 @@ export function renderYears(): void {
   const revTitle = document.createElement('div');
   revTitle.className = 'years-section';
   revTitle.textContent = isFilterActive(YEARS_SCOPE)
-    ? `? À revue — filtré (${data.a_revue.length.toLocaleString('fr')} fichiers au total)`
-    : `? À revue — choisissez l'année ou rejetez (${data.a_revue.length.toLocaleString('fr')} fichiers)`;
+    ? `? À revue — filtré (${fmtCount(data.a_revue.length)} fichiers au total)`
+    : `? À revue — choisissez l'année ou rejetez (${fmtCount(data.a_revue.length)} fichiers)`;
   // Année de remplacement (champ libre) : appliquée à la carte focusée avant
   // export — utile pour trancher vite une ambiguïté hors candidates.
   const input = document.createElement('input');
@@ -364,12 +361,10 @@ export function yearsMoveFocus(delta: number): void {
 export async function openYearsMode(): Promise<void> {
   goPage('years');
   focusIndex = -1; // ouverture = vue fraîche (pas de focus hérité)
-  const statusText = document.getElementById('status-text');
-  if (statusText) {
-    statusText.textContent =
-      '📅 Vue Années — ↑↓ naviguer · clic = choisir/rejeter · e = exporter · F7 ou / = filtrer · ' +
-      'Échap revenir. Export = choix persistés (year_review.json) → scripts/apply_years.py --review.';
-  }
+  setStatus(
+    '📅 Vue Années — ↑↓ naviguer · clic = choisir/rejeter · e = exporter · F7 ou / = filtrer · ' +
+      'Échap revenir. Export = choix persistés (year_review.json) → scripts/apply_years.py --review.',
+  );
   await refreshYears();
   await loadChoices();
   renderYears();

@@ -5,6 +5,7 @@
 // + destination calculée en tooltip. Sans choix : cellule vide (la colonne
 // est préservée par le colgroup).
 
+import { fmtCount } from '../core/format.js';
 import { state } from '../state.js';
 import { parseArtistTitle, type Suggestion, suggestStyle } from '../styleSuggest.js';
 import { buildTaxonomy, destFor, findEparsEntry, type Taxonomy, yearOf } from '../styles.js';
@@ -143,7 +144,7 @@ export function updateStyleRecap(): void {
   if (n === 0) return;
   const span = document.createElement('span');
   span.className = 's-style';
-  span.textContent = `🏷 ${n.toLocaleString('fr')} assigné${n > 1 ? 's' : ''} · e = aperçu`;
+  span.textContent = `🏷 ${fmtCount(n)} assigné${n > 1 ? 's' : ''} · e = aperçu`;
   line.appendChild(span);
 }
 

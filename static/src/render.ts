@@ -2,6 +2,7 @@
 // Phase 2: Component Factories. render.ts is now a thin shell.
 // All exports use local bindings (import + export) to avoid pass-through conflicts.
 
+import { subscribeVisible } from './core/subscribe.js';
 import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
 import { getBatchCopy } from './render/batchCopy.js';
 import { doDragCopy } from './render/dragDrop.js';
@@ -55,26 +56,14 @@ export function updatePlaylistLedIndicator(): void {
 
 /** Wire up EventEmitter state changes to auto-renders. Called once at boot. */
 export function setupRenderSubscriptions(): void {
-  // Auto-render panels when their data changes
-  on('eparsFiles:changed', () => {
-    const container = document.getElementById('epars-container');
-    if (container && !container.classList.contains('hidden')) renderEpars();
-  });
-  on('sourceFiles:changed', () => {
-    const container = document.getElementById('source-container');
-    if (container && !container.classList.contains('hidden')) renderSource();
-  });
+  // Auto-render panels when their data changes (EPIC-036 : garde hidden centralisé)
+  subscribeVisible('eparsFiles:changed', 'epars-container', renderEpars);
+  subscribeVisible('sourceFiles:changed', 'source-container', renderSource);
   // Dossiers racine créés via ➕ (sourceTree.renderExtraDirs)
-  on('sourceExtraDirs:changed', () => {
-    const container = document.getElementById('source-container');
-    if (container && !container.classList.contains('hidden')) renderSource();
-  });
+  subscribeVisible('sourceExtraDirs:changed', 'source-container', renderSource);
 
   // Journal change → epars badges need recomputation
-  on('journal:changed', () => {
-    const container = document.getElementById('epars-container');
-    if (container && !container.classList.contains('hidden')) renderEpars();
-  });
+  subscribeVisible('journal:changed', 'epars-container', renderEpars);
 
   // ── Panel active class toggling ──────────────────────────────────────
   on('activePanel:changed', () => {
@@ -92,13 +81,6 @@ export function setupRenderSubscriptions(): void {
   on('audio:changed', updatePlaylistLedIndicator);
 
   // When playlist tracks or active tab change, auto-update the panel
-  const autoRenderPlaylistPanel = (): void => {
-    const layout = document.getElementById('playlist-layout');
-    if (layout && !layout.classList.contains('hidden')) {
-      renderPlaylistPanel();
-    }
-  };
-
-  on('eparsPlaylist:changed', autoRenderPlaylistPanel);
-  on('activePlaylistIndex:changed', autoRenderPlaylistPanel);
+  subscribeVisible('eparsPlaylist:changed', 'playlist-layout', renderPlaylistPanel);
+  subscribeVisible('activePlaylistIndex:changed', 'playlist-layout', renderPlaylistPanel);
 }

@@ -1,5 +1,8 @@
 // ─── Éparpillé panel rendering ────────────────────────────────────────────
 
+import { beginRender } from '../core/dom.js';
+import { setStatus } from '../core/feedback.js';
+import { fmtCount } from '../core/format.js';
 import { foldTerm, matchesTokens } from '../filterEngine.js';
 import { focusItemByElement, revalidateFocus, setActivePanel } from '../focus.js';
 import { type EparsSelection, state } from '../state.js';
@@ -73,11 +76,7 @@ function selectEparsFile(
   }
 
   const count = state.selectedEparsFiles.size;
-  const statusText = document.getElementById('status-text');
-  if (statusText) {
-    statusText.textContent =
-      count > 1 ? `${count} fichiers sélectionnés. Tab → F5 pour copier.` : 'Appuie sur Tab → F5 pour copier.';
-  }
+  setStatus(count > 1 ? `${count} fichiers sélectionnés. Tab → F5 pour copier.` : 'Appuie sur Tab → F5 pour copier.');
   setActivePanel('epars');
   if (row && container) focusItemByElement(container, row);
 }
@@ -87,8 +86,7 @@ function selectEparsFile(
 export function renderEpars(): void {
   const container = document.getElementById('epars-container');
   if (!container) return;
-  const savedScrollTop = container.scrollTop;
-  container.innerHTML = '';
+  const restore = beginRender(container); // EPIC-036 : wipe + save/restore scroll centralisés
 
   // EPIC-030 : chip de filtre persistant (slot dédié hors du DOM effacé,
   // mémorisé scope 'sync-epars') — la saisie survit aux re-renders.
@@ -105,8 +103,8 @@ export function renderEpars(): void {
   const dupCount = state.dupMatches.size;
   const headerCount = document.getElementById('epars-header-count');
   if (headerCount) {
-    const base = totalFiles > 0 ? totalFiles.toLocaleString('fr') : '';
-    const dupPart = dupCount > 0 ? ` · ${dupCount.toLocaleString('fr')} ↔` : '';
+    const base = totalFiles > 0 ? fmtCount(totalFiles) : '';
+    const dupPart = dupCount > 0 ? ` · ${fmtCount(dupCount)} ↔` : '';
     headerCount.textContent = base ? `(${base}${dupPart})` : '';
   }
 
@@ -219,17 +217,15 @@ export function renderEpars(): void {
   if (statusLine) {
     const dupPart =
       dupCount > 0
-        ? `\n      <span class="s-dupfuzzy">↔ ${dupCount.toLocaleString('fr')} homonyme${dupCount > 1 ? 's' : ''}</span>`
+        ? `\n      <span class="s-dupfuzzy">↔ ${fmtCount(dupCount)} homonyme${dupCount > 1 ? 's' : ''}</span>`
         : '';
     statusLine.innerHTML = `
-      <span class="s-traite">✓ ${countTraite.toLocaleString('fr')} traité</span>
-      <span class="s-reste">● ${countNouveau.toLocaleString('fr')} reste</span>
-      <span class="s-doublon">○ ${countDoublon.toLocaleString('fr')} doublon</span>${dupPart}
+      <span class="s-traite">✓ ${fmtCount(countTraite)} traité</span>
+      <span class="s-reste">● ${fmtCount(countNouveau)} reste</span>
+      <span class="s-doublon">○ ${fmtCount(countDoublon)} doublon</span>${dupPart}
     `;
     updateStyleRecap(); // EPIC-035 : « 🏷 N assignés » après reconstruction de la ligne
   }
 
-  requestAnimationFrame(() => {
-    container.scrollTop = savedScrollTop;
-  });
+  restore(container);
 }

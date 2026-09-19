@@ -1,6 +1,8 @@
 // ─── Business operations: scan, copy, config, init ───────────────────────
 
 import { api } from './api.js';
+import { setStatus } from './core/feedback.js';
+import { fmtCount } from './core/format.js';
 import { patchEparsFileAfterCopy, patchSourceFileAfterCopy } from './domPatches.js';
 import { detectDuplicates } from './dupDetect.js';
 import { durationCompatible, type VersionGroup } from './dupGroups.js';
@@ -124,14 +126,13 @@ export async function runScan(): Promise<void> {
   const progressBar = document.getElementById('scan-progress') as HTMLElement | null;
   const progressFill = document.getElementById('scan-progress-fill') as HTMLElement | null;
   const progressText = document.getElementById('scan-progress-text') as HTMLElement | null;
-  const statusText = document.getElementById('status-text') as HTMLElement | null;
 
   if (btn) btn.disabled = true;
   if (btn) btn.classList.add('scanning');
   if (progressBar) progressBar.classList.remove('hidden');
   if (progressFill) progressFill.style.width = '0%';
   if (progressText) progressText.textContent = '🔍 Préparation…';
-  if (statusText) statusText.textContent = 'Scan en cours…';
+  setStatus('Scan en cours…');
 
   const pollTimer = setInterval(async () => {
     try {
@@ -143,8 +144,7 @@ export async function runScan(): Promise<void> {
       const pct = p.total > 0 ? Math.round((p.current / p.total) * 100) : 0;
       if (progressFill) progressFill.style.width = `${Math.min(pct, 100)}%`;
       if (progressText) progressText.textContent = `${p.phase || '…'} : ${p.current} / ${p.total} (${pct}%)`;
-      if (statusText)
-        statusText.textContent = `🔍 Scan ${p.phase ? p.phase.toLowerCase() : '…'} — ${p.current}/${p.total}`;
+      setStatus(`🔍 Scan ${p.phase ? p.phase.toLowerCase() : '…'} — ${p.current}/${p.total}`);
     } catch (_) {
       /* ignore polling errors */
     }
@@ -182,7 +182,7 @@ export async function runScan(): Promise<void> {
       const totalFiles =
         Object.values(state.sourceFiles).reduce((s, f) => s + Object.keys(f).length, 0) +
         Object.values(state.eparsFiles).reduce((s, f) => s + Object.keys(f).length, 0);
-      if (statusText) statusText.textContent = `Scan terminé — ${totalFiles.toLocaleString('fr')} fichiers`;
+      setStatus(`Scan terminé — ${fmtCount(totalFiles)} fichiers`);
     }
   }
 }
@@ -259,8 +259,6 @@ export async function copyFilesTo(
 }
 
 export function executeCopy(): void {
-  const statusText = document.getElementById('status-text');
-
   // ── Batch copy (A8/A9) : multi-select or drag-drop ──────────────────
   const batch = getBatchCopy();
   if (batch.target && batch.files.length > 0) {
@@ -280,8 +278,9 @@ export function executeCopy(): void {
       confirmBtn.onclick = async () => {
         closeAllModals();
         const copied = (await copyFilesTo(destDir, files)).length;
-        if (statusText)
-          statusText.textContent = `✓ ${copied}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}`;
+        setStatus(
+          `✓ ${copied}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}`,
+        );
       };
     }
     if (cancelBtn) cancelBtn.onclick = () => closeAllModals();
@@ -298,22 +297,22 @@ export function executeCopy(): void {
     : (rightFocused?.closest('.directory') as HTMLElement | null);
 
   if (!leftFocus) {
-    if (statusText) statusText.textContent = "Met d'abord en surbrillance un fichier à gauche (↑↓).";
+    setStatus("Met d'abord en surbrillance un fichier à gauche (↑↓).");
     return;
   }
   if (!rightFocus) {
-    if (statusText) statusText.textContent = "Met d'abord en surbrillance un dossier à droite (Tab puis ↑↓).";
+    setStatus("Met d'abord en surbrillance un dossier à droite (Tab puis ↑↓).");
     return;
   }
   if (!leftFocus.dataset.epardir) {
-    if (statusText) statusText.textContent = "Ce fichier n'a pas de dossier source valide.";
+    setStatus("Ce fichier n'a pas de dossier source valide.");
     return;
   }
   const filename = leftFocus.dataset.filename || '';
   const eparDir = leftFocus.dataset.epardir;
   const relPath = state.eparsFiles[eparDir]?.[filename]?.path;
   if (!relPath) {
-    if (statusText) statusText.textContent = 'Fichier introuvable dans les données scannées.';
+    setStatus('Fichier introuvable dans les données scannées.');
     return;
   }
   const fullSrc = `${eparDir}/${relPath}`;
@@ -365,7 +364,7 @@ export function executeCopy(): void {
         // Auto-expansion mémoire : montrer la copie sans re-déplier.
         revealSourceDir(destDir);
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
-        if (statusText) statusText.textContent = `✓ ${filename} copié vers ${destDir}`;
+        setStatus(`✓ ${filename} copié vers ${destDir}`);
       } catch (err) {
         showError(`Échec de la copie : ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -381,10 +380,9 @@ export function executeCopy(): void {
  *  `<source_root>/_trash/<date>/`. Jamais d'effacement physique. Le move n'a
  *  lieu QUE si la copie a réussi — rien n'est perdu en cas d'échec. */
 export async function executeReplace(eparsFullPath: string): Promise<void> {
-  const statusText = document.getElementById('status-text');
   const match = state.dupMatches.get(eparsFullPath);
   if (!match) {
-    if (statusText) statusText.textContent = 'Aucun jumeau rangé à remplacer pour ce fichier.';
+    setStatus('Aucun jumeau rangé à remplacer pour ce fichier.');
     return;
   }
 
@@ -392,7 +390,7 @@ export async function executeReplace(eparsFullPath: string): Promise<void> {
   const eparDir = Object.keys(state.eparsFiles).find(d => eparsFullPath.startsWith(`${d}/`));
   const sourceRoot = Object.keys(state.sourceFiles).find(d => match.sourceFullPath.startsWith(`${d}/`));
   if (!eparDir || !sourceRoot) {
-    if (statusText) statusText.textContent = 'Chemin introuvable dans les données scannées.';
+    setStatus('Chemin introuvable dans les données scannées.');
     return;
   }
   const eparsFilename = match.eparsFilename;
@@ -442,9 +440,7 @@ export async function executeReplace(eparsFullPath: string): Promise<void> {
           patchEparsFileAfterCopy(eparsFilename, eparDir);
           state.selectedEparsFiles = new Map();
           refreshDupMatches(); // l'ancien jumeau n'existe plus → la Map change
-          if (statusText) {
-            statusText.textContent = `✓ ${sourceFilename} remplacé par ${eparsFilename} (ancien → _trash)`;
-          }
+          setStatus(`✓ ${sourceFilename} remplacé par ${eparsFilename} (ancien → _trash)`);
         } catch (err) {
           showError(`Échec du remplacement : ${err instanceof Error ? err.message : String(err)}`);
         } finally {
@@ -486,8 +482,7 @@ export async function createSourceFolder(): Promise<void> {
         const next = new Set(state.sourceExtraDirs);
         next.add(res.path);
         state.sourceExtraDirs = next; // EventEmitter → re-render
-        const statusText = document.getElementById('status-text');
-        if (statusText) statusText.textContent = `✓ Dossier "${name}" créé à la racine de Source Data.`;
+        setStatus(`✓ Dossier "${name}" créé à la racine de Source Data.`);
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
       } catch (err) {
         showError(`Échec de la création : ${err instanceof Error ? err.message : String(err)}`);
@@ -505,7 +500,6 @@ export async function createSourceFolder(): Promise<void> {
  *  Les épars perdants restent en place (décision utilisateur). overridePath
  *  désigne un autre survivant choisi par l'utilisateur. */
 export async function applyGroupPlan(group: VersionGroup, overridePath: string | null): Promise<void> {
-  const statusText = document.getElementById('status-text');
   let finalWinner = group.winner;
   if (overridePath) {
     const alt = group.members.find(m => m.fullPath === overridePath);
@@ -518,7 +512,7 @@ export async function applyGroupPlan(group: VersionGroup, overridePath: string |
     m => m.fullPath !== finalWinner.fullPath && m.side === 'source' && durationCompatible(m, finalWinner),
   );
   if (losers.length === 0) {
-    if (statusText) statusText.textContent = 'Rien à déplacer : le gagnant choisi est déjà le seul exemplaire rangé.';
+    setStatus('Rien à déplacer : le gagnant choisi est déjà le seul exemplaire rangé.');
     return;
   }
   const sourceRoot = Object.keys(state.sourceFiles).find(d => losers[0].fullPath.startsWith(`${d}/`));
@@ -555,9 +549,7 @@ export async function applyGroupPlan(group: VersionGroup, overridePath: string |
     }
     state.sourceFiles = { ...state.sourceFiles }; // EventEmitter → re-render
     refreshDupMatches();
-    if (statusText) {
-      statusText.textContent = `✓ ${finalWinner.filename} conservé — ${losers.length} exemplaire(s) → _trash`;
-    }
+    setStatus(`✓ ${finalWinner.filename} conservé — ${losers.length} exemplaire(s) → _trash`);
   } catch (err) {
     showError(`Échec du plan de groupe : ${err instanceof Error ? err.message : String(err)}`);
   } finally {
@@ -607,11 +599,9 @@ export async function initApp(): Promise<void> {
     // Focus restoration after EventEmitter's deferred render
     requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
     setActivePanel('epars');
-    const statusText = document.getElementById('status-text');
-    if (statusText) statusText.textContent = 'Prêt. Configure les dossiers puis lance Scan.';
+    setStatus('Prêt. Configure les dossiers puis lance Scan.');
   } catch (err) {
     console.error('Init failed:', err);
-    const statusText = document.getElementById('status-text');
-    if (statusText) statusText.textContent = 'Erreur de connexion au serveur.';
+    setStatus('Erreur de connexion au serveur.');
   }
 }

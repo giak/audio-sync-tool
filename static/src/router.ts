@@ -4,6 +4,7 @@
 // (page === 'playlist'). Extrait de script.ts pour être importable par les
 // modules de vue sans effets de bord.
 
+import { setStatus } from './core/feedback.js';
 import { state } from './state.js';
 
 export type Page = 'sync' | 'playlist' | 'dups' | 'years';
@@ -30,6 +31,5 @@ export function goPage(page: Page): void {
     document.getElementById(`page-${name}`)?.classList.toggle('active', name === page);
   }
 
-  const statusText = document.getElementById('status-text');
-  if (page === 'sync' && statusText) statusText.textContent = 'Prêt.';
+  if (page === 'sync') setStatus('Prêt.');
 }

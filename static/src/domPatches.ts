@@ -4,6 +4,7 @@
 // renderSource, or any other render sub-modules.
 
 import { stopPlayer, togglePlay } from './audio.js';
+import { fmtCount } from './core/format.js';
 import { focusItemByElement, setActivePanel } from './focus.js';
 import { getRating } from './ratings.js';
 import { openCueEditor } from './render/cueEditor.js';
@@ -41,15 +42,15 @@ export function patchEparsFileAfterCopy(filename: string, eparDir: string): void
   const statusLine = document.getElementById('epars-status-line');
   if (statusLine) {
     statusLine.innerHTML = `
-      <span class="s-traite">✓ ${countTraite.toLocaleString('fr')} traité</span>
-      <span class="s-reste">● ${countNouveau.toLocaleString('fr')} reste</span>
-      <span class="s-doublon">○ ${countDoublon.toLocaleString('fr')} doublon</span>
+      <span class="s-traite">✓ ${fmtCount(countTraite)} traité</span>
+      <span class="s-reste">● ${fmtCount(countNouveau)} reste</span>
+      <span class="s-doublon">○ ${fmtCount(countDoublon)} doublon</span>
     `;
   }
 
   const totalFiles = countAllEparsFiles(state.eparsFiles);
   const headerCount = document.getElementById('epars-header-count');
-  if (headerCount) headerCount.textContent = totalFiles > 0 ? `(${totalFiles.toLocaleString('fr')})` : '';
+  if (headerCount) headerCount.textContent = totalFiles > 0 ? `(${fmtCount(totalFiles)})` : '';
 }
 
 export function patchSourceFileAfterCopy(
@@ -106,11 +107,11 @@ export function patchSourceFileAfterCopy(
   const headerCount = document.getElementById('source-header-count');
   const filterActive = (state.filters['sync-source'] ?? '').length > 0;
   if (!filterActive) {
-    if (headerCount) headerCount.textContent = totalSource > 0 ? `(${totalSource.toLocaleString('fr')})` : '';
+    if (headerCount) headerCount.textContent = totalSource > 0 ? `(${fmtCount(totalSource)})` : '';
   } else if (headerCount) {
     const currentMatches = headerCount.textContent?.match(/[\d\s]+(?= \/)/);
     const filtered = currentMatches ? parseInt(currentMatches[0].replace(/\s/g, ''), 10) : totalSource;
-    headerCount.textContent = `(${filtered.toLocaleString('fr')} / ${totalSource.toLocaleString('fr')})`;
+    headerCount.textContent = `(${fmtCount(filtered)} / ${fmtCount(totalSource)})`;
   }
 
   const dirEl = document.querySelector(

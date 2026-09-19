@@ -9,6 +9,8 @@
 
 import { applyGroupPlan, refreshDupMatches } from '../actions.js';
 import { playingPath, togglePlay } from '../audio.js';
+import { setStatus } from '../core/feedback.js';
+import { fmtCount } from '../core/format.js';
 import { buildVersionGroups, type VersionGroup } from '../dupGroups.js';
 import { revalidateFocus } from '../focus.js';
 import { goPage } from '../router.js';
@@ -75,7 +77,7 @@ export function renderDups(): void {
   if (count) {
     count.textContent =
       groups.length > 0
-        ? `(${groups.length.toLocaleString('fr')} groupes · ${groups.reduce((n, g) => n + g.members.length, 0).toLocaleString('fr')} fichiers)`
+        ? `(${fmtCount(groups.length)} groupes · ${fmtCount(groups.reduce((n, g) => n + g.members.length, 0))} fichiers)`
         : '';
   }
   if (groups.length === 0) {
@@ -176,10 +178,7 @@ export function openDupsMode(): void {
   overrides.clear();
   renderDups();
   goPage('dups');
-  const statusText = document.getElementById('status-text');
-  if (statusText) {
-    statusText.textContent = '↔ Vue Doublons — ↑↓ groupes · clic membre = override · R appliquer · Échap revenir.';
-  }
+  setStatus('↔ Vue Doublons — ↑↓ groupes · clic membre = override · R appliquer · Échap revenir.');
 }
 
 export function closeDupsMode(): void {

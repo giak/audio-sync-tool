@@ -18,6 +18,7 @@ import './commands/style.js'; // EPIC-035 — EN DERNIER : les index de la matri
 import { createSourceFolder, initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
 import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
+import { setStatus } from './core/feedback.js';
 import { initTwinHint, setActivePanel } from './focus.js';
 import { createNewPlaylist, loadPlaylists, savePlaylist, setPendingTracks } from './playlist.js';
 import { openCueEditor } from './render/cueEditor.js';
@@ -56,8 +57,7 @@ async function enterPlaylistMode(): Promise<void> {
   renderPlaylistSource();
   renderPlaylistPanel();
   document.getElementById('playlist-source')?.classList.add('panel-active');
-  const statusText = document.getElementById('status-text');
-  if (statusText) statusText.textContent = '🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.';
+  setStatus('🎵 Mode Playlist — Espace pour ajouter/retirer, Ctrl+S pour sauvegarder.');
 }
 
 async function exitPlaylistMode(): Promise<void> {

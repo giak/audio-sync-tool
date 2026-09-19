@@ -6,6 +6,7 @@
 // fonction dest(style, année). Source de vérité = les dossiers existants —
 // aucune liste à maintenir à la main.
 
+import { byCountThenId } from './core/format.js';
 import type { FileIndex } from './state.js';
 
 export interface StyleDef {
@@ -162,7 +163,7 @@ export function findEparsEntry(
  *  prend la première lettre libre parmi : initiales de ses segments, puis
  *  lettres de son id, puis n'importe quelle lettre libre a-z. Épuisé → null. */
 export function deriveHotkeys(tax: Taxonomy): Map<string, string | null> {
-  const ordered = [...tax.styles.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+  const ordered = [...tax.styles.values()].sort(byCountThenId);
   const taken = new Set<string>();
   const out = new Map<string, string | null>();
   const alphabet = 'abcdefghijklmnopqrstuvwxyz';

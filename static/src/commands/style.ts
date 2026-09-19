@@ -7,6 +7,7 @@
 // Importé EN DERNIER dans script.ts : les index des bindings existants ne
 // bougent pas.
 
+import { setStatus } from '../core/feedback.js';
 import { openStylePalette } from '../render/stylePalette.js';
 import { openStylePreview } from '../render/stylePreview.js';
 import { state } from '../state.js';
@@ -19,9 +20,7 @@ export function openPaletteOnFocus(): void {
   const selected = [...state.selectedEparsFiles.values()].map(s => s.fullpath).filter(Boolean);
   const targets = selected.length > 0 ? selected : focusedRow?.dataset.focuspath ? [focusedRow.dataset.focuspath] : [];
   if (targets.length === 0) {
-    const statusText = document.getElementById('status-text');
-    if (statusText)
-      statusText.textContent = "Met d'abord en surbrillance un fichier épars (↑↓) ou sélectionne-en (Espace).";
+    setStatus("Met d'abord en surbrillance un fichier épars (↑↓) ou sélectionne-en (Espace).");
     return;
   }
   // Ancre : la ligne focusée si elle fait partie des cibles, sinon la première cible visible.

@@ -8,6 +8,8 @@
 
 import { copyFilesTo } from '../actions.js';
 import { api } from '../api.js';
+import { setStatus } from '../core/feedback.js';
+import { plural } from '../core/format.js';
 import { state } from '../state.js';
 import { type Destination, destFor, findEparsEntry, yearOf } from '../styles.js';
 import { confirmDialog, showToast } from '../ui.js';
@@ -67,10 +69,6 @@ export function buildRangementPlan(): RangementPlan {
   return plan;
 }
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n > 1 ? 's' : ''}`;
-}
-
 /** Texte multi-ligne pour confirmDialog (#dialog-msg est en pre-line). */
 export function formatPlan(plan: RangementPlan): string {
   const lines: string[] = [];
@@ -86,11 +84,11 @@ export function formatPlan(plan: RangementPlan): string {
     );
   if (plan.twinInDest.length)
     lines.push(
-      `⤷ ${plan.twinInDest.length} déjà rangé${plan.twinInDest.length > 1 ? 's' : ''} dans le dossier cible — ${ign(plan.twinInDest.length)}`,
+      `⤷ ${plural(plan.twinInDest.length, 'déjà rangé', 'déjà rangés')} dans le dossier cible — ${ign(plan.twinInDest.length)}`,
     );
   if (plan.unknownStyle.length)
     lines.push(
-      `? ${plural(plan.unknownStyle.length, 'style')} inconnu${plan.unknownStyle.length > 1 ? 's' : ''} des dossiers actuels — ${ign(plan.unknownStyle.length)}`,
+      `? ${plural(plan.unknownStyle.length, 'style inconnu', 'styles inconnus')} des dossiers actuels — ${ign(plan.unknownStyle.length)}`,
     );
   return lines.join('\n');
 }
@@ -135,23 +133,19 @@ async function exportStyleChoices(fullpaths: string[]): Promise<void> {
       body: JSON.stringify({ choices }),
     });
   } catch (err) {
-    const statusText = document.getElementById('status-text');
-    if (statusText)
-      statusText.textContent = `Copies ok — export des styles échoué : ${err instanceof Error ? err.message : String(err)}`;
+    setStatus(`Copies ok — export des styles échoué : ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 /** `e` : aperçu → confirmation → apply. Plan vide → barre d'état. */
 export function openStylePreview(): void {
   const plan = buildRangementPlan();
-  const statusText = document.getElementById('status-text');
   if (plan.groups.length === 0) {
-    if (statusText) {
-      statusText.textContent =
-        state.styleChoices.size === 0
-          ? 'Aucun style posé — g sur un fichier épars pour commencer.'
-          : `Rien à copier : ${formatPlan(plan).replace(/\n/g, ' · ') || 'choix sans destination'}`;
-    }
+    setStatus(
+      state.styleChoices.size === 0
+        ? 'Aucun style posé — g sur un fichier épars pour commencer.'
+        : `Rien à copier : ${formatPlan(plan).replace(/\n/g, ' · ') || 'choix sans destination'}`,
+    );
     return;
   }
   const total = plan.groups.reduce((n, g) => n + g.files.length, 0);

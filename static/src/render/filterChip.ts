@@ -8,6 +8,7 @@
 // state.filters. F7// focus l'input (commands/filter.ts) ; ✕ efface ;
 // Backspace sur champ vide sort du mode filtre.
 
+import { fmtCount } from '../core/format.js';
 import { type FilterSubject, foldTerm, matchesTokens } from '../filterEngine.js';
 import { state } from '../state.js';
 
@@ -200,7 +201,7 @@ export function updateFilterCount(scope: string, matched: number, total: number)
   const countEl = chip.querySelector('.filter-count');
   if (!(countEl instanceof HTMLElement)) return;
   if (isFilterActive(scope) && matched !== total) {
-    countEl.textContent = `${matched.toLocaleString('fr')}/${total.toLocaleString('fr')}`;
+    countEl.textContent = `${fmtCount(matched)}/${fmtCount(total)}`;
   } else {
     countEl.textContent = '';
   }
