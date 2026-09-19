@@ -1,0 +1,41 @@
+/* EPIC-036 P3 : couche générée depuis static/style.css (découpage mécanique
+   par sections ; l'ordre de cascade est garanti par l'ordre d'import dans
+   pages/index.css — voir scripts/split_css_phase3.py). */
+
+/* Tokens du design system (EPIC-036 P3). Police : fallback système assumé
+   (EPIC-014). JetBrains Mono si installée en local, sinon stack monospace du
+   système — plus aucun CDN (hors-ligne vrai, zéro fuite de vie privée). */
+:root {
+  /* Backgrounds */
+  --bg-deep:       #050510;
+  --bg-panel:      #0a0e27;
+  --bg-surface:    #0e1230;
+  --bg-hover:      #141838;
+  --bg-focus:      #1a1f45;
+  --bg-input:      #080b1f;
+
+  /* Text */
+  --text-primary:  #f5f8ff;
+  --text-secondary:#c3cdee;
+  --text-muted:    #aab4d2;
+  --text-dim:      #909bbf;
+
+  /* Borders */
+  --border-panel:  rgba(0, 136, 255, 0.12);
+  --border-focus:  rgba(0, 136, 255, 0.35);
+  --border-active: rgba(0, 212, 255, 0.5);
+  --border-emph:   rgba(0, 212, 255, 0.25);
+
+  /* LED status colors */
+  --led-green:     #00ff88;
+  --led-blue:      #00aeff;
+  --led-grey:      #334060;
+  --led-amber:     #ffcc00;
+  --led-red:       #ff4466;
+  --led-cyan:      #00ddff;
+
+  /* Accent */
+  --accent:        #00d4ff;
+  --amber:         #ffaa00;
+  --accent-green:  #00ff88;
+}

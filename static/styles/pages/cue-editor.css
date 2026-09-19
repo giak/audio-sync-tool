@@ -1,0 +1,301 @@
+/* EPIC-036 P3 : couche générée depuis static/style.css (découpage mécanique
+   par sections ; l'ordre de cascade est garanti par l'ordre d'import dans
+   pages/index.css — voir scripts/split_css_phase3.py). */
+
+/* éditeur de cues (modal). */
+
+/* ===== Cue editor modal ============================================ */
+.modal-content.modal-lg {
+  min-width: 780px; max-width: 1100px;
+}
+.modal-content.modal-xl {
+  min-width: 860px; max-width: 1200px;
+}
+.cue-slot {
+  display: inline-block;
+  min-width: 34px; height: 34px; line-height: 32px;
+  text-align: center; vertical-align: middle;
+  margin: 2px;
+  border: 1px solid var(--border-panel);
+  border-radius: 4px;
+  cursor: pointer;
+  background: var(--bg-elevated, #1e2430);
+  user-select: none;
+}
+.cue-slot:hover { border-color: var(--border-active); }
+.cue-slot.live { border-color: var(--accent); color: var(--accent); }
+/* Slot avec un cue (EPIC-019) : bordure et lettre teintées de la couleur du cue. */
+.cue-slot.has-cue {
+  border-color: var(--cue-color, var(--border-panel));
+  color: var(--cue-color, var(--text-primary));
+}
+.cue-slot.has-cue:hover { border-color: var(--cue-color); }
+.cue-slot-sep { display: inline-block; width: 0; }
+
+/* Éditeur nom/couleur d'un cue (double-clic sur slot ou région, EPIC-019). */
+#cue-editor-metaeditor {
+  position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 30;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-active);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  padding: 14px 16px;
+  min-width: 260px;
+  text-align: left;
+}
+.cue-meta-title { font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+.cue-meta-field { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+.cue-meta-field input {
+  width: 100%; box-sizing: border-box; margin-top: 4px;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border-panel); border-radius: 2px;
+  padding: 5px 8px; font-size: 13px;
+}
+.cue-meta-field input:focus { border-color: var(--border-active); outline: none; }
+.cue-meta-colors { display: flex; gap: 6px; margin: 10px 0; }
+.cue-meta-swatch {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer; padding: 0;
+}
+.cue-meta-swatch.selected { border-color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.cue-meta-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.cue-meta-actions button {
+  background: var(--bg-hover); color: var(--text-primary);
+  border: 1px solid var(--border-panel); border-radius: 3px;
+  padding: 4px 12px; cursor: pointer; font-size: 12px;
+}
+.cue-meta-actions #cue-meta-ok { background: var(--accent); color: #000; border-color: transparent; font-weight: 600; }
+.cue-meta-actions button:hover { filter: brightness(1.15); }
+/* Nom affiché dans la région (contenu HTML). */
+.cue-region-name {
+  position: absolute; top: 2px; left: 4px;
+  font-size: 10px; line-height: 1.2;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+/* Cue editor transport (play/pause + temps) */
+#cue-editor-waveform { height: 200px; position: relative; }
+
+/* Fullscreen (bouton 🗖 dans le header de la modal) */
+.modal-header-actions { display: flex; align-items: center; gap: 4px; }
+#cue-btn-fullscreen {
+  background: none; border: none;
+  color: var(--text-muted); font-size: 15px;
+  cursor: pointer; padding: 2px 6px; border-radius: 2px; line-height: 1;
+}
+#cue-btn-fullscreen:hover { color: var(--accent); background: var(--bg-hover); }
+.modal-content.modal-lg.cue-fullscreen {
+  position: fixed; inset: 0;
+  width: 100vw; height: 100vh;
+  max-width: none; max-height: none;
+  border: none; border-radius: 0;
+  display: flex; flex-direction: column;
+}
+.cue-fullscreen #cue-editor-waveform {
+  flex: 1; min-height: 0; height: auto;
+}
+/* Minimap / overview (EPIC-018) : vue d'ensemble de la piste sous la waveform,
+   synchronisée au zoom/scroll (viewport overlay) — clic = seek. */
+#cue-editor-minimap {
+  height: 56px;
+  margin-top: 4px;
+  border: 1px solid var(--border-panel);
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--bg-input);
+}
+#cue-editor-minimap wavesurfer { background: transparent; }
+#cue-editor-transport {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0 4px;
+  font-size: 13px; color: var(--text-secondary);
+}
+.cue-play {
+  min-width: 40px; height: 30px; cursor: pointer;
+  background: var(--bg-hover); color: var(--text-primary);
+  border: 1px solid var(--border-panel); border-radius: 4px;
+  font-size: 13px; line-height: 1;
+}
+.cue-play:hover { border-color: var(--border-active); color: var(--accent); }
+/* Undo/redo (EPIC-021) : désactivés quand la pile correspondante est vide. */
+.cue-play:disabled { opacity: 0.35; cursor: default; }
+.cue-play:disabled:hover { border-color: var(--border-panel); color: var(--text-primary); }
+.cue-play.playing { color: var(--accent-green); border-color: var(--accent-green); }
+.cue-play.looping {
+  color: var(--led-amber); border-color: var(--led-amber);
+  box-shadow: 0 0 8px rgba(255, 204, 0, 0.35);
+}
+.cue-play.snap-on { color: var(--accent); border-color: var(--accent); }
+/* Nudge de phase (EPIC-009) : boutons compacts à côté du champ BPM */
+#cue-btn-nudge-bwd,
+#cue-btn-nudge-fwd {
+  min-width: 30px;
+  height: 30px;
+  font-size: 12px;
+  padding: 0 4px;
+}
+.cue-play.beat1-on {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.35);
+}
+/* Analyse serveur (EPIC-010) : état ⏳ pendant le calcul (basse/phase) */
+#cue-btn-analyze:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  min-width: 96px;
+}
+/* Écriture de la grille dans la collection (EPIC-011) : indisponible sans
+   BPM calé ou en mode visualisation seule (pas d'ENTRY à modifier). */
+#cue-btn-writegrid:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--text-dim);
+}
+#cue-btn-writegrid.writing {
+  opacity: 0.6;
+  cursor: wait;
+}
+.cue-play.loop-playing {
+  color: var(--led-amber); border-color: var(--led-amber);
+  box-shadow: 0 0 8px rgba(255, 204, 0, 0.35);
+  animation: cue-loop-pulse 1.2s ease-in-out infinite;
+}
+@keyframes cue-loop-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+#cue-editor-time { font-variant-numeric: tabular-nums; min-width: 120px; }
+.cue-hint { color: var(--text-dim); font-size: 12px; }
+
+/* Ajout d'une piste absente à la collection Traktor */
+#cue-editor-addrow {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 6px 0; padding: 8px 10px;
+  background: rgba(255, 170, 0, 0.07);
+  border: 1px solid var(--led-amber);
+  border-radius: 6px;
+}
+#cue-editor-addrow label {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--text-secondary); white-space: nowrap;
+}
+#cue-editor-addrow input {
+  width: 130px; padding: 4px 8px;
+  background: var(--bg-focus); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; font-size: 13px;
+}
+#cue-editor-addrow input:focus { border-color: var(--border-active); outline: none; }
+#cue-btn-add {
+  background: var(--led-amber); color: #1e1e2e;
+  border: none; border-radius: 6px;
+  padding: 5px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+#cue-btn-add:hover { filter: brightness(1.1); }
+#cue-btn-add:disabled { opacity: 0.5; cursor: default; }
+#cue-editor-status { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+
+/* Champ BPM manuel (grille recalculée) */
+.cue-bpm {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--text-muted);
+}
+#cue-bpm {
+  width: 54px; padding: 3px 4px;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border-panel); border-radius: 2px;
+  font-size: 12px; text-align: center;
+}
+#cue-bpm:focus { border-color: var(--border-active); outline: none; }
+
+/* Badge source de la grille : NML (native) / auto (détecté) / manuel */
+.cue-bpm-badge {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+  padding: 2px 8px; border-radius: 10px;
+  border: 1px solid var(--border-panel);
+  color: var(--text-muted); background: var(--bg-hover);
+  white-space: nowrap; user-select: none;
+}
+.cue-bpm-badge.src-nml {
+  color: var(--accent-green); border-color: rgba(0, 255, 136, 0.4);
+  background: rgba(0, 255, 136, 0.08);
+}
+.cue-bpm-badge.src-detected {
+  color: var(--accent); border-color: rgba(0, 212, 255, 0.4);
+  background: rgba(0, 212, 255, 0.08);
+}
+.cue-bpm-badge.src-manual {
+  color: var(--led-amber); border-color: rgba(255, 204, 0, 0.4);
+  background: rgba(255, 204, 0, 0.08);
+}
+
+/* Grille de beats (overlay sur la waveform, sous les régions z-index 5) */
+#cue-editor-grid {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2; /* au-dessus de la bande basse (1), sous les régions (5) */
+}
+.cue-grid-line {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: rgba(0, 212, 255, 0.15);
+}
+.cue-grid-line.strong { width: 2px; background: rgba(0, 212, 255, 0.5); }
+/* Downbeat différencié (EPIC-017) : le beat 1 de la grille (phase) est le repère
+   de calage — trait épais ambre + encoche haute. */
+.cue-grid-line.beat1 {
+  width: 3px;
+  background: rgba(255, 200, 60, 0.85);
+  box-shadow: 0 0 4px rgba(255, 200, 60, 0.4);
+}
+.cue-grid-line.beat1::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 6px;
+  background: rgba(255, 200, 60, 0.9);
+}
+/* Numéros de barre (EPIC-012) : en tête des lignes fortes (tous les 4 beats). */
+.cue-bar-num {
+  position: absolute; top: 2px; left: 3px;
+  font-size: 9px; line-height: 1;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+/* Zoom (EPIC-017) : la bande RGB couvre toute la piste — masquée quand on zoome
+   (elle ne suivrait pas la fenêtre visible et induirait en erreur). */
+#cue-editor-waveform.zoomed #cue-editor-rgbband { display: none; }
+/* Waveform 3-bandes RGB (EPIC-020) : strip 24px sous la waveform, sous la grille.
+   3 couches superposées (low/mid/high) mélangées en écran (blend additif) → le
+   standard des DJ softs : kick seul = rouge, kick+voix = jaune, tout = blanc. */
+#cue-editor-rgbband {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 24px;
+  pointer-events: none;
+  z-index: 1; /* sous la grille (z-index 2) et les régions (5) */
+}
+#cue-editor-rgbband .rgb-layer {
+  position: absolute; inset: 0;
+  display: flex; align-items: flex-end;
+  gap: 1px;
+  padding: 0 1px;
+  mix-blend-mode: screen;
+}
+#cue-editor-rgbband .rgb-bar {
+  flex: 1 1 0;
+  min-height: 1px;
+  border-radius: 1px;
+}
+#cue-editor-rgbband .rgb-low .rgb-bar {
+  /* rouge = basse (kick 40–150 Hz) */
+  background: linear-gradient(180deg, rgba(255, 90, 70, 0.9), rgba(200, 40, 30, 0.55));
+}
+#cue-editor-rgbband .rgb-mid .rgb-bar {
+  /* vert = médium (voix 150–2000 Hz) */
+  background: linear-gradient(180deg, rgba(130, 255, 110, 0.85), rgba(70, 190, 50, 0.5));
+}
+#cue-editor-rgbband .rgb-high .rgb-bar {
+  /* bleu = aigu (hats 2–16 kHz) */
+  background: linear-gradient(180deg, rgba(110, 170, 255, 0.85), rgba(60, 110, 230, 0.5));
+}

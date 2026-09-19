@@ -1,0 +1,286 @@
+/* EPIC-036 P3 : couche générée depuis static/style.css (découpage mécanique
+   par sections ; l'ordre de cascade est garanti par l'ordre d'import dans
+   pages/index.css — voir scripts/split_css_phase3.py). */
+
+/* layout, nav, header, panneaux, table, LED, palette. */
+
+/* ===== Page Navigation =============================================== */
+#page-nav {
+  display: flex;
+  gap: 4px;
+}
+.page-btn {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-panel);
+  padding: 5px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 3px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.page-btn.active {
+  background: var(--bg-focus);
+  border-color: var(--border-active);
+  color: var(--accent);
+}
+.page-btn:hover {
+  background: var(--bg-focus);
+}
+.page-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.page-btn:disabled:hover {
+  background: var(--bg-hover);
+}
+
+/* ===== Header & Toolbar ============================================== */
+header {
+  background: var(--bg-surface);
+  padding: 8px 16px;
+  display: flex; align-items: center; gap: 20px;
+  border-bottom: 1px solid var(--border-panel);
+  flex-shrink: 0;
+}
+header h1 {
+  font-size: 15px; font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+#toolbar { display: flex; gap: 6px; margin-left: auto; }
+#toolbar button {
+  background: var(--bg-hover); color: var(--text-secondary);
+  border: 1px solid var(--border-panel);
+  padding: 5px 14px; cursor: pointer;
+  font-size: 13px; border-radius: 3px;
+}
+#toolbar button:hover {
+  background: var(--bg-focus);
+  border-color: var(--border-emph);
+  color: var(--text-primary);
+}
+
+/* ===== Main Panels (2-column workspace) ============================== */
+#main-panels { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+.panel {
+  flex: 1; overflow-y: auto;
+  padding: 10px;
+  border-right: 1px solid var(--border-panel);
+}
+.panel:last-child { border-right: none; }
+.panel h2 {
+  font-size: 15px; font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-panel);
+}
+.panel-active { border: 1px solid var(--border-active) !important; }
+.panel-header-count {
+  font-size: 12px; color: var(--text-muted);
+  font-weight: normal; margin-left: 8px;
+}
+
+/* ===== Bouton ➕ création dossier (header panneau Source Data) ======== */
+.panel-add-btn {
+  float: right;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-panel);
+  border-radius: 3px;
+  padding: 1px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.panel-add-btn:hover {
+  background: var(--bg-focus);
+  border-color: var(--border-emph);
+  color: var(--text-primary);
+}
+
+/* ===== Source Container (2-column layout) ============================ */
+#source-container { column-count: 2; column-gap: 14px; }
+
+/* ===== Directory Items =============================================== */
+.directory {
+  break-inside: avoid-column;
+  font-weight: 600; color: var(--text-primary);
+  cursor: pointer;
+  padding: 3px 0 3px 14px;
+  font-size: 14px;
+}
+.directory.focused { background: var(--bg-focus); outline: 1px solid var(--border-focus); }
+.directory:hover    { background: var(--bg-hover); }
+.directory:active   { background: var(--bg-focus); opacity: 0.8; }
+.directory::before  { content: '📁  '; }
+#source-container .directory.expanded::before { content: '📂  '; }
+.children { padding-left: 12px; }
+.dir-count {
+  font-size: 12px; color: var(--text-muted);
+  margin-left: 8px;
+}
+
+/* ===== File Rows — vrai tableau (table-layout: fixed + colgroup) ====== */
+/* Chaque dossier expandé / éparpillé rend SA <table class="file-table">.
+   table-layout: fixed + colonnes définies par le <colgroup> (cf. nth-child
+   ci-dessous) : toutes les lignes partagent EXACTEMENT les mêmes colonnes,
+   année/codec/durée restent alignées verticalement quoi qu'il arrive et la
+   largeur résiduelle est absorbée par la colonne 2 (width: 100%) — zéro vide à droite. */
+.file-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.file-table col:nth-child(1) { width: 22px; }
+.file-table col:nth-child(2) { width: 100%; }
+.file-table col:nth-child(3) { width: 26px; }
+.file-table col:nth-child(4) { width: 44px; }
+.file-table col:nth-child(5) { width: 110px; }
+.file-table col:nth-child(6) { width: 60px; }
+.file-table col:nth-child(7) { width: 54px; }
+/* EPIC-035 — table épars avec colonne « Style » (7 colonnes : play, nom,
+   note, année, STYLE, codec, durée). Règles plus spécifiques : les autres
+   tables gardent les largeurs ci-dessus. */
+.file-table.has-style col:nth-child(5) { width: 96px; }
+.file-table.has-style col:nth-child(6) { width: 110px; }
+.file-table.has-style col:nth-child(7) { width: 60px; }
+.style-cell { text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.style-chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+}
+.style-chip.pending-year { border-style: dashed; opacity: 0.8; }
+.style-chip.suggested { border-style: dotted; opacity: 0.55; color: var(--text-secondary, #999); border-color: var(--text-secondary, #999); background: none; }
+.style-chip.written { color: var(--accent-green); border-color: var(--accent-green); background: color-mix(in srgb, var(--accent-green) 14%, transparent); }
+
+/* EPIC-035 — palette « g » : popover clavier ancré à la ligne (couche DOM). */
+.style-palette {
+  position: fixed;
+  z-index: 1200;
+  width: 440px;
+  max-width: calc(100vw - 16px);
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--amber);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  outline: none;
+  font-size: 12px;
+}
+.style-palette .sp-title {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.style-palette .sp-styles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+.style-palette .sp-style,
+.style-palette .sp-tranche {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.style-palette .sp-style:hover,
+.style-palette .sp-tranche:hover { border-color: var(--amber); }
+.style-palette kbd {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--amber);
+  color: #000;
+  font-weight: 700;
+  text-align: center;
+}
+.style-palette .sp-tranches {
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--amber);
+}
+.style-palette.tranche-step .sp-tranches { display: grid; }
+.style-palette.tranche-step .sp-styles { opacity: 0.45; }
+.style-palette .sp-dest {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.file-row > td {
+  padding: 0 4px 0 0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+/* Focus ligne fichier : barre d'accent à gauche + contour net — bien visible
+   sur écran de DJ booth en périphérie. La barre verticale traverse les td via
+   box-shadow inset (pas de décalage de layout). */
+.file-row.focused > td { background: var(--bg-focus); }
+.file-row.focused > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.file-row.focused > td:last-child { box-shadow: inset -1px 0 0 var(--border-focus); }
+.file-row.focused td.file { outline: 1px solid var(--border-focus); }
+.file-row:active { opacity: 0.8; }
+
+/* Play button */
+td.play-btn {
+  font-size: 12px; cursor: pointer; text-align: center;
+  color: var(--text-muted); padding: 2px 0;
+  flex-shrink: 0;
+  background: none; border: none; border-radius: 2px;
+}
+td.play-btn:hover   { color: var(--accent-green); background: var(--bg-hover); }
+td.play-btn.playing { color: var(--accent-green); }
+
+/* File labels */
+td.file {
+  padding: 2px 4px; font-size: 14px;
+  cursor: default; text-overflow: ellipsis; overflow: hidden;
+}
+td.file:hover       { background: var(--bg-hover); }
+td.file.nouveau     { color: var(--led-blue);       cursor: pointer; }
+td.file.doublon     { color: var(--text-muted); }
+td.file.traite      { color: var(--accent-green); }
+td.file.selected    { background: var(--bg-focus);  outline: 1px solid var(--led-blue); }
+td.file.focused     { background: var(--bg-focus);  outline: 1px solid var(--border-focus); }
+
+/* ===== LED Status Dots =============================================== */
+/* Shared base — individual overrides only set background + optional shadow */
+.led-nouveau::before,
+.led-doublon::before,
+.led-traite::before,
+.led-playing::before {
+  content: ''; display: inline-block;
+  width: 7px; height: 7px; border-radius: 50%;
+  margin-right: 4px; flex-shrink: 0;
+}
+.led-nouveau::before { background: var(--led-blue); box-shadow: 0 0 6px var(--led-blue); }
+.led-doublon::before { background: var(--led-grey); }
+.led-traite::before  { background: var(--led-green); box-shadow: 0 0 6px var(--led-green); }

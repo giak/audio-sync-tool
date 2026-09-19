@@ -1,0 +1,37 @@
+/* EPIC-036 P3 : couche générée depuis static/style.css (découpage mécanique
+   par sections ; l'ordre de cascade est garanti par l'ordre d'import dans
+   pages/index.css — voir scripts/split_css_phase3.py). */
+
+/* menu contextuel + états drag & drop. */
+
+/* ===== Context Menu (A7) =========================================== */
+.context-menu {
+  position: fixed;
+  z-index: 200;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-active);
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 200px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+}
+.ctx-item {
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.ctx-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.ctx-item.ctx-danger { color: var(--led-red); }
+.ctx-item.ctx-danger:hover { background: rgba(255,68,102,0.12); }
+
+/* ===== Drag & Drop States (A9) ====================================== */
+.file-row.dragging-source { opacity: 0.4; }
+.directory.drag-over {
+  background: rgba(0, 212, 255, 0.12);
+  border: 1px dashed var(--accent);
+}

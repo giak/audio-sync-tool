@@ -1,0 +1,35 @@
+/* EPIC-036 P3 : couche générée depuis static/style.css (découpage mécanique
+   par sections ; l'ordre de cascade est garanti par l'ordre d'import dans
+   pages/index.css — voir scripts/split_css_phase3.py). */
+
+/* ===== Reset & Base ================================================== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* Form elements don't inherit font-family — fix that */
+input, button, select, textarea { font-family: inherit; }
+
+/* ===== Utility ======================================================= */
+.hidden { display: none !important; }
+
+/* ===== Focus ring (keyboard only) ==================================== */
+:focus-visible { outline: 1px solid var(--border-active); outline-offset: -1px; }
+:focus:not(:focus-visible) { outline: none; }
+
+/* ===== Reduced motion ================================================ */
+@media (prefers-reduced-motion: reduce) {
+  #player-progress-fill { transition: none; }
+}
+
+/* ===== Scrollbar ===================================================== */
+::-webkit-scrollbar             { width: 6px; }
+::-webkit-scrollbar-track       { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb       { background: var(--bg-hover); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--bg-focus); }

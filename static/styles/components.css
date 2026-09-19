@@ -1,0 +1,299 @@
+/* EPIC-036 P3 : couche générée depuis static/style.css (découpage mécanique
+   par sections ; l'ordre de cascade est garanti par l'ordre d'import dans
+   pages/index.css — voir scripts/split_css_phase3.py). */
+
+/* Toasts flottants (EPIC-014) : au-dessus de tout, auto-expirants, ne touchent
+   pas à la barre d'état (canal de messages séparé de l'erreur persistante). */
+#toast-container {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  z-index: 300;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-active);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  animation: toast-in 0.15s ease-out;
+}
+.toast.toast-error { border-color: var(--led-red); color: var(--led-red); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.server-badge {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-panel);
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.3s, border-color 0.3s, color 0.3s;
+  background: rgba(255,68,102,0.15);
+  color: var(--led-red);
+}
+.server-badge.online {
+  background: rgba(0,255,136,0.12);
+  color: var(--led-green);
+  border-color: rgba(0,255,136,0.3);
+}
+
+/* ===== FilterChip intégré (EPIC-030) ================================= */
+.filter-chip {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 8px; padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-input) 55%, transparent);
+}
+/* Caché par F7/Échap : visibility, pas display — la hauteur du slot est
+   préservée (pas de saut de layout à l'ouverture/fermeture du filtre). */
+.filter-chip.hidden { visibility: hidden; }
+.filter-chip:hover { border-color: var(--border-panel); }
+.filter-chip .filter-icon { font-size: 11px; opacity: 0.6; }
+.filter-chip .filter-input {
+  flex: 1; min-width: 0;
+  background: transparent; color: var(--text-primary);
+  border: none; outline: none;
+  font-size: 12px; font-family: inherit;
+}
+.filter-chip .filter-input::placeholder { color: var(--text-muted); opacity: 0.55; }
+.filter-chip .filter-input:focus { outline: none; }
+.filter-chip:focus-within {
+  border-color: var(--border-active);
+  background: var(--bg-input);
+}
+/* Filtré : le chip s'affirme (état visible en permanence) */
+.filter-chip.active {
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, var(--bg-input));
+}
+.filter-chip .filter-count {
+  font-size: 11px; color: var(--text-muted); white-space: nowrap;
+}
+.filter-chip.active .filter-count { color: var(--amber); }
+.filter-chip .filter-clear {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 12px;
+  padding: 0 2px; border-radius: 2px;
+  display: none;
+}
+.filter-chip.active .filter-clear { display: inline; }
+.filter-chip .filter-clear:hover { color: var(--led-red); }
+
+/* Toggle « 📄 fichiers » (arbres sync-source / playlist-source) : filtre à
+   deux niveaux — dossiers seuls par défaut (dépliables pour consulter),
+   fichiers opt-in (auto-expansion, comportement historique). */
+.filter-chip .filter-files {
+  background: none; border: 1px solid transparent; cursor: pointer;
+  color: var(--text-muted); font-size: 11px;
+  padding: 0 4px; border-radius: 3px; white-space: nowrap;
+}
+.filter-chip .filter-files:hover { color: var(--text-primary); border-color: var(--border-panel); }
+.filter-chip .filter-files.on {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
+/* ===== Modal System ================================================== */
+/* Gabarits de boîtes (modal / palette / toast) : couleurs et ombres
+   intentionnellement différentes par famille (popover ambre, panel neutre,
+   toast fonction) — PAS de classe de base partagée : elle exigerait des
+   overrides par instance, verdict EPIC-036 P3. */
+.modal {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.75);
+}
+.modal-content {
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  padding: 20px 24px;
+  max-height: 80vh; overflow-y: auto;
+  min-width: 420px; max-width: 640px; width: 100%;
+  border-radius: 6px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+.modal-content.modal-sm {
+  min-width: 360px; max-width: 480px;
+  text-align: center;
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.modal-header h3 { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.modal-close {
+  background: none; border: none;
+  color: var(--text-muted);
+  font-size: 18px; cursor: pointer;
+  padding: 2px 6px; border-radius: 2px;
+}
+.modal-close:hover { color: var(--led-red); background: var(--bg-hover); }
+
+/* ===== Config Form (inside modal) ==================================== */
+#config-selector { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+#config-selector label { flex-grow: 1; font-size: 13px; }
+#config-selector select {
+  width: 100%; margin-top: 4px; padding: 4px 8px;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border-panel);
+  font-size: 13px; border-radius: 2px;
+}
+#config-selector button {
+  background: var(--bg-hover); color: var(--text-secondary);
+  border: 1px solid var(--border-panel);
+  width: 28px; height: 28px; cursor: pointer;
+  font-size: 16px; line-height: 1; border-radius: 2px;
+}
+#config-selector button:hover { background: var(--bg-focus); }
+#config-fields label { display: block; margin-bottom: 6px; font-size: 13px; }
+#config-fields input,
+#config-fields textarea {
+  width: 100%; margin-top: 3px; padding: 5px 8px;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border-panel);
+  font-size: 13px; border-radius: 2px;
+}
+#config-fields input:focus,
+#config-fields textarea:focus { border-color: var(--border-active); outline: none; }
+#config-fields textarea { resize: vertical; }
+#btn-save-config {
+  background: var(--accent-green); color: var(--bg-deep);
+  border: none; padding: 5px 16px; cursor: pointer;
+  font-weight: 600; font-size: 13px; border-radius: 3px;
+  margin-top: 4px;
+}
+#btn-save-config:hover { filter: brightness(1.1); }
+#config-status { margin-top: 4px; font-size: 12px; color: var(--accent-green); }
+
+/* ===== Legend (inside modal) ========================================= */
+#legend-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px 32px;
+}
+.legend-section h4 {
+  font-size: 13px; font-weight: 600; color: var(--accent);
+  margin: 0 0 8px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-panel);
+}
+.legend-row {
+  font-size: 13px; color: var(--text-secondary);
+  padding: 2px 0;
+  display: grid; grid-template-columns: max-content 1fr;
+  gap: 8px; align-items: baseline;
+}
+/* LED demos in legend share base size, override per status */
+.led-demo {
+  display: inline-block;
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0; align-self: center;
+}
+.led-demo-nouveau { background: var(--led-blue); box-shadow: 0 0 6px var(--led-blue); }
+.led-demo-doublon { background: var(--led-grey); }
+.led-demo-traite  { background: var(--led-green); box-shadow: 0 0 6px var(--led-green); }
+.led-demo-dup-fuzzy { background: var(--led-amber); }
+.led-demo-playing { background: var(--led-cyan);  box-shadow: 0 0 8px var(--led-cyan); }
+/* Démo « Sélectionné » : carré bleu (état = fond + contour sur la cellule, pas une LED) */
+.led-demo-selected { background: var(--led-blue); box-shadow: 0 0 6px var(--led-blue); border-radius: 2px; }
+/* Démo « Halo jumeau » : mini contour ambre animé, même pulsation que .twin-hint */
+.twin-demo {
+  display: inline-block;
+  width: 10px; height: 10px; border-radius: 2px;
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+  align-self: center;
+  animation: twinPulse 2.4s ease-in-out infinite;
+}
+/* Chips badges NML (✓ / ≈ / ✕) et ✅ — cohérents avec matchStatus.ts */
+.badge-demo {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px; white-space: nowrap;
+  color: var(--text-primary);
+  border: 1px solid var(--border-panel);
+  border-radius: 3px; padding: 1px 5px;
+  align-self: center;
+}
+.legend-row kbd {
+  font-size: 12.5px;
+  background: var(--bg-hover); color: var(--text-primary);
+  border: 1px solid var(--border-panel);
+  padding: 2px 5px; margin: 0 2px; border-radius: 2px;
+}
+/* Pied de modal : notes transverses */
+#legend-footer {
+  margin-top: 16px; padding-top: 10px;
+  border-top: 1px solid var(--border-panel);
+  font-size: 12px; color: var(--text-muted);
+  display: flex; gap: 24px; flex-wrap: wrap;
+}
+@media (max-width: 1180px) { .modal-content.modal-xl { width: 92vw; } }
+@media (max-width: 1100px) { #legend-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { #legend-grid { grid-template-columns: 1fr; } }
+
+/* ===== Journal (inside modal) ======================================== */
+#journal-content { font-size: 13px; max-height: 50vh; overflow-y: auto; }
+#journal-content div { padding: 1px 0; }
+#journal-content .copied      { color: var(--led-green); }
+#journal-content .scanned     { color: var(--led-cyan); }
+#journal-content .configured  { color: var(--led-amber); }
+#journal-content .error       { color: var(--led-red); }
+
+/* ===== Confirm Dialog ================================================ */
+#dialog-msg { margin-bottom: 16px; font-size: 15px; color: var(--text-primary); white-space: pre-line; } /* pre-line : aperçu multi-ligne EPIC-035 ; messages existants mono-ligne */
+/* Champ du prompt custom (EPIC-014, remplace prompt()) */
+.dialog-input {
+  width: 100%;
+  margin-top: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.dialog-input:focus { border-color: var(--border-active); outline: none; }
+/* Rating hors plage 0-100 (EPIC-014) : feedback visuel à la frappe */
+.pl-rating-input.invalid { border-color: var(--led-red); box-shadow: 0 0 0 1px var(--led-red); }
+/* État vide des panneaux (EPIC-014) */
+.panel-empty {
+  padding: 16px;
+  color: var(--text-dim);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  margin: 10px;
+  font-size: 13px;
+  text-align: center;
+}
+.dialog-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
+.dialog-buttons button {
+  padding: 8px 22px; border: none; cursor: pointer;
+  font-size: 14px; border-radius: 3px;
+}
+#dialog-confirm {
+  background: var(--accent-green); color: var(--bg-deep);
+  font-weight: 600;
+}
+#dialog-confirm:hover { filter: brightness(1.1); }
+#dialog-cancel {
+  background: var(--bg-hover); color: var(--text-secondary);
+  border: 1px solid var(--border-panel);
+}
+#dialog-cancel:hover { background: var(--bg-focus); }

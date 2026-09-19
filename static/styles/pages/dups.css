@@ -1,0 +1,120 @@
+/* EPIC-036 P3 : couche générée depuis static/style.css (découpage mécanique
+   par sections ; l'ordre de cascade est garanti par l'ordre d'import dans
+   pages/index.css — voir scripts/split_css_phase3.py). */
+
+/* EPIC-028 doublons fuzzy + vue dédiée. */
+
+/* ===== EPIC-028 P1 : doublons fuzzy (homonymes probables) ============
+   4e état visuel : ambre = matché fuzzy à un jumeau rangé (le GRIS reste
+   réservé au doublon EXACT — nom de fichier identique). Deux intensités
+   volontairement distinctes :
+   — marqueur gauche PERMANENT : discret (barre fine adoucie, LED sans
+     glow, contour à peine perceptible) — il vit sur la ligne en continu ;
+   — twin-hint DROITE TEMPORAIRE : marqué (contour 2px, fond teinté, LED
+     glow, pulsé lent) — il ne dure que le temps du focus. */
+
+/* Barre uniquement sur le 1er td (comme le focus) — sur tous les td, on
+   peindrait une barre à chaque frontière de colonne. :not(.focused) : la
+   barre cyan du focus garde la priorité visuelle sur la ligne naviguée. */
+.file-row.dup-fuzzy:not(.focused) > td:first-child {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--amber) 75%, transparent);
+}
+.file-row.dup-fuzzy td.file::before {
+  background: var(--led-amber);
+}
+.file-row.dup-fuzzy td.file {
+  outline: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+}
+/* Pastille « déjà rangé » (fichier épars sous le filtre source actif) : le
+   jumeau existe déjà dans le dossier visé — texte discret après le nom. */
+.file-row.dup-ranged td.file::after {
+  content: '⤷ déjà rangé';
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+tr.file-row.twin-hint {
+  outline: 2px solid var(--amber);
+  animation: twinPulse 2.4s ease-in-out infinite;
+}
+tr.file-row.twin-hint > td {
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+/* Variante dossier (jumeau replié : hint sur le conteneur rendu) */
+.twin-hint.directory {
+  outline: 2px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  animation: twinPulse 2.4s ease-in-out infinite;
+}
+.twin-hint td.file::before {
+  background: var(--led-amber);
+  box-shadow: 0 0 6px var(--led-amber);
+}
+@keyframes twinPulse {
+  0%, 100% { outline-color: color-mix(in srgb, var(--amber) 85%, transparent); }
+  50%      { outline-color: color-mix(in srgb, var(--amber) 45%, transparent); }
+}
+
+/* ===== EPIC-028 P2 : vue dédiée « Doublons » (modal dups) ============ */
+#dups-layout { display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+/* padding-top: 0 — l'espacement vit DANS l'en-tête collé (fond peint). */
+#dups-main { flex: 1; overflow-y: auto; padding: 0 10px 10px; }
+/* En-tête (compteur + hint) collé pendant le scroll — fond opaque, le
+   contenu défile dessous (même pattern que la page Années). */
+#dups-head {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--bg-deep);
+  padding: 10px 0 8px;
+}
+#dups-head h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border-panel); }
+#dups-hint { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+#dups-count { color: var(--text-dim); font-weight: 400; }
+.dups-empty { color: var(--text-dim); font-style: italic; padding: 14px 4px; }
+
+/* v2 : cartes de groupes (morceau = N versions, gagnant ✓) */
+.dup-card {
+  border: 1px solid var(--border-panel);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.dup-card.focused {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+}
+.dup-card-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.dup-member {
+  font-family: monospace; font-size: 12px;
+  padding: 2px 6px; border-radius: 4px; margin: 2px 0;
+}
+.dup-member:hover { background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.dup-member.winner { color: var(--led-green); }
+/* EPIC-032 : autre version du même morceau (durée ≠ gagnant) — jamais trashée. */
+.dup-version {
+  color: var(--text-dim);
+  font-size: 10px;
+  border: 1px solid var(--border-panel);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 4px;
+}
+.dup-member.epars .dup-side { color: var(--text-dim); }
+.dup-side { font-size: 11px; }
+.dup-card-actions { margin-top: 6px; }
+/* Le bouton « Appliquer » reste épinglé en bas du conteneur tant que sa
+   carte est visible : accessible sans scroller jusqu'à son pied de carte. */
+.dup-card-actions {
+  position: sticky; bottom: 0; z-index: 2;
+  background: var(--bg-deep);
+  padding: 6px 0 2px;
+}
+.dup-apply {
+  font-size: 12px; padding: 3px 10px; cursor: pointer;
+  border: 1px solid var(--border-panel); border-radius: 4px;
+  background: transparent; color: var(--text);
+}
+.dup-apply:hover { border-color: var(--amber); color: var(--amber); }

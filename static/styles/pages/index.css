@@ -1,0 +1,13 @@
+/* EPIC-036 P3 : point d'entrée unique du CSS (importé par script.ts).
+   L'ordre des @import = l'ordre des sections de l'ancien style.css →
+   cascade inchangée (prouvé par scripts/check_css_equiv.py). */
+@import '../tokens.css';
+@import '../base.css';
+@import './sync.css';
+@import './dups.css';
+@import './years.css';
+@import './sync-main.css';
+@import '../components.css';
+@import './playlist.css';
+@import './overlays.css';
+@import './cue-editor.css';

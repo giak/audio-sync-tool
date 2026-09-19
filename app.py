@@ -268,12 +268,13 @@ def config():
 
 @app.route('/')
 def index():
-    # Cache-buster: la plus récente mtime de script.js ET style.css, pour que le
+    # Cache-buster: la plus récente mtime de script.js ET script.css (le CSS est
+    # bundlé par esbuild depuis static/styles/, EPIC-036 P3), pour que le
     # navigateur rafraîchisse le CSS/JS dès qu'un des deux fichiers change.
     base = os.path.dirname(os.path.abspath(__file__))
     paths = (
         os.path.join(base, 'static', 'dist', 'script.js'),
-        os.path.join(base, 'static', 'style.css'),
+        os.path.join(base, 'static', 'dist', 'script.css'),
     )
     mt = [int(os.path.getmtime(p)) for p in paths if os.path.exists(p)]
     cache_buster = str(max(mt)) if mt else '1'

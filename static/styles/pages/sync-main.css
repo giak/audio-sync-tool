@@ -1,0 +1,159 @@
+/* EPIC-036 P3 : couche générée depuis static/style.css (découpage mécanique
+   par sections ; l'ordre de cascade est garanti par l'ordre d'import dans
+   pages/index.css — voir scripts/split_css_phase3.py). */
+
+/* métadonnées, éparpillé, player, scan, status-bar (suite de sync dans l'ordre original). */
+
+/* Ligne d'état épars : segment homonymes (ambre) */
+.s-dupfuzzy { color: var(--amber); }
+.led-playing::before { background: var(--led-cyan);  box-shadow: 0 0 8px var(--led-cyan); }
+
+/* ===== File Metadata (year / codec / duration) ======================= */
+/* Cellules de table : TOUJOURS présentes (vides si vide) — c'est ce qui
+   garantit la colonne droite alignée entre lignes. */
+.year, .codec, .duration { white-space: nowrap; }
+.year     { text-align: right; font-size: 13px; color: var(--text-muted); }
+.codec    { text-align: right; font-size: 12px; color: var(--text-dim); }
+.duration { text-align: right; font-size: 12px; color: var(--text-secondary); }
+
+/* ===== File-level rating display (Source Data tree) ================== */
+.file-rating {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.file-rating:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.file-row:hover .file-rating {
+  color: var(--text-secondary);
+}
+
+/* ===== Éparpillé Status Line ========================================= */
+#epars-status-line {
+  font-size: 12px; color: var(--text-muted);
+  margin-bottom: 6px;
+  display: flex; gap: 10px;
+}
+#epars-status-line .s-traite  { color: var(--led-green); }
+#epars-status-line .s-reste   { color: var(--led-blue); }
+#epars-status-line .s-doublon { color: var(--text-muted); }
+#epars-status-line .s-style   { color: var(--amber); }
+
+/* ===== Player Bar ==================================================== */
+#player-bar {
+  background: var(--bg-surface);
+  padding: 5px 14px;
+  border-top: 1px solid var(--border-panel);
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; flex-shrink: 0;
+}
+
+/* Player buttons (stop / seek) */
+#player-stop, #player-seek-bwd, #player-seek-fwd {
+  cursor: pointer; font-size: 14px;
+  background: none; border: none;
+}
+#player-stop          { color: var(--led-red); }
+#player-stop:hover    { color: var(--led-amber); }
+#player-seek-bwd,
+#player-seek-fwd      { color: var(--text-secondary); padding: 2px 4px; user-select: none; }
+#player-seek-bwd:hover,
+#player-seek-fwd:hover { color: var(--led-cyan); }
+
+#player-filename {
+  color: var(--accent);
+  min-width: 80px; max-width: 180px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#player-progress {
+  flex: 1; height: 4px;
+  background: var(--bg-focus);
+  cursor: pointer; min-width: 60px;
+  border-radius: 2px; overflow: hidden;
+}
+#player-progress-fill {
+  height: 100%; width: 0%;
+  background: var(--accent-green);
+  transition: width 0.1s linear;
+}
+#player-time {
+  color: var(--text-secondary);
+  font-size: 13px; min-width: 90px; text-align: center;
+}
+#player-step-label { display: flex; align-items: center; gap: 2px; color: var(--text-muted); font-size: 13px; }
+#player-step {
+  width: 38px; padding: 2px 4px;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border-panel);
+  font-size: 13px; text-align: center; border-radius: 2px;
+}
+
+/* ===== Scan Progress Bar ============================================ */
+#scan-progress {
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 18px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-panel);
+  flex-shrink: 0;
+}
+#scan-progress-bar {
+  flex: 1; height: 6px;
+  background: var(--bg-focus);
+  border-radius: 3px; overflow: hidden;
+  min-width: 100px;
+}
+#scan-progress-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-green));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+#scan-progress-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+/* ===== Scanning button state ========================================= */
+#btn-scan.scanning {
+  pointer-events: none;
+  opacity: 0.7;
+  position: relative;
+  padding-left: 28px;
+}
+#btn-scan.scanning::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  margin-top: -6px;
+  width: 12px; height: 12px;
+  border: 2px solid var(--text-muted);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: scan-spin 0.8s linear infinite;
+}
+@keyframes scan-spin {
+  to { transform: rotate(360deg); }
+}
+#btn-scan:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* ===== Status Bar ==================================================== */
+#status-bar {
+  background: var(--bg-deep);
+  padding: 7px 18px; font-size: 13px;
+  border-top: 1px solid var(--border-panel);
+  color: var(--text-secondary); flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+}

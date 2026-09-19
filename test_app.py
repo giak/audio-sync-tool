@@ -46,13 +46,15 @@ def make_cfg(source_data='', epars_dirs=None):
 
 
 def test_cache_buster_covers_css(client):
-    """Le cache-buster doit refléter la mtime de style.css, pas seulement celle de
+    """Le cache-buster doit refléter la mtime de script.css (le CSS est bundlé
+    par esbuild depuis static/styles/, EPIC-036 P3), pas seulement celle de
     script.js — sinon le navigateur sert une CSS périmée (cache définitif)."""
     import app as app_module
 
     base = os.path.dirname(os.path.abspath(app_module.__file__))
-    css_path = os.path.join(base, 'static', 'style.css')
-    assert os.path.exists(css_path)
+    css_path = os.path.join(base, 'static', 'dist', 'script.css')
+    assert os.path.exists(css_path), (
+        'script.css absent : lancer npm run build avant pytest (le CSS est bundlé)')
 
     future = 2_000_000_000
     orig = os.stat(css_path).st_mtime
@@ -62,8 +64,8 @@ def test_cache_buster_covers_css(client):
     finally:
         os.utime(css_path, (orig, orig))
 
-    target = f'/static/style.css?v={int(future)}'
-    assert target in html, f'style.css non invalidé par le cache-buster: attendu {target}'
+    target = f'/static/dist/script.css?v={int(future)}'
+    assert target in html, f'script.css non invalidé par le cache-buster: attendu {target}'
 def test_log_journal():
     """Test that log_journal() appends entries correctly."""
     from app import JOURNAL_PATH

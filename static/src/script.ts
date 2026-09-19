@@ -1,5 +1,10 @@
 // ─── Orchestrator: keyboard router via CommandRegistry + toolbar + init ────
 
+// EPIC-036 P3 — le CSS est bundlé par esbuild (static/dist/script.css) : les
+// couches vivent dans static/styles/, l'ordre d'import (pages/index.css) =
+// l'ordre de cascade de l'ancien style.css (prouvé par check_css_equiv.py).
+import '../styles/pages/index.css';
+
 import { buildContext, registry } from './commands/registry.js';
 // EPIC-031 P1 — menu.ts EN PREMIER : le menu ouvert isole le clavier (↑↓/Enter/
 // Échap-menu gagnent sur tout, pile menu → modale → filtre → dossier → audio).
