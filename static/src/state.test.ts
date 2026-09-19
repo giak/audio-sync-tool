@@ -72,7 +72,7 @@ describe('state EventEmitter', () => {
     expect(state.lastCueTrack).toBeNull();
   });
 
-  it('styleChoices (EPIC-035) : Map vide au départ, émet styleChoices:changed à l’affectation', async () => {
+  it('styleChoices (EPIC-035) : Map vide au départ, émet styleChoices:changed a affectation', async () => {
     expect(state.styleChoices).toBeInstanceOf(Map);
     expect(state.styleChoices.size).toBe(0);
     const fn = vi.fn();
@@ -81,5 +81,27 @@ describe('state EventEmitter', () => {
     await new Promise(r => requestAnimationFrame(r));
     expect(fn).toHaveBeenCalledTimes(1);
     state.styleChoices = new Map();
+  });
+
+  it('sourceIndex : objet vide au départ, émet sourceIndex:changed a affectation', async () => {
+    expect(state.sourceIndex).toEqual({});
+    const fn = vi.fn();
+    on('sourceIndex:changed', fn);
+    state.sourceIndex = { 'daft punk': ['techno', 'electro_clash'] };
+    await new Promise(r => requestAnimationFrame(r));
+    expect(fn).toHaveBeenCalledTimes(1);
+    state.sourceIndex = {};
+  });
+
+  it('genre est présent dans les entrées FileIndex (type vérifié)', () => {
+    // Vérifie que le champ genre existe dans l'interface SourceFileEntry
+    // (test compile-time : assigner un objet avec genre ne doit pas d'éclencher d'erreur TS)
+    state.eparsFiles = {
+      '/tmp': {
+        'test.mp3': { path: 'test.mp3', year: null, duration: null, codec: null, genre: 'Techno' },
+      },
+    };
+    expect(state.eparsFiles['/tmp']['test.mp3'].genre).toBe('Techno');
+    state.eparsFiles = {};
   });
 });

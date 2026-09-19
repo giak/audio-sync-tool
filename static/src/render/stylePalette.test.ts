@@ -198,4 +198,31 @@ describe('render/stylePalette', () => {
     expect(document.querySelectorAll('.style-palette').length).toBe(1);
     expect(palette().querySelector('.sp-title')?.textContent).toBe('b.mp3');
   });
+
+  it('P2 : Enter sur une suggestion unique accepte le style (pas de hotkey)', () => {
+    // _techno/a.mp3 → segment 'techno' aliasé → suggestion 'techno'
+    openStylePalette([A], rowA);
+    const hint = palette().querySelector('.sp-dest')?.textContent ?? '';
+    expect(hint).toContain('techno');
+    expect(hint).toContain('Enter = accepter');
+    key('Enter');
+    expect(state.styleChoices.get(A)).toEqual({ style: 'techno', tranche: null });
+    expect(isStylePaletteOpen()).toBe(false);
+    expect(rowA.querySelector('.style-chip')?.textContent).toBe('techno');
+  });
+
+  it('P2 : lot (2 cibles) → pas de suggestion unique, hint standard', () => {
+    openStylePalette([A, B], rowA);
+    const hint = palette().querySelector('.sp-dest')?.textContent ?? '';
+    expect(hint).not.toContain('Enter = accepter');
+    expect(hint).toContain('Lettre = style');
+  });
+
+  it('P2 : suggestion dans le hint, puis lettre de hotkey prime sur la suggestion', () => {
+    openStylePalette([A], rowA);
+    // La suggestion est 'techno' (segment _techno), mais on choisit 'hardcore' via hotkey
+    key('h');
+    expect(state.styleChoices.get(A)).toEqual({ style: 'hardcore', tranche: null });
+    expect(isStylePaletteOpen()).toBe(false);
+  });
 });

@@ -119,16 +119,17 @@ def scan_progress():
 
 
 def get_audio_meta(path):
-    """Return (year, duration_seconds, codec_str)."""
+    """Return (year, duration_seconds, codec_str, genre_str)."""
     year = None
     duration = None
+    genre = None
     codec = os.path.splitext(path)[1].lower()[1:].upper()
     if not HAS_MUTAGEN:
-        return year, duration, codec
+        return year, duration, codec, genre
     try:
         audio = MutagenFile(path, easy=False)
         if audio is None:
-            return year, duration, codec
+            return year, duration, codec, genre
         if hasattr(audio.info, 'length') and audio.info.length is not None:
             duration = round(audio.info.length)
         if hasattr(audio.info, 'bitrate') and audio.info.bitrate:
@@ -140,6 +141,13 @@ def get_audio_meta(path):
                 if val:
                     year = str(val)[:4]
                     break
+            # Genre : TCON (content type) — valeur additive
+            try:
+                tcon = audio.tags.get('TCON')
+                if tcon:
+                    genre = str(tcon[0] if isinstance(tcon, (list, tuple)) else tcon)
+            except Exception:
+                pass
         # MP4 / M4A : tag (c)day (découvert via EPIC-033 — des M4A taggés
         # étaient comptés « sans année » par le scan)
         if year is None and hasattr(audio, 'tags') and audio.tags:
@@ -151,16 +159,33 @@ def get_audio_meta(path):
                 if isinstance(val, (list, tuple)):
                     val = val[0]
                 year = str(val)[:4]
+            # M4A genre : ©gen
+            if genre is None:
+                try:
+                    val = audio.tags.get('\xa9gen')
+                except Exception:
+                    val = None
+                if val:
+                    if isinstance(val, (list, tuple)):
+                        val = val[0]
+                    genre = str(val)
         # FLAC / Vorbis
-        if year is None and hasattr(audio, 'get'):
-            for tag in ('DATE', 'YEAR'):
-                val = audio.get(tag)
-                if val and val[0]:
-                    year = str(val[0])[:4]
-                    break
+        if hasattr(audio, 'get'):
+            if year is None:
+                for tag in ('DATE', 'YEAR'):
+                    val = audio.get(tag)
+                    if val and val[0]:
+                        year = str(val[0])[:4]
+                        break
+            if genre is None:
+                for tag in ('GENRE', 'STYLE'):
+                    val = audio.get(tag)
+                    if val and val[0]:
+                        genre = str(val[0])
+                        break
     except Exception:
         pass
-    return year, duration, codec
+    return year, duration, codec, genre
 
 
 def get_audio_tags(path):
@@ -263,8 +288,8 @@ def ping():
 def _scan_file(full_path, rel_path):
     """Worker function — called in child process (must be top-level for pickle)."""
     filename = os.path.basename(full_path)
-    year, duration, codec = get_audio_meta(full_path)
-    return (filename, {'path': rel_path, 'year': year, 'duration': duration, 'codec': codec})
+    year, duration, codec, genre = get_audio_meta(full_path)
+    return (filename, {'path': rel_path, 'year': year, 'duration': duration, 'codec': codec, 'genre': genre})
 
 
 def index_files(directory, phase_label='source'):
@@ -481,6 +506,7 @@ def scan():
         for d in epars_dirs:
             result['epars'][d] = index_files(d, 'Éparpillé')
         result['extra_dirs'] = load_extra_dirs()
+        result['source_index'] = _build_source_index(result.get('source', {}))
 
         save_json(CACHE_PATH, result)
 
@@ -504,6 +530,7 @@ def load_cached():
     data = load_json(CACHE_PATH, {'source': {}, 'epars': {}})
     data.setdefault('source', {})
     data['extra_dirs'] = load_extra_dirs()
+    data.setdefault('source_index', {})
     return jsonify(data)
 
 
@@ -570,10 +597,10 @@ def copy_file():
         """Build consistent response with metadata when available."""
         src = kw.pop('_src', None)
         if src and os.path.exists(src):
-            year, duration, codec = get_audio_meta(src)
+            year, duration, codec, genre = get_audio_meta(src)
         else:
-            year = duration = codec = None
-        return jsonify({'ok': ok, 'year': year, 'duration': duration, 'codec': codec, **kw})
+            year = duration = codec = genre = None
+        return jsonify({'ok': ok, 'year': year, 'duration': duration, 'codec': codec, 'genre': genre, **kw})
 
     data = request.json
     if data is None:
@@ -606,13 +633,13 @@ def copy_file():
     # Update cache so /load reflects the new file on refresh
     cache = load_json(CACHE_PATH)
     if cache:
-        year, duration, codec = get_audio_meta(dst)
+        year, duration, codec, genre = get_audio_meta(dst)
         for source_dir in list(cache.get('source', {}).keys()):
             if dst_dir == source_dir or dst_dir.startswith(source_dir.rstrip('/') + '/'):
                 rel = os.path.relpath(dst_dir, source_dir) if dst_dir != source_dir else '.'
                 rel_path = os.path.join(rel, filename) if rel != '.' else filename
                 cache['source'][source_dir][filename] = {
-                    'path': rel_path, 'year': year, 'duration': duration, 'codec': codec
+                    'path': rel_path, 'year': year, 'duration': duration, 'codec': codec, 'genre': genre
                 }
                 save_json(CACHE_PATH, cache)
                 break
@@ -797,7 +824,7 @@ def _move_cache_update(cache, src, filename, final_dst):
                 cache['source'][source_dir].pop(filename, None)
                 break
     # Add to the dest side if dest is under a scanned root
-    year, duration, codec = get_audio_meta(final_dst)
+    year, duration, codec, genre = get_audio_meta(final_dst)
     dest_dir = os.path.dirname(final_dst)
     base = os.path.basename(final_dst)
     for source_dir in list(cache.get('source', {}).keys()):
@@ -805,7 +832,7 @@ def _move_cache_update(cache, src, filename, final_dst):
             rel = os.path.relpath(dest_dir, source_dir) if dest_dir != source_dir else '.'
             rel_path = os.path.join(rel, base) if rel != '.' else base
             cache['source'][source_dir][base] = {
-                'path': rel_path, 'year': year, 'duration': duration, 'codec': codec
+                'path': rel_path, 'year': year, 'duration': duration, 'codec': codec, 'genre': genre
             }
             break
     save_json(CACHE_PATH, cache)
@@ -902,6 +929,35 @@ def _artist_title(fn):
             a = None
     a = re.sub(r'^\d{1,4}\s+', '', a) if a else None
     return (_YEARS_NOISE.sub(' ', a).strip() if a else None), _YEARS_NOISE.sub(' ', t).strip()
+
+
+def _build_source_index(source_files):
+    """Construit l'index artiste → styles depuis les fichiers source.
+    Pour chaque fichier source, parse l'artiste (nom de fichier) et la
+   /styles (sous-dossier). Retourne {artiste_normalisé: [styles triés]}.
+    Utilisé par /scan pour alimenter les suggestions de style côté client.
+    """
+    index = {}  # artiste normalisé → set de styles
+    for source_dir, files in source_files.items():
+        for filename, meta in files.items():
+            path = meta.get('path', '')
+            slash = path.find('/')
+            if slash <= 0:
+                continue  # fichier à la racine, pas de style
+            folder_name = path[:slash]  # ex. 'techno_acid_1990'
+            # Extraire le style (sans la tranche YYYY)
+            m = re.match(r'^(.+)_(\d{4})$', folder_name)
+            style = m.group(1) if m else folder_name
+            # Parser l'artiste
+            artist, _ = _artist_title(filename)
+            if not artist:
+                continue
+            artist_norm = _years_strip_accents(artist.lower().strip())
+            if not artist_norm:
+                continue
+            index.setdefault(artist_norm, set())
+            index[artist_norm].add(style)
+    return {k: sorted(v) for k, v in index.items()}
 
 
 def _load_years_caches():

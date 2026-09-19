@@ -9,6 +9,7 @@
 
 import { focusItemByElement, navigateFocus } from '../focus.js';
 import { state } from '../state.js';
+import { parseArtistTitle, type Suggestion, suggestStyle } from '../styleSuggest.js';
 import { deriveHotkeys, findEparsEntry, type StyleChoice, TRANCHES, yearOf } from '../styles.js';
 import { currentTaxonomy, refreshStyleCells, updateStyleRecap } from './styleCell.js';
 
@@ -17,6 +18,8 @@ let _targets: string[] = [];
 let _anchor: HTMLElement | null = null;
 /** Style choisi, en attente d'une tranche (fichiers sans année). */
 let _pending: string | null = null;
+/** Suggestion calculée pour la cible unique (P2). Enter sans hotkey = accepter. */
+let _suggestion: Suggestion | null = null;
 let _hotkeyToStyle = new Map<string, string>();
 
 export function isStylePaletteOpen(): boolean {
@@ -98,6 +101,11 @@ function onKeydown(e: KeyboardEvent): void {
     else if (/^[1-9]$/.test(e.key)) commit(_pending, TRANCHES[Number(e.key) - 1], _pendingNeeding);
     return;
   }
+  // P2 : Enter sur une suggestion unique → accepter la suggestion
+  if (e.key === 'Enter' && _suggestion && _targets.length === 1) {
+    pick(_suggestion.style);
+    return;
+  }
   if (e.key.length === 1) {
     const styleId = _hotkeyToStyle.get(e.key.toLowerCase());
     if (styleId) pick(styleId);
@@ -136,6 +144,23 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
   _targets = [...targets];
   _anchor = anchor;
   _pending = null;
+  _suggestion = null;
+  // P2 : suggestion unique
+  if (targets.length === 1) {
+    const found = findEparsEntry(state.eparsFiles, targets[0]);
+    if (found) {
+      const relPath = found.entry.path;
+      const { artist } = parseArtistTitle(found.filename);
+      const seg = relPath.indexOf('/') > 0 ? relPath.slice(0, relPath.indexOf('/')) : '';
+      const sessionStyles: string[] = [];
+      for (const [fp, choice] of state.styleChoices) {
+        if (fp.startsWith(`${found.eparDir}/${seg}/`) || (seg === '' && fp.startsWith(`${found.eparDir}/`))) {
+          sessionStyles.push(choice.style);
+        }
+      }
+      _suggestion = suggestStyle(relPath, found.entry.genre, artist, state.sourceIndex, sessionStyles, tax);
+    }
+  }
   const hotkeys = deriveHotkeys(tax);
   _hotkeyToStyle = new Map();
   for (const [id, k] of hotkeys) if (k) _hotkeyToStyle.set(k, id);
@@ -192,7 +217,12 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
 
   const dest = document.createElement('div');
   dest.className = 'sp-dest';
-  dest.textContent = 'Lettre = style · Échap = annuler · ⌫ = retirer le style';
+  if (_suggestion && _targets.length === 1) {
+    const pct = Math.round(_suggestion.confidence * 100);
+    dest.textContent = `→ ${_suggestion.style} (${pct}%) — Enter = accepter · Lettre = style · Échap = annuler · ⌫ = retirer`;
+  } else {
+    dest.textContent = 'Lettre = style · Échap = annuler · ⌫ = retirer le style';
+  }
   el.appendChild(dest);
 
   el.addEventListener('keydown', onKeydown);

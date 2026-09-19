@@ -156,10 +156,12 @@ export async function runScan(): Promise<void> {
       source: Record<string, FileIndex>;
       epars: Record<string, FileIndex>;
       extra_dirs?: string[];
+      source_index?: Record<string, string[]>;
     }>('/scan');
     state.sourceFiles = (data.source || {}) as typeof state.sourceFiles;
     state.eparsFiles = (data.epars || {}) as typeof state.eparsFiles;
     state.sourceExtraDirs = new Set(data.extra_dirs || []);
+    state.sourceIndex = (data.source_index || {}) as typeof state.sourceIndex;
     state.journal = await api<typeof state.journal>('/journal');
     refreshDupMatches();
     // EventEmitter auto-renders panels via subscriptions
@@ -569,7 +571,12 @@ export async function initApp(): Promise<void> {
   try {
     const [config, cache, journal] = await Promise.all([
       api<ConfigData>('/config'),
-      api<{ source?: Record<string, FileIndex>; epars?: Record<string, FileIndex>; extra_dirs?: string[] }>('/load'),
+      api<{
+        source?: Record<string, FileIndex>;
+        epars?: Record<string, FileIndex>;
+        extra_dirs?: string[];
+        source_index?: Record<string, string[]>;
+      }>('/load'),
       api<typeof state.journal>('/journal'),
     ]);
 
@@ -586,6 +593,8 @@ export async function initApp(): Promise<void> {
     }
     // Dossiers racine vides (➕) — toujours, même sans cache de scan.
     state.sourceExtraDirs = new Set(cache?.extra_dirs || []);
+    // Index artiste→styles (P2) pour les suggestions de style.
+    state.sourceIndex = (cache?.source_index || {}) as typeof state.sourceIndex;
     // Doublons fuzzy (EPIC-028) : le cache vient de peupler les deux index —
     // sans ça, aucun marqueur ambre après un simple rechargement de page.
     refreshDupMatches();

@@ -144,7 +144,13 @@ export function renderEpars(): void {
       const fullpath = `${dirPath}/${relPath}`;
       if (
         eparsActive &&
-        !matchesTokens(eparsTerm, { name: filename, year: data.year ?? null, codec: data.codec ?? null, path: relPath })
+        !matchesTokens(eparsTerm, {
+          name: filename,
+          year: data.year ?? null,
+          codec: data.codec ?? null,
+          path: relPath,
+          genre: data.genre ?? null,
+        })
       )
         continue;
       const status = computeStatus(filename, state.sourceFiles, state.journal as any);
@@ -194,6 +200,7 @@ export function renderEpars(): void {
             year: data.year ?? null,
             codec: data.codec ?? null,
             path: data.path,
+            genre: data.genre ?? null,
           })
         )
           matched++;

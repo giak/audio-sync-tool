@@ -6,6 +6,7 @@
 // est préservée par le colgroup).
 
 import { state } from '../state.js';
+import { parseArtistTitle, type Suggestion, suggestStyle } from '../styleSuggest.js';
 import { buildTaxonomy, destFor, findEparsEntry, type Taxonomy, yearOf } from '../styles.js';
 
 // Mémo : la taxonomie se recalcule seulement quand l'index source ou les
@@ -44,15 +45,49 @@ export function destinationLabel(fullpath: string, entry: { year: string | null 
   return resolve(fullpath, entry)?.label ?? '';
 }
 
-function paint(td: HTMLTableCellElement, fullpath: string, entry: { year: string | null }): void {
+/** Calcule la suggestion pour une cellule épars (sans choix utilisateur). */
+function computeSuggestion(fullpath: string, entry: { year: string | null; genre?: string | null }): Suggestion | null {
+  const tax = currentTaxonomy();
+  if (!tax) return null;
+  const found = findEparsEntry(state.eparsFiles, fullpath);
+  if (!found) return null;
+  const relPath = found.entry.path;
+  const { artist } = parseArtistTitle(found.filename);
+  // Styles choisis en session pour des fichiers du même sous-dossier épars
+  const eparDir = found.eparDir;
+  const seg = relPath.indexOf('/') > 0 ? relPath.slice(0, relPath.indexOf('/')) : '';
+  const sessionStyles: string[] = [];
+  for (const [fp, choice] of state.styleChoices) {
+    if (fp.startsWith(`${eparDir}/${seg}/`) || (seg === '' && fp.startsWith(`${eparDir}/`))) {
+      sessionStyles.push(choice.style);
+    }
+  }
+  return suggestStyle(relPath, entry.genre, artist, state.sourceIndex, sessionStyles, tax);
+}
+
+function paint(
+  td: HTMLTableCellElement,
+  fullpath: string,
+  entry: { year: string | null; genre?: string | null },
+): void {
   td.innerHTML = '';
   td.title = '';
   const r = resolve(fullpath, entry);
-  if (!r) return;
+  if (r) {
+    const chip = document.createElement('span');
+    chip.className = r.pendingYear ? 'style-chip chosen pending-year' : 'style-chip chosen';
+    chip.textContent = state.styleChoices.get(fullpath)?.style ?? '';
+    td.title = r.label;
+    td.appendChild(chip);
+    return;
+  }
+  // Pas de choix utilisateur → suggestion (P2)
+  const sug = computeSuggestion(fullpath, entry);
+  if (!sug) return;
   const chip = document.createElement('span');
-  chip.className = r.pendingYear ? 'style-chip chosen pending-year' : 'style-chip chosen';
-  chip.textContent = state.styleChoices.get(fullpath)?.style ?? '';
-  td.title = r.label;
+  chip.className = 'style-chip suggested';
+  chip.textContent = sug.style;
+  chip.title = `Suggéré (${Math.round(sug.confidence * 100)}%) — g pour valider`;
   td.appendChild(chip);
 }
 
@@ -60,7 +95,7 @@ function paint(td: HTMLTableCellElement, fullpath: string, entry: { year: string
 export function insertStyleCell(
   row: HTMLElement,
   fullpath: string,
-  entry: { year: string | null },
+  entry: { year: string | null; genre?: string | null },
 ): HTMLTableCellElement {
   const td = document.createElement('td');
   td.className = 'style-cell';

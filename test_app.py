@@ -212,7 +212,7 @@ def test_load_empty_cache(client):
     rv = client.get('/load')
     assert rv.status_code == 200
     # extra_dirs : dossiers racine créés via ➕ (toujours présent dans la réponse)
-    assert rv.json == {'source': {}, 'epars': {}, 'extra_dirs': []}
+    assert rv.json == {'source': {}, 'epars': {}, 'extra_dirs': [], 'source_index': {}}
 
 
 def test_load_after_scan(client):
@@ -734,12 +734,107 @@ def test_get_audio_meta_m4a_cday():
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, 'test.m4a')
             open(path, 'w').close()
-            year, duration, codec = get_audio_meta(path)
+            year, duration, codec, genre = get_audio_meta(path)
             assert year == '2019'
             assert duration == 300
             assert codec == 'M4A'
     finally:
         app_module.MutagenFile = original_mutagen
+
+
+def test_get_audio_meta_mp3_genre():
+    """Genre TCON extrait d'un fichier MP3 mocké."""
+    import app as app_module
+
+    class MockInfo:
+        length = 300.0
+        bitrate = 320000
+
+    class MockTags:
+        @staticmethod
+        def get(key):
+            # TDRC : mutagen retourne un ID3TimeStamp, str() = '2020'
+            # TCON : mutagen retourne une liste, on prend le 1er
+            return {'TCON': ['Electronic'], 'TDRC': '2020'}.get(key)
+
+    class MockMP3:
+        info = MockInfo()
+        tags = MockTags()
+
+    def mock_mutagen_file(path, easy=False):
+        if path.endswith('.mp3'):
+            return MockMP3()
+        return None
+
+    original_mutagen = app_module.MutagenFile
+    app_module.MutagenFile = mock_mutagen_file
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, 'test.mp3')
+            open(path, 'w').close()
+            year, duration, codec, genre = get_audio_meta(path)
+            assert year == '2020'
+            assert genre == 'Electronic'
+    finally:
+        app_module.MutagenFile = original_mutagen
+
+
+def test_get_audio_meta_no_genre():
+    """Genre est None quand aucun tag TCON/GENRE/©gen n'est présent."""
+    import app as app_module
+
+    class MockInfo:
+        length = 120.0
+
+    class MockTags:
+        @staticmethod
+        def get(key):
+            return None
+
+    class MockMP3:
+        info = MockInfo()
+        tags = MockTags()
+
+    def mock_mutagen_file(path, easy=False):
+        if path.endswith('.mp3'):
+            return MockMP3()
+        return None
+
+    original_mutagen = app_module.MutagenFile
+    app_module.MutagenFile = mock_mutagen_file
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, 'test.mp3')
+            open(path, 'w').close()
+            year, duration, codec, genre = get_audio_meta(path)
+            assert genre is None
+    finally:
+        app_module.MutagenFile = original_mutagen
+
+
+def test_build_source_index():
+    """L'index artiste→styles est construit à partir de la structure des dossiers source."""
+    from app import _build_source_index
+    source = {
+        '/src': {
+            'artist1 - track1.mp3': {'path': 'techno_acid_1990/artist1 - track1.mp3'},
+            'artist2 - track2.mp3': {'path': 'hardcore_1995/artist2 - track2.mp3'},
+            'artist1 - track3.mp3': {'path': 'techno_acid_1990/artist1 - track3.mp3'},
+        }
+    }
+    idx = _build_source_index(source)
+    assert 'artist1' in idx
+    assert idx['artist1'] == ['techno_acid']
+    assert 'artist2' in idx
+    assert idx['artist2'] == ['hardcore']
+
+
+def test_build_source_index_empty():
+    """Index vide quand aucun fichier source."""
+    from app import _build_source_index
+    assert _build_source_index({}) == {}
+    assert _build_source_index({'/src': {}}) == {}
+
 
 def test_get_audio_meta_corrupt_file():
     """Returns None for year/duration, extension codec for a corrupt file."""
@@ -749,7 +844,7 @@ def test_get_audio_meta_corrupt_file():
         with open(path, 'wb') as f:
             f.write(b'\x00\x01\x02' * 100)
 
-        year, duration, codec = get_audio_meta(path)
+        year, duration, codec, genre = get_audio_meta(path)
         assert year is None
         assert duration is None
         assert codec == 'OGG'  # from extension
@@ -784,7 +879,7 @@ def test_get_audio_meta_ogg_vorbis():
             path = os.path.join(tmp, 'test.ogg')
             open(path, 'w').close()
 
-            year, duration, codec = get_audio_meta(path)
+            year, duration, codec, genre = get_audio_meta(path)
             assert year == '2022'
             assert duration == 0
             assert codec == 'OGG'
@@ -818,7 +913,7 @@ def test_get_audio_meta_ogg_vorbis_year_fallback():
             path = os.path.join(tmp, 'test.ogg')
             open(path, 'w').close()
 
-            year, duration, codec = get_audio_meta(path)
+            year, duration, codec, genre = get_audio_meta(path)
             assert year == '2005'
             assert duration == 60
             assert codec == 'OGG'
@@ -837,7 +932,7 @@ def test_get_audio_meta_no_mutagen():
             path = os.path.join(tmp, 'test.mp3')
             open(path, 'w').close()
 
-            year, duration, codec = get_audio_meta(path)
+            year, duration, codec, genre = get_audio_meta(path)
             assert year is None
             assert duration is None
             assert codec == 'MP3'
@@ -1488,7 +1583,7 @@ def test_get_audio_meta_mp3():
             f.write(id3)
             f.write(mpeg_data)
 
-        year, duration, codec = get_audio_meta(path)
+        year, duration, codec, genre = get_audio_meta(path)
         assert year == '2021'
         assert duration == 1  # ~1.0 sec rounded
         assert codec is not None
@@ -1657,7 +1752,7 @@ def test_get_audio_meta_flac():
         with open(path, 'wb') as f:
             f.write(data)
 
-        year, duration, codec = get_audio_meta(path)
+        year, duration, codec, genre = get_audio_meta(path)
         assert year == '2021'
         assert duration == 1  # 44100 samples / 44100 Hz = 1.0 sec
         assert codec is not None

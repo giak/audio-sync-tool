@@ -42,6 +42,7 @@ interface SourceFileEntry {
   year: string | null;
   duration: number | null;
   codec: string | null;
+  genre?: string | null;
 }
 
 export interface FileIndex {
@@ -138,6 +139,9 @@ interface AppState {
    *  SESSION (perdu au reload) ; consommé par l'aperçu `e` → copies par dossier
    *  cible. Toujours réaffecter une nouvelle Map (événement). */
   styleChoices: Map<string, StyleChoice>;
+  /** P2 : index artiste→styles construit au scan (clé = artiste normalisé,
+   *  valeur = liste de styles triés). Servi par /load, /scan. */
+  sourceIndex: Record<string, string[]>;
 }
 
 export interface EparsSelection {
@@ -186,6 +190,7 @@ const _state: AppState = {
   focusListId: 'epars',
   lastCueTrack: null,
   styleChoices: new Map(),
+  sourceIndex: {},
 };
 
 export const state = new Proxy<AppState>(_state, {

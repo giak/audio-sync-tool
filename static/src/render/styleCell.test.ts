@@ -43,14 +43,24 @@ describe('render/styleCell', () => {
     state.styleChoices = new Map();
   });
 
-  it('insère td.style-cell juste avant .codec, vide sans choix', () => {
+  it('insère td.style-cell juste avant .codec ; sans choix : suggestion ou vide', () => {
     const row = makeRow(`${EPARS}/_techno/a.mp3`);
     const td = insertStyleCell(row, `${EPARS}/_techno/a.mp3`, { year: '1992' });
     expect(td.nextElementSibling?.classList.contains('codec')).toBe(true);
     expect(td.previousElementSibling?.classList.contains('year')).toBe(true);
+    // _techno → segment 'techno' aliasé → suggestion 'techno' (confiance > seuil)
+    const chip = td.querySelector('.style-chip');
+    expect(chip).not.toBeNull();
+    expect(chip?.classList.contains('suggested')).toBe(true);
+    expect(chip?.textContent).toBe('techno');
+    expect(row.children.length).toBe(7);
+  });
+
+  it('fichier sans segment aliasé → cellule vide sans choix', () => {
+    const row = makeRow(`${EPARS}/diverse/a.mp3`);
+    const td = insertStyleCell(row, `${EPARS}/diverse/a.mp3`, { year: '1992' });
     expect(td.textContent).toBe('');
     expect(td.title).toBe('');
-    expect(row.children.length).toBe(7);
   });
 
   it('avec choix : chip « chosen » + destination existante en tooltip', () => {
@@ -89,19 +99,21 @@ describe('render/styleCell', () => {
     expect(destinationLabel(fp, { year: '1992' })).toContain('style inconnu');
   });
 
-  it('refreshStyleCell met à jour la cellule affichée en place (lecture de l’année via eparsFiles)', () => {
+  it('refreshStyleCell met à jour la cellule affichée en place', () => {
     const fp = `${EPARS}/_techno/a.mp3`;
     const row = makeRow(fp);
     insertStyleCell(row, fp, { year: '1992' });
     document.getElementById('tb')!.appendChild(row);
-    expect(row.querySelector('.style-cell')!.textContent).toBe('');
+    // _techno → suggestion 'techno' (segment aliasé)
+    expect(row.querySelector('.style-chip.suggested')?.textContent).toBe('techno');
     state.styleChoices = new Map([[fp, { style: 'techno', tranche: null }]]);
     refreshStyleCell(fp);
-    expect(row.querySelector('.style-chip')?.textContent).toBe('techno');
+    expect(row.querySelector('.style-chip.chosen')?.textContent).toBe('techno');
     expect((row.querySelector('.style-cell') as HTMLElement).title).toBe('→ techno_1990');
     state.styleChoices = new Map();
     refreshStyleCell(fp);
-    expect(row.querySelector('.style-chip')).toBeNull();
+    // Retiré le choix → retour à la suggestion (_techno → 'techno')
+    expect(row.querySelector('.style-chip.suggested')?.textContent).toBe('techno');
   });
 
   it('clic sur la cellule → ouvre la palette pour ce fichier (souris = même chemin que g)', async () => {
