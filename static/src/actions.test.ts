@@ -468,7 +468,7 @@ describe('actions', () => {
   // ── Init ───────────────────────────────────────────────────────────
 
   describe('copyFilesTo (EPIC-035 — extrait du batch F5, iso-comportement)', () => {
-    it('copie, patch l’index source sous le sous-dossier cible, révèle la destination, renvoie le nombre copié', async () => {
+    it('copie, patch l’index source sous le sous-dossier cible, révèle la destination, renvoie les fullpaths copiés', async () => {
       const c = document.createElement('div');
       c.id = 'source-container';
       const dir = document.createElement('div');
@@ -490,7 +490,7 @@ describe('actions', () => {
         { filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/_techno/f.mp3' },
       ]);
 
-      expect(n).toBe(1);
+      expect(n).toEqual(['/epars/_techno/f.mp3']);
       expect(api).toHaveBeenCalledWith('/copy', expect.objectContaining({ method: 'POST' }));
       expect(JSON.parse((api.mock.calls[0][1] as { body: string }).body)).toEqual({
         source_path: '/epars/_techno/f.mp3',
@@ -508,7 +508,7 @@ describe('actions', () => {
       state.sourceNodeMap.clear();
     });
 
-    it('/copy KO ou fichier inconnu → 0, index source intact', async () => {
+    it('/copy KO ou fichier inconnu → liste vide, index source intact', async () => {
       state.eparsFiles = { '/epars': { 'f.mp3': { path: 'f.mp3', year: null, duration: null, codec: null } } };
       state.sourceFiles = { '/source': {} };
       api.mockImplementation(async (url: string) => (url === '/journal' ? [] : { ok: false }));
@@ -516,7 +516,7 @@ describe('actions', () => {
         { filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/f.mp3' },
         { filename: 'ghost.mp3', eparDir: '/epars', fullpath: '/epars/ghost.mp3' },
       ]);
-      expect(n).toBe(0);
+      expect(n).toEqual([]);
       expect(Object.keys(state.sourceFiles['/source'])).toEqual([]);
     });
   });

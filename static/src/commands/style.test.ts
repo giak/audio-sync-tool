@@ -4,24 +4,29 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { bind, openStylePalette } = vi.hoisted(() => ({
+const { bind, openStylePalette, openStylePreview } = vi.hoisted(() => ({
   bind: vi.fn(),
   openStylePalette: vi.fn(),
+  openStylePreview: vi.fn(),
 }));
 
 vi.mock('./registry.js', () => ({ registry: { bind } }));
 vi.mock('../render/stylePalette.js', () => ({ openStylePalette }));
+vi.mock('../render/stylePreview.js', () => ({ openStylePreview }));
 
 import { state } from '../state.js';
 import './style.js';
 
-let binding: Record<string, unknown> & { handler: () => void };
+type Binding = Record<string, unknown> & { handler: () => void };
+let binding: Binding;
+let bindingE: Binding;
 let bindCount = 0;
 
 beforeAll(() => {
   // Capturé AVANT le clearAllMocks du beforeEach (registry.bind s'exécute à l'import).
   bindCount = bind.mock.calls.length;
-  binding = bind.mock.calls[0][0] as typeof binding;
+  binding = bind.mock.calls[0][0] as Binding;
+  bindingE = bind.mock.calls[1][0] as Binding;
 });
 
 beforeEach(() => {
@@ -41,8 +46,14 @@ afterAll(() => {
 });
 
 describe('style command (g)', () => {
-  it('un seul binding : g, page sync, panneau épars, hors input/modale/menu, labellisé pour la légende', () => {
-    expect(bindCount).toBe(1);
+  it('deux bindings : g (page sync, panneau épars) et e (page sync), hors input/modale/menu, labellisés', () => {
+    expect(bindCount).toBe(2);
+    expect(bindingE.key).toBe('e');
+    expect(bindingE.page).toBe('sync');
+    expect(bindingE.isInput).toBe(false);
+    expect(bindingE.activeModal).toBeNull();
+    expect(bindingE.ctrlKey).toBeUndefined(); // Ctrl+e playlist reste distinct par playlistMode/page
+    expect(typeof bindingE.label).toBe('string');
     expect(binding.key).toBe('g');
     expect(binding.page).toBe('sync');
     expect(binding.activePanel).toBe('epars');
@@ -81,6 +92,11 @@ describe('style command (g)', () => {
     binding.handler();
     expect(openStylePalette).not.toHaveBeenCalled();
     expect(document.getElementById('status-text')?.textContent).toContain('surbrillance');
+  });
+
+  it('e → openStylePreview', () => {
+    bindingE.handler();
+    expect(openStylePreview).toHaveBeenCalledTimes(1);
   });
 
   it('focus sur un dossier épars (pas une ligne fichier) → pas de cible', () => {

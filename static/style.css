@@ -611,6 +611,7 @@ tr.file-row.twin-hint > td {
 #epars-status-line .s-traite  { color: var(--led-green); }
 #epars-status-line .s-reste   { color: var(--led-blue); }
 #epars-status-line .s-doublon { color: var(--text-muted); }
+#epars-status-line .s-style   { color: var(--amber); }
 
 /* ===== Player Bar ==================================================== */
 #player-bar {
@@ -973,7 +974,7 @@ tr.file-row.twin-hint > td {
 #journal-content .error       { color: var(--led-red); }
 
 /* ===== Confirm Dialog ================================================ */
-#dialog-msg { margin-bottom: 16px; font-size: 15px; color: var(--text-primary); }
+#dialog-msg { margin-bottom: 16px; font-size: 15px; color: var(--text-primary); white-space: pre-line; } /* pre-line : aperçu multi-ligne EPIC-035 ; messages existants mono-ligne */
 /* Champ du prompt custom (EPIC-014, remplace prompt()) */
 .dialog-input {
   width: 100%;

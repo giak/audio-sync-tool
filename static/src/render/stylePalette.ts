@@ -10,7 +10,7 @@
 import { focusItemByElement, navigateFocus } from '../focus.js';
 import { state } from '../state.js';
 import { deriveHotkeys, findEparsEntry, type StyleChoice, TRANCHES, yearOf } from '../styles.js';
-import { currentTaxonomy, refreshStyleCell } from './styleCell.js';
+import { currentTaxonomy, refreshStyleCell, updateStyleRecap } from './styleCell.js';
 
 let _el: HTMLElement | null = null;
 let _targets: string[] = [];
@@ -45,6 +45,7 @@ function commit(styleId: string, tranche: number | null): void {
   for (const fp of _targets) next.set(fp, { style: styleId, tranche: noYear.has(fp) ? tranche : null });
   state.styleChoices = next;
   for (const fp of _targets) refreshStyleCell(fp);
+  updateStyleRecap();
   const single = _targets.length === 1;
   closeStylePalette();
   const container = eparsContainer();
@@ -56,6 +57,7 @@ function removeChoices(): void {
   for (const fp of _targets) next.delete(fp);
   state.styleChoices = next;
   for (const fp of _targets) refreshStyleCell(fp);
+  updateStyleRecap();
   closeStylePalette();
 }
 

@@ -71,6 +71,28 @@ export function insertStyleCell(
   return td;
 }
 
+/** Nombre de choix de session portant sur un fichier épars encore indexé. */
+export function countActiveChoices(): number {
+  let n = 0;
+  for (const fp of state.styleChoices.keys()) if (findEparsEntry(state.eparsFiles, fp)) n++;
+  return n;
+}
+
+/** Récap « 🏷 N assignés · e = aperçu » dans la ligne d'état épars. Appelé par
+ *  renderEpars (après reconstruction de la ligne), par la palette après un
+ *  choix et par l'aperçu après apply — aucune souscription supplémentaire. */
+export function updateStyleRecap(): void {
+  const line = document.getElementById('epars-status-line');
+  if (!line) return;
+  line.querySelector('.s-style')?.remove();
+  const n = countActiveChoices();
+  if (n === 0) return;
+  const span = document.createElement('span');
+  span.className = 's-style';
+  span.textContent = `🏷 ${n.toLocaleString('fr')} assigné${n > 1 ? 's' : ''} · e = aperçu`;
+  line.appendChild(span);
+}
+
 /** Re-rend en place la cellule d'une ligne épars (après un choix), sans
  *  re-render du panneau. No-op si la ligne n'est pas affichée. */
 export function refreshStyleCell(fullpath: string): void {

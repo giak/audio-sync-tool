@@ -7,7 +7,7 @@ import { computeStatus, countAllEparsFiles, type FileStatus } from '../utils.js'
 import { makeFileEl, makeFileTable } from './fileRow.js';
 import { ensureFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
-import { insertStyleCell } from './styleCell.js';
+import { insertStyleCell, updateStyleRecap } from './styleCell.js';
 
 // ── File selection logic ─────────────────────────────────────────────────
 
@@ -219,6 +219,7 @@ export function renderEpars(): void {
       <span class="s-reste">● ${countNouveau.toLocaleString('fr')} reste</span>
       <span class="s-doublon">○ ${countDoublon.toLocaleString('fr')} doublon</span>${dupPart}
     `;
+    updateStyleRecap(); // EPIC-035 : « 🏷 N assignés » après reconstruction de la ligne
   }
 
   requestAnimationFrame(() => {

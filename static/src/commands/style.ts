@@ -8,6 +8,7 @@
 // bougent pas.
 
 import { openStylePalette } from '../render/stylePalette.js';
+import { openStylePreview } from '../render/stylePreview.js';
 import { state } from '../state.js';
 import { registry } from './registry.js';
 
@@ -46,4 +47,17 @@ registry.bind({
   label: 'Poser un style (palette : lettre, puis chiffre de tranche si année manquante)',
   group: 'sync',
   handler: openPaletteOnFocus,
+});
+
+// e — aperçu du rangement (plan groupé par dossier cible → confirmation →
+// copies). Libre en page sync (vérifié : `e` = page years, Ctrl+e = playlist).
+registry.bind({
+  key: 'e',
+  page: 'sync',
+  isInput: false,
+  activeModal: null,
+  isContextMenuOpen: false,
+  label: 'Aperçu du rangement par style (copies par dossier cible)',
+  group: 'sync',
+  handler: () => openStylePreview(),
 });

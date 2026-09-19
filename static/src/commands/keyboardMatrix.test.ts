@@ -93,8 +93,12 @@ const { focusFilterChip, hideFilterChip } = vi.hoisted(() => ({
   hideFilterChip: vi.fn(),
 }));
 const { toggleSourceDir } = vi.hoisted(() => ({ toggleSourceDir: vi.fn() }));
-const { openStylePalette } = vi.hoisted(() => ({ openStylePalette: vi.fn() }));
+const { openStylePalette, openStylePreview } = vi.hoisted(() => ({
+  openStylePalette: vi.fn(),
+  openStylePreview: vi.fn(),
+}));
 vi.mock('../render/stylePalette.js', () => ({ openStylePalette }));
+vi.mock('../render/stylePreview.js', () => ({ openStylePreview }));
 
 vi.mock('../focus.js', async importOriginal => {
   const mod = await importOriginal<typeof import('../focus.js')>();
@@ -291,6 +295,7 @@ const IDX = {
   dupsR: BINDINGS.findIndex(b => b.key === 'r' && b.page === 'dups'),
   dupsEscape: BINDINGS.findIndex(b => b.key === 'Escape' && b.page === 'dups'),
   styleG: BINDINGS.findIndex(b => b.key === 'g'),
+  styleE: BINDINGS.findIndex(b => b.key === 'e' && b.page === 'sync' && b.ctrlKey === undefined),
 } as const;
 
 // ── Le dispatch réel de script.ts (gate modale incluse) ───────────────────
@@ -804,6 +809,20 @@ const CELLS: Cell[] = [
   { name: 'dups: g non intercepté', w: { page: 'dups' }, key: 'g', expect: null },
   { name: 'playlist: g non intercepté', w: { page: 'playlist' }, key: 'g', expect: null },
   { name: 'modale dialog: g isolé par la gate', w: { activeModal: 'dialog' }, key: 'g', expect: null },
+  // ── EPIC-035 — aperçu du rangement `e` (page sync, tous panneaux) ──
+  {
+    name: 'sync: e ouvre l’aperçu du rangement',
+    key: 'e',
+    expect: IDX.styleE,
+    check: () => expect(openStylePreview).toHaveBeenCalledTimes(1),
+  },
+  { name: 'sync source: e ouvre aussi l’aperçu', w: { activePanel: 'source' }, key: 'e', expect: IDX.styleE },
+  { name: 'sync: e dans un input = texte (non intercepté)', w: { input: true }, key: 'e', expect: null },
+  { name: 'sync: e dans le filtre = texte (non intercepté)', w: { fi: true }, key: 'e', expect: null },
+  { name: 'menu ouvert: e non intercepté', w: { menu: true }, key: 'e', expect: null },
+  { name: 'dups: e non intercepté', w: { page: 'dups' }, key: 'e', expect: null },
+  { name: 'playlist: e (sans Ctrl) non intercepté', w: { page: 'playlist' }, key: 'e', expect: null },
+  { name: 'modale dialog: e isolé par la gate', w: { activeModal: 'dialog' }, key: 'e', expect: null },
 ];
 
 // Petit alias car la table ci-dessus est longue — garder les nirs lisibles.

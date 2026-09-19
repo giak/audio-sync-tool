@@ -195,15 +195,16 @@ export function refreshDupMatches(): void {
 // ── Copy (F5) ─────────────────────────────────────────────────────────────
 
 /** Copie `files` (épars) vers `destDir`, patch l'index + le DOM, recharge le
- *  journal, vide la sélection et révèle le dossier destination. Renvoie le
- *  nombre de copies réussies. Extrait du handler batch de F5 (EPIC-035) pour
- *  être enchaîné par dossier cible depuis l'aperçu de rangement — corps
- *  iso-comportement, aucune confirmation ici (l'appelant l'a déjà obtenue). */
+ *  journal, vide la sélection et révèle le dossier destination. Renvoie les
+ *  fullpaths épars effectivement copiés. Extrait du handler batch de F5
+ *  (EPIC-035) pour être enchaîné par dossier cible depuis l'aperçu de
+ *  rangement — corps iso-comportement, aucune confirmation ici (l'appelant
+ *  l'a déjà obtenue). */
 export async function copyFilesTo(
   destDir: string,
   files: Array<{ filename: string; eparDir: string; fullpath: string }>,
-): Promise<number> {
-  let copied = 0;
+): Promise<string[]> {
+  const copied: string[] = [];
   for (const f of files) {
     const relPath = state.eparsFiles[f.eparDir]?.[f.filename]?.path;
     if (!relPath) continue;
@@ -219,7 +220,7 @@ export async function copyFilesTo(
         body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename: f.filename }),
       });
       if (!res.ok) continue;
-      copied++;
+      copied.push(f.fullpath);
       let relPathNew = f.filename;
       const sourceDir = Object.keys(state.sourceFiles).find(dir => destDir === dir || destDir.startsWith(`${dir}/`));
       if (sourceDir && destDir.startsWith(sourceDir)) {
@@ -276,7 +277,7 @@ export function executeCopy(): void {
     if (confirmBtn) {
       confirmBtn.onclick = async () => {
         closeAllModals();
-        const copied = await copyFilesTo(destDir, files);
+        const copied = (await copyFilesTo(destDir, files)).length;
         if (statusText)
           statusText.textContent = `✓ ${copied}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}`;
       };
