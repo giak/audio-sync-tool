@@ -1,6 +1,6 @@
 // ─── Éparpillé panel rendering ────────────────────────────────────────────
 
-import { beginRender } from '../core/dom.js';
+import { appendPanelEmpty, beginRender } from '../core/dom.js';
 import { setStatus } from '../core/feedback.js';
 import { fmtCount } from '../core/format.js';
 import { foldTerm, matchesTokens } from '../filterEngine.js';
@@ -111,13 +111,13 @@ export function renderEpars(): void {
   let countNouveau = 0,
     countDoublon = 0,
     countTraite = 0;
+  // EPIC-036 P2 : le compteur du chip est dérivé de CETTE passe de rendu —
+  // la 2ᵉ passe matchesTokens (sur 5 092 fichiers) est supprimée.
+  let matched = 0;
 
   // État vide (EPIC-014) : guidance visuelle quand aucun dossier épars n'est configuré.
   if (Object.keys(state.eparsFiles).length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'panel-empty';
-    empty.textContent = 'Aucun dossier épars configuré — ⚙️ Config → Dossiers puis 🔄 Scan.';
-    container.appendChild(empty);
+    appendPanelEmpty(container, 'Aucun dossier épars configuré — ⚙️ Config → Dossiers puis 🔄 Scan.');
   }
 
   for (const [dirPath, files] of Object.entries(state.eparsFiles)) {
@@ -151,6 +151,7 @@ export function renderEpars(): void {
         })
       )
         continue;
+      matched++;
       const status = computeStatus(filename, state.sourceFiles, state.journal as any);
       if (status === 'nouveau') countNouveau++;
       else if (status === 'doublon') countDoublon++;
@@ -187,29 +188,11 @@ export function renderEpars(): void {
     }
   }
 
-  // Compteur du chip : matchés / total (recalcul léger après filtrage)
+  // Compteur du chip : dérivé de la passe de rendu unique (EPIC-036 P2)
   if (eparsActive) {
-    let matched = 0;
-    for (const files of Object.values(state.eparsFiles)) {
-      for (const [filename, data] of Object.entries(files)) {
-        if (
-          matchesTokens(eparsTerm, {
-            name: filename,
-            year: data.year ?? null,
-            codec: data.codec ?? null,
-            path: data.path,
-            genre: data.genre ?? null,
-          })
-        )
-          matched++;
-      }
-    }
-    updateFilterCount('sync-epars', matched, countAllEparsFiles(state.eparsFiles));
+    updateFilterCount('sync-epars', matched, totalFiles);
     if (matched === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'panel-empty';
-      empty.textContent = 'Aucun fichier ne matche ce filtre.';
-      container.appendChild(empty);
+      appendPanelEmpty(container, 'Aucun fichier ne matche ce filtre.');
     }
   }
 

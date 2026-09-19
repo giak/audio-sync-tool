@@ -9,6 +9,7 @@
 
 import { applyGroupPlan, refreshDupMatches } from '../actions.js';
 import { playingPath, togglePlay } from '../audio.js';
+import { beginRender } from '../core/dom.js';
 import { setStatus } from '../core/feedback.js';
 import { fmtCount } from '../core/format.js';
 import { buildVersionGroups, type VersionGroup } from '../dupGroups.js';
@@ -70,7 +71,7 @@ function groupTitle(g: VersionGroup): string {
 export function renderDups(): void {
   const list = document.getElementById('dups-list');
   if (!list) return;
-  list.innerHTML = '';
+  const restore = beginRender(list); // EPIC-036 P2 : wipe centralisé (scroll = scrollIntoView, iso-comportement)
 
   groups = buildVersionGroups(state.eparsFiles, state.sourceFiles);
   const count = document.getElementById('dups-count');
@@ -137,6 +138,7 @@ export function renderDups(): void {
     };
     list.appendChild(card);
   });
+  restore(list);
 }
 
 function paintFocus(): void {

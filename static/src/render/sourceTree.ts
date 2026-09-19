@@ -1,7 +1,7 @@
 // ─── Source Data panel: tree building, toggle, filtering, rendering ───────
 
 import { api } from '../api.js';
-import { beginRender } from '../core/dom.js';
+import { appendPanelEmpty, beginRender } from '../core/dom.js';
 import { setStatus } from '../core/feedback.js';
 import { fmtCount } from '../core/format.js';
 import { focusItemByElement, focusItemByPath, revalidateFocus, setActivePanel } from '../focus.js';
@@ -544,6 +544,58 @@ function renderExtraDirs(container: HTMLElement, allTrees: TreeAndDir[]): void {
   }
 }
 
+// ── Squelette d'arbre partagé (EPIC-036 Phase 2) ─────────────────────────
+
+/** Construction arbre → allTrees + compte total, partagée par sync-source et
+ *  playlist-source (bloc identique au caractère près, doublon mesuré P2). */
+export function buildSourceTrees(files: typeof state.sourceFiles): { allTrees: TreeAndDir[]; totalCount: number } {
+  const allTrees: TreeAndDir[] = [];
+  let totalCount = 0;
+  for (const [dirPath, dirFiles] of Object.entries(files)) {
+    const tree: TreeNode = {};
+    for (const [filename, data] of Object.entries(dirFiles)) {
+      const parts = data.path.split('/');
+      totalCount++;
+      if (parts.length <= 1) continue;
+      let current: TreeNode = tree;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i];
+        if (!current[key]) current[key] = {};
+        current = current[key] as TreeNode;
+      }
+      current.__files__ = current.__files__ || [];
+      const entries = current.__files__;
+      entries.push({
+        filename,
+        relPath: data.path,
+        year: data.year,
+        duration: data.duration,
+        codec: data.codec,
+        baseDir: dirPath,
+      } as FileEntry);
+    }
+    allTrees.push({ tree, dirPath });
+  }
+  return { allTrees, totalCount };
+}
+
+/** Fin de render d'un panneau arbre : compteur d'en-tête + bandeau vide si le
+ *  filtre ne garde rien. Partagée par sync-source et playlist-source. */
+export function finishSourcePanel(
+  container: HTMLElement,
+  headerCountId: string,
+  filteredCount: number | null,
+  totalCount: number,
+): void {
+  const headerCount = document.getElementById(headerCountId);
+  if (filteredCount !== null) {
+    if (headerCount) headerCount.textContent = `(${fmtCount(filteredCount)} / ${fmtCount(totalCount)})`;
+    if (filteredCount === 0) appendPanelEmpty(container, 'Aucun dossier trouvé pour ce filtre.');
+  } else if (headerCount) {
+    headerCount.textContent = totalCount > 0 ? `(${fmtCount(totalCount)})` : '';
+  }
+}
+
 // ── Main render ───────────────────────────────────────────────────────────
 
 export function renderSource(): void {
@@ -573,64 +625,29 @@ export function renderSource(): void {
     if (state.eparsFocusPath) focusItemByPath(eparsContainer, state.eparsFocusPath);
   }
 
-  const allTrees: TreeAndDir[] = [];
-  let totalCount = 0;
-
-  for (const [dirPath, files] of Object.entries(state.sourceFiles)) {
-    const tree: TreeNode = {};
-    for (const [filename, data] of Object.entries(files)) {
-      const parts = data.path.split('/');
-      totalCount++;
-      if (parts.length <= 1) continue;
-      let current: TreeNode = tree;
-      for (let i = 0; i < parts.length - 1; i++) {
-        const key = parts[i];
-        if (!current[key]) current[key] = {};
-        current = current[key] as TreeNode;
-      }
-      current.__files__ = current.__files__ || [];
-      const entries = current.__files__;
-      entries.push({
-        filename,
-        relPath: data.path,
-        year: data.year,
-        duration: data.duration,
-        codec: data.codec,
-        baseDir: dirPath,
-      } as FileEntry);
-    }
-    allTrees.push({ tree, dirPath });
-  }
+  const { allTrees, totalCount } = buildSourceTrees(state.sourceFiles);
 
   // État vide (EPIC-014) : rien à afficher → guidance visuelle au lieu d'un panneau muet.
   if (allTrees.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'panel-empty';
-    empty.textContent =
+    appendPanelEmpty(
+      container,
       Object.keys(state.sourceFiles).length === 0
         ? 'Aucun dossier configuré — ouvre ⚙️ Config, renseigne le dossier Source puis 🔄 Scan.'
-        : 'Aucun fichier scanné — lance 🔄 Scan.';
-    container.appendChild(empty);
+        : 'Aucun fichier scanné — lance 🔄 Scan.',
+    );
   }
 
-  const headerCount = document.getElementById('source-header-count');
   const sourceFilterActive = getFilterTerm('sync-source').length > 0;
   if (sourceFilterActive) {
     const filteredCount = renderFilteredSource(container, allTrees, 'sync-source');
-    if (headerCount) headerCount.textContent = `(${fmtCount(filteredCount)} / ${fmtCount(totalCount)})`;
     updateFilterCount('sync-source', filteredCount, totalCount);
-    if (filteredCount === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'panel-empty';
-      empty.textContent = 'Aucun dossier trouvé pour ce filtre.';
-      container.appendChild(empty);
-    }
+    finishSourcePanel(container, 'source-header-count', filteredCount, totalCount);
   } else {
     for (const { tree, dirPath } of allTrees) {
       renderDirTree(tree, container, dirPath);
     }
     renderExtraDirs(container, allTrees);
-    if (headerCount) headerCount.textContent = totalCount > 0 ? `(${fmtCount(totalCount)})` : '';
+    finishSourcePanel(container, 'source-header-count', null, totalCount);
   }
 
   restore(container);

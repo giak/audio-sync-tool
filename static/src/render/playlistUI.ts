@@ -3,7 +3,6 @@
 import { togglePlay } from '../audio.js';
 import { beginRender } from '../core/dom.js';
 import { setStatus } from '../core/feedback.js';
-import { fmtCount } from '../core/format.js';
 import { revalidateFocus } from '../focus.js';
 import { getMatchStatus, matchBadgeParts } from '../matchStatus.js';
 import {
@@ -24,28 +23,13 @@ import { closeAllModals, confirmDialog, promptDialog, showContextMenu } from '..
 import { openCueEditor } from './cueEditor.js';
 import { ensureFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
 import { _ratingClickHandler } from './ratingEdit.js';
-import { renderDirTree, renderFilteredSource, togglePlaylistSourceDir } from './sourceTree.js';
-
-// ── Internal types ──────────────────────────────────────────────────────
-
-interface FileEntry {
-  filename: string;
-  relPath: string;
-  year: string | null;
-  duration: number | null;
-  codec: string | null;
-  baseDir: string;
-}
-
-interface TreeNode {
-  [key: string]: TreeNode | FileEntry[] | undefined;
-  __files__?: FileEntry[];
-}
-
-interface TreeAndDir {
-  tree: TreeNode;
-  dirPath: string;
-}
+import {
+  buildSourceTrees,
+  finishSourcePanel,
+  renderDirTree,
+  renderFilteredSource,
+  togglePlaylistSourceDir,
+} from './sourceTree.js';
 
 // ── Tabs ─────────────────────────────────────────────────────────────────
 
@@ -374,7 +358,7 @@ export function renderPlaylistPanel(): void {
 export function renderPlaylistSource(): void {
   const container = document.getElementById('playlist-source-container');
   if (!container) return;
-  container.innerHTML = '';
+  const restore = beginRender(container); // EPIC-036 P2 : save/restore scroll ajouté (iso-affichage)
 
   // EPIC-030 P1 : chip de filtre persistant (slot dédié hors du DOM effacé,
   // mémorisé scope 'playlist-source') — la saisie survit aux re-renders.
@@ -386,53 +370,21 @@ export function renderPlaylistSource(): void {
     tree: true,
   });
 
-  const allTrees: TreeAndDir[] = [];
-  let totalCount = 0;
+  const { allTrees, totalCount } = buildSourceTrees(state.sourceFiles);
 
-  for (const [dirPath, files] of Object.entries(state.sourceFiles)) {
-    const tree: TreeNode = {};
-    for (const [filename, data] of Object.entries(files)) {
-      const parts = data.path.split('/');
-      totalCount++;
-      if (parts.length <= 1) continue;
-      let current: TreeNode = tree;
-      for (let i = 0; i < parts.length - 1; i++) {
-        const key = parts[i];
-        if (!current[key]) current[key] = {};
-        current = current[key] as TreeNode;
-      }
-      current.__files__ = current.__files__ || [];
-      const entries = current.__files__;
-      entries.push({
-        filename,
-        relPath: data.path,
-        year: data.year,
-        duration: data.duration,
-        codec: data.codec,
-        baseDir: dirPath,
-      } as FileEntry);
-    }
-    allTrees.push({ tree, dirPath });
-  }
-
-  const headerCount = document.getElementById('playlist-source-count');
   const filterActive = getFilterTerm('playlist-source').length > 0;
   if (filterActive) {
     const filteredCount = renderFilteredSource(container, allTrees, 'playlist-source');
-    if (headerCount) headerCount.textContent = `(${fmtCount(filteredCount)} / ${fmtCount(totalCount)})`;
     updateFilterCount('playlist-source', filteredCount, totalCount);
-    if (filteredCount === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'panel-empty';
-      empty.textContent = 'Aucun dossier trouvé pour ce filtre.';
-      container.appendChild(empty);
-    }
+    finishSourcePanel(container, 'playlist-source-count', filteredCount, totalCount);
   } else {
     for (const { tree, dirPath } of allTrees) {
       renderDirTree(tree, container, dirPath, togglePlaylistSourceDir);
     }
-    if (headerCount) headerCount.textContent = totalCount > 0 ? `(${fmtCount(totalCount)})` : '';
+    finishSourcePanel(container, 'playlist-source-count', null, totalCount);
   }
+
+  restore(container);
 }
 
 // ── Manager ──────────────────────────────────────────────────────────────

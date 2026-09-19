@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { beginRender } from './dom.js';
+import { appendPanelEmpty, beginRender } from './dom.js';
 
 // jsdom n'exécute pas les rAF via les fake timers : on capture les callbacks
 // et on les exécute manuellement — le test pilote le temps, pas l'inverse.
@@ -73,5 +73,32 @@ describe('beginRender', () => {
       runRaf(raf);
     }).not.toThrow();
     expect(el.scrollTop).toBe(90);
+  });
+});
+
+describe('appendPanelEmpty', () => {
+  it('ajoute un div.panel-empty avec le message en textContent', () => {
+    const el = document.createElement('div');
+    appendPanelEmpty(el, 'Aucun dossier trouvé pour ce filtre.');
+    const banner = el.querySelector('div.panel-empty');
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toBe('Aucun dossier trouvé pour ce filtre.');
+  });
+
+  it('ne wipe pas le conteneur (append, pas replace)', () => {
+    const el = document.createElement('div');
+    const existing = document.createElement('p');
+    el.appendChild(existing);
+    appendPanelEmpty(el, 'vide');
+    expect(el.contains(existing)).toBe(true);
+    expect(el.querySelectorAll('.panel-empty')).toHaveLength(1);
+  });
+
+  it('échappe le HTML du message (textContent, pas innerHTML)', () => {
+    const el = document.createElement('div');
+    appendPanelEmpty(el, '<b>pas du gras</b>');
+    const banner = el.querySelector('div.panel-empty')!;
+    expect(banner.textContent).toBe('<b>pas du gras</b>');
+    expect(banner.querySelector('b')).toBeNull();
   });
 });

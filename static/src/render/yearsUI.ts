@@ -11,6 +11,7 @@
 
 import { api } from '../api.js';
 import { playingPath, togglePlay } from '../audio.js';
+import { beginRender } from '../core/dom.js';
 import { setStatus } from '../core/feedback.js';
 import { fmtCount } from '../core/format.js';
 import { subjectFromName } from '../filterEngine.js';
@@ -172,7 +173,7 @@ export function renderYears(): void {
       renderYears();
     },
   });
-  list.innerHTML = '';
+  const restore = beginRender(list); // EPIC-036 P2 : wipe centralisé (scroll = scrollIntoView, iso-comportement)
 
   const count = document.getElementById('years-count');
   if (count) {
@@ -325,6 +326,7 @@ export function renderYears(): void {
   // Compteur du chip : cartes listées / cartes totales (certaines dédupliquées
   // + à revue) — les rejetés (masqués par design) restent comptés au total.
   updateFilterCount(YEARS_SCOPE, nVisible, seen.size + data.a_revue.length);
+  restore(list);
 }
 
 function paintFocus(): void {
