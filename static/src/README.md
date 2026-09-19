@@ -15,6 +15,9 @@ static/src/
 ├── commands/      registry clavier + matrice de caractérisation (EPIC-031)
 ├── domains        styles.ts, styleSuggest.ts, filterEngine.ts, dupDetect.ts,
 │                  dupGroups.ts, utils.ts — modules métier purs, sans DOM
+├── styles/        CSS en couches (EPIC-036 P3) : tokens · base · components ·
+│                  pages/ (index.css = agrégateur, l'ordre des @import EST la
+│                  cascade) — importé par script.ts, bundlé esbuild → dist/script.css
 └── script.ts      point d'entrée (imports des commands EN ORDRE : index matrice)
 ```
 

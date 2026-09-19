@@ -148,7 +148,8 @@ static/src/
 │   ├── (cellules) fileRow, styleCell, ratingEdit …                ← inchangés
 │   └── cueEditor.ts             ← HORS PÉRIMÈTRE (isolé, YAGNI)
 ├── commands/                    ← inchangé (registry + matrice = actif)
-└── style.css                    ← découpé en 4 fichiers importés par esbuild (§5)
+└── styles/                      ← tokens · base · components · pages/ (importés par
+                                     script.ts, bundlés esbuild — livré P3, voir §8)
 ```
 
 **Règle d'or d'extraction** : un module `core/` n'est créé que s'il remplace **au moins 2 implémentations existantes** écrites, avec leurs tests qui passent avant ET après. Interdiction d'« anticiper » une abstraction (YAGNI).
@@ -363,9 +364,34 @@ réellement dupliqué était arbre+compteur+vide, pas les lignes (spécifiques p
 **Critère de sortie atteint** : double passe disparue, `wc -l` net **−34**, matrice
 clavier verte (1 120 vitest / 317 pytest).
 
-### Phase 3 — CSS en couches (1-2 jours)
-Découpage mécanique §5 + extraction des 6 familles structurelles (.modal/.dialog, .chip, .toast, .kbd, table rows, .empty-state) + nettoyage fallbacks. **Capture avant/après obligatoire** pour chaque famille (l'app est visuelle, pas de test automatisé de pixel).
-**Critère de sortie** : 4 fichiers importés par esbuild, 0 duplication de tokens, captures vérifiées.
+### Phase 3 — CSS en couches — ✅ LIVRÉE 2026-09-19 (`b60d8dc`, EPIC-036)
+Découpage mécanique par sections, preuves outillées (détails as-built dans l'EPIC-036) :
+- `static/styles/` : tokens (37 lignes) · base (31) · components (295 : toast+badge,
+  filter-chip, modal, config form, legend, journal, dialog, panel-empty) · pages/ ×7
+  (sync, dups, years, sync-main, playlist, overlays, cue-editor) + `index.css` agrégateur.
+  **Écart assumé vs « 4 fichiers »** : l'ordre original interdit le découpage
+  pages-simple — dups/years sont intercalés **entre les deux moitiés** de sync,
+  Context Menu/D&D viennent **après** playlist → l'ordre des `@import` reproduit
+  la cascade originale, preuve incluse (`check_css_equiv.py` : multiset + ordre
+  relatif des 410 règles = 410).
+- **6 familles structurelles** : regroupées dans `components.css` ; PAS de classe
+  de base commune modal/palette/toast — couleurs/ombres intentionnellement
+  différentes (popover ambre, panel neutre, toast fonction), une base exigerait
+  du re-theming par instance (verdict YAGNI daté 2026-09-19).
+- **3 transformations documentées** (double `--led-amber`, doublon `.years-section`,
+  fallback `var(--text-secondary, #999)`) ; `var(--border)` sans définition (4 sites)
+  **consigné, non changé** — le définir modifierait le rendu (à trancher lors d'une
+  retouche visuelle de ces éléments).
+- **Preuve rendu** (`capture_ui.py`, réutilisable) : Chrome headless + CDP, monde de
+  capture isolé, animations gelées, chemin de monde fixe — 2 causes de
+  non-déterminisme éliminées (`twinPulse` ; suffixe mkdtemp affiché dans la modal
+  config) → 7 captures avant/après **0 pixel de différence**, SHA256 identiques
+  (`docs/refactoring/phase3/{before,after}/`).
+- `audit-css.mjs` porté sur les couches **et corrigé** : PurgeCSS renvoie 1 résultat
+  par fichier (l'ancien `const [res]` ne voyait que tokens.css) ; verdict : 0 classe morte.
+**Critère de sortie — atteint** : CSS importé par esbuild (`dist/script.css`, 38 Ko),
+0 duplication de tokens restante, captures vérifiées ; gate vert (1 120 vitest ×3
+graines shuffle, 317 pytest).
 
 ### Phase 4 — Mesure performance et décisions data-driven (1 jour)
 1. Profiler Chrome headless sur données réelles (rendu 5 092 lignes, frappe de filtre, re-render après copie).

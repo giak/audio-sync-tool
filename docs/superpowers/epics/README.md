@@ -55,7 +55,7 @@
 | [EPIC-033](EPIC-033-enrichissement-annees-id3.md) | Enrichissement des années ID3 manquantes (57 % du corpus) : 7 sources — MusicBrainz (1ʳᵉ sortie, 1 req/s) → Deezer → Discogs (token) → iTunes → Discogs reformulé ×2 (junk-artiste/marqueurs/suffixes) → YouTube (Topic + tier vérifié) — consolidation **1 443 certaines / 782 à revue / 1 473 introuvables**, apply mutagen par vagues de confiance (**2 161 écritures au journal**, backup additif, `--undo`) + vue « Années manquantes » (preview → confirmation, jamais écraser) + **P2** : export des choix (**e**/💾 → `POST /years/review`) consommé par `apply_years.py --review` (override humain) | 🏁 **Clôturée (2026-09-18)** — revue soldée (692 choix, 59 rejets), apply final idempotent, **76 % du corpus avec année** (vs 43 %) ; restes = données inexistantes en ligne (voir bilan de clôture dans l'epic) | Haute | mémoires Mnemolite `9539d4ab`, `32392db0`, `357e89d8` (bilan final) |
 | [EPIC-034](EPIC-034-ux-rangement-sync-player-pastille.md) | UX rangement Sync : player audio des cartes (Années/Doublons, ▶/⏹ player global), pastille « déjà rangé » sur les épars jumeaux sous le filtre source, auto-expansion mémoire du dossier destination après F5 | 🟢 Livrée (2026-09-19, `c6546a0`, `ca21e21`, `6e02f87`) | Haute | EPIC-030/028/033 (socles) |
 | [EPIC-035](EPIC-035-rangement-par-style.md) | Rangement par style : palette clavier `g` (1 style parmi 25, chord tranche), destination `style_tranche` **calculée** depuis l'année, suggestions locales (segments du chemin épars, voisinage artiste, genre ID3 aliasé, borne d'acquisition), aperçu groupé par dossier → F5 batch, écriture `TCON` via export → `apply_styles.py` (journal `old_genre` + `--undo`) | 🟢 **P1+P2+P3 livrés (2026-09-19, `c6fcfdf` → `e6dfa82`)** — P1 socle clavier (live headless) · P2 suggestions locales (moteur 4 signaux, chip « suggéré », `Enter` = accepter) · P3 TCON (`/styles/review` + `apply_styles.py` : journal `old_genre`, `--undo`, tag épars + copie, chip « écrit » ✓) ; P4 backlog | Haute | spec `2026-09-19-rangement-par-style-design.md` · plan `2026-09-19-rangement-par-style.md` |
-| [EPIC-036](EPIC-036-refactoring-architecture.md) | Refactoring architecture : dette Phase 0 (flaky shuffle, gate 3 graines fixes, audit listeners, CSS mort via PurgeCSS), noyau `core/` (format/feedback/subscribe/dom), squelette de liste commun aux 5 pages, CSS en 4 couches, perf mesurée — strangler fig, **pas de framework** (verdict mesuré) | 🟡 **Phase 0 livrée (2026-09-19, `e623dd0`)** — 2 flaky corrigés (`state.filters` non réinitialisé), gate shuffle reproductible, 0 fuite listener, 21 lignes CSS mortes supprimées ; Phases 1-4 backlog | Moyenne | étude `refactoring/2026-09-19-refactoring-architecture.md` |
+| [EPIC-036](EPIC-036-refactoring-architecture.md) | Refactoring architecture : dette Phase 0 (flaky shuffle, gate 3 graines fixes, audit listeners, CSS mort via PurgeCSS), noyau `core/` (format/feedback/subscribe/dom), squelette de liste commun aux 5 pages, CSS en couches bundlées esbuild, perf mesurée — strangler fig, **pas de framework** (verdict mesuré) | 🟡 **Phases 0-3 livrées (2026-09-19, `e623dd0`+`a5e2e08`+`30f9400`+`b60d8dc`)** — CSS en couches avec preuve de cascade + captures 0 px ; Phase 4 (perf mesurée) backlog | Moyenne | étude `refactoring/2026-09-19-refactoring-architecture.md` |
 
 ## État actuel du projet (2026-09-19)
 
@@ -105,6 +105,14 @@
   journal `old_genre` = backup, `--undo` idempotent, tag épars + copie rangée), chip
   « écrit ✓ » quand le genre du scan == style. Gate P3 : 1 095 vitest / 317 pytest.
   Reste P4 (confort) + live P3 sur données réelles après un premier usage.
+- **EPIC-036 Phase 3 livrée** (2026-09-19, `b60d8dc`) : `style.css` (1 500 lignes) →
+  `static/styles/` en couches (tokens · base · components · pages ×7) importées par
+  `script.ts`, bundlées esbuild → `dist/script.css` ; équivalence de cascade prouvée
+  (`check_css_equiv.py` : multiset + ordre des 410 règles, 3 collapses documentés) ;
+  preuve rendu 7 captures avant/après **0 pixel** (harnais `capture_ui.py` :
+  animations gelées + chemin de monde fixe, 2 causes de non-déterminisme éliminées) ;
+  `audit-css.mjs` corrigé (PurgeCSS multi-fichiers) — 0 classe morte. Gate : 1 120
+  vitest ×3 graines / 317 pytest.
 - **EPIC-036 Phases 0+1+2 livrées** (2026-09-19, `e623dd0` + `a5e2e08` + `30f9400`)
   : Phase 0 — hygiène (2 flaky corrigés, shuffle 3 graines fixes en CI, audit
   listeners : zéro fuite, PurgeCSS : ancienne table doublons supprimée). Phase 1 —
@@ -117,7 +125,8 @@
   `appendPanelEmpty` ×5, domPatches conservé (verdict documenté), **wc -l net −34**.
   Gate P2 : 1 120 vitest / 317 pytest. Doc dev : `static/src/README.md` +
   `AGENT.md` %ARCHITECTURE.core.
-- Prochains chantiers : **EPIC-036 Phase 3** (CSS en 4 couches, captures avant/après),
+- Prochains chantiers : **EPIC-036 Phase 4** (perf mesurée : profilage rendu 5 092 lignes,
+  décision `content-visibility` chiffrée),
   **EPIC-035 P4** (confort : reprise `style_review.json`, onglet
   Config Styles, dossier pré-surligné), **EPIC-033-bis** (re-scan du corpus puis collectes incrémentales sur les ~3 551 nouveaux fichiers sans année), **EPIC-031 P2**
   (ergonomie sync : M déplacer, écoute en chaîne), reprise **EPIC-030 P1**

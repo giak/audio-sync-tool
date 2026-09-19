@@ -1,6 +1,6 @@
 # EPIC-036 — Refactoring architecture : dette Phase 0, noyau `core/`, squelette de liste, CSS en couches
 
-> **Statut** : 🟡 **Phases 0+1+2 livrées (2026-09-19, `e623dd0` + `a5e2e08` + `30f9400`)** — Phases 3-4 en backlog
+> **Statut** : 🟡 **Phases 0+1+2+3 livrées (2026-09-19, `e623dd0` + `a5e2e08` + `30f9400` + `b60d8dc`)** — Phase 4 en backlog
 > **Créée** : 2026-09-19 · **Dernière mise à jour** : 2026-09-19
 > **Priorité** : Moyenne (dette mesurée, pas urgente ; chaque phase découle de la mesure, pas de l'intuition)
 > **Docs liées** : **étude complète** `docs/refactoring/2026-09-19-refactoring-architecture.md` (mesures, verdicts, plan 5 phases, refus argumentés, annexes honnêteté)
@@ -116,11 +116,58 @@ atteint ici) ; matrice clavier + suite complète vertes (1 120 vitest, shuffle �
 317 pytest). Les 5 pages consomment le squelette là où le code était réellement
 dupliqué (arbres ×2, vides ×5, wipes ×6) sans dénaturer leurs différences.
 
-### ⬜ Phase 3 — CSS en 4 couches (~1-2 jours)
+### ✅ Phase 3 — CSS en couches, bundlé par esbuild (2026-09-19, commit `b60d8dc`)
 
-tokens / components / pages / legacy. Réintégrer la décision sur les blocs démo
-(consignés en Phase 0) et les 5 vrais positifs PurgeCSS. `npm run audit:css`
-comme garde.
+1. ✅ **Découpage mécanique prouvé** : `static/style.css` (1 500 lignes, 411 règles)
+   → `static/styles/` : `tokens.css` (37) · `base.css` (31) · `components.css`
+   (295 : toast+badge, filter-chip, modal, config form, legend, journal, dialog,
+   panel-empty) · `pages/` sync (280), dups (114), years (92), sync-main (153),
+   playlist (167), overlays (31), cue-editor (295) + `index.css` agrégateur.
+   **Écart de forme assumé vs « 4 couches » de l'étude** : 7 fichiers pages,
+   car l'ordre original rend le découpage 5-pages impossible sans inversions
+   de cascade (dups/years intercalés **entre les deux moitiés** de sync ;
+   Context Menu/D&D **après** playlist) → sync coupé en `sync`+`sync-main`,
+   overlays séparé ; l'ordre des `@import` = ordre original exact.
+2. ✅ **Équivalence de cascade prouvée** (`scripts/check_css_equiv.py`) :
+   multiset + ordre relatif des règles (410=410), aux 3 transformations
+   documentées près : `--led-amber` dupliqué résolu (cascade gardait déjà
+   `#ffcc00`) · `.years-section` dupliquée à l'identique (l.478/l.496) →
+   collapse sans effet · fallback `var(--text-secondary, #999)` retiré
+   (la variable existe). **Verdict boîtes** : PAS de classe de base commune
+   modal/palette/toast — couleurs/ombres intentionnellement différentes,
+   une base exigerait du re-theming par instance (YAGNI) ; l'extraction
+   réelle est le regroupement des familles dans `components.css`.
+3. ✅ **Câblage build** : `script.ts` importe `pages/index.css` → esbuild émet
+   `static/dist/script.css` (minifié 38 Ko) ; cache-buster `app.py` couvre
+   `script.js`+`script.css` ; `templates/index.html` → `/static/dist/script.css` ;
+   test cache-buster adapté (mtime du bundle) ; `globals.d.ts`
+   (`declare module '*.css'`) pour TS2882 ; `style.css` supprimé.
+4. ✅ **Décisions reportées de P0 tranchées** : blocs démo (`led-demo`,
+   `twin-demo`, `badge-demo`, `modal-xl`) **vivants** (légende `index.html`)
+   → conservés ; les 5 positifs PurgeCSS (`classList.toggle` dynamiques)
+   confirmés vivants → conservés. `audit-css.mjs` porté sur les couches **et
+   corrigé** : PurgeCSS renvoie 1 résultat par fichier — l'ancien
+   `const [res]` ne voyait que `tokens.css` (184/186 fausses candidates) ;
+   verdict post-correctif : « Aucune classe morte détectée ».
+5. ✅ **Preuve rendu** (`scripts/capture_ui.py`, réutilisable) : Chrome headless
+   + CDP, monde de capture isolé (chemin FIXE `/tmp/epic036_capture`, scan avant
+   navigation, ports éphémères, garde anti-zombie), animations/transitions/caret
+   gelées, sonde DOM (`CAPTURE_PROBE=1`). **2 causes de non-déterminisme trouvées
+   par diff** et éliminées : `twinPulse` (LED, 2,4 s infini) et le suffixe
+   `mkdtemp` affiché dans les inputs `cfg-source`/`cfg-epars`. Résultat :
+   **7 captures AVANT/APRÈS → 0 pixel de différence, SHA256 identiques
+   byte-à-byte** (`docs/refactoring/phase3/{before,after}/` + `*.sha256`).
+6. ℹ️ **Consigné, non changé** : `var(--border)` utilisé 4× **sans définition**
+   (computed = `currentColor` par invalidation) — le définir changerait le
+   rendu ; à trancher lors d'une retouche visuelle de ces éléments.
+   `var(--bg-elevated, #1e2430)` : variable inexistante mais fallback porteur
+   (= comportement actuel) → conservé.
+
+**Critère de sortie atteint** : CSS importé par esbuild (1 entry agrégé,
+11 imports dans l'ordre de cascade original) · 0 duplication de tokens
+(les 2 doublons résolus) · captures avant/après vérifiées (0 px).
+**Gate P3** : typecheck 0 · lint 0 · vitest 1 120 (×3 graines shuffle) ·
+build + validation OK · pytest 317.
 
 ### ⬜ Phase 4 — Performance mesurée (~1 jour)
 

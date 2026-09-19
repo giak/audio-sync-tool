@@ -104,6 +104,11 @@ $  → scope/périmètre (était ⟐ dans source)
     $core/dom.ts: beginRender(container) → restore(el) — wipe + save/restore scrollTop (rAF), restore no-op si nœud détaché ; variante directe acceptée (renderPlaylistTracks)
     !règle d'extraction: un module core/ n'est créé que s'il remplace ≥ 2 implémentations existantes écrites, tests verts avant ET après (YAGNI — pas d'abstraction anticipée) ; tout nouveau module passe par une EPIC
 
+  %ARCHITECTURE.css (EPIC-036 P3 — CSS en couches, static/styles/)
+    $couches: tokens.css (variables :root) · base.css (reset/focus/scrollbar) · components.css (familles transversales : modal, dialog, toast, filter-chip, panel-empty…) · pages/ (sync, sync-main, dups, years, playlist, overlays, cue-editor)
+    $ordre: pages/index.css agrège les @import dans l'ordre de cascade de l'ancien style.css — NE PAS réordonner ; script.ts importe index.css, esbuild bundle → dist/script.css (cache-buster app.py couvre JS+CSS)
+    !règles: nouvelle règle CSS = fichier de sa page ; transversale = components.css ; nouvelle variable = tokens.css uniquement (jamais 2 déclarations du même token) ; audit mort : npm run audit:css (rapport seul, vérif manuelle obligatoire)
+
   %ARCHITECTURE.pages
     $router: state.page ('sync'|'playlist'|'dups'|'years') ← router.js goPage()
     #layouts et boutons nav mutuellement exclusifs (source de vérité unique)
