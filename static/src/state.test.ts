@@ -71,4 +71,15 @@ describe('state EventEmitter', () => {
   it('lastCueTrack is initialized to null', () => {
     expect(state.lastCueTrack).toBeNull();
   });
+
+  it('styleChoices (EPIC-035) : Map vide au départ, émet styleChoices:changed à l’affectation', async () => {
+    expect(state.styleChoices).toBeInstanceOf(Map);
+    expect(state.styleChoices.size).toBe(0);
+    const fn = vi.fn();
+    on('styleChoices:changed', fn);
+    state.styleChoices = new Map([['/e/a.mp3', { style: 'techno_acid', tranche: null }]]);
+    await new Promise(r => requestAnimationFrame(r));
+    expect(fn).toHaveBeenCalledTimes(1);
+    state.styleChoices = new Map();
+  });
 });

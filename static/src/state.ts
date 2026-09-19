@@ -5,6 +5,7 @@
 
 import type { DupMatch } from './dupDetect.js';
 import type { PlaylistTrackLite } from './render/cueEditor.js';
+import type { StyleChoice } from './styles.js';
 
 // ── EventEmitter (Phase 3) ─────────────────────────────────────────────────
 type Listener = () => void;
@@ -133,6 +134,10 @@ interface AppState {
   page: 'sync' | 'playlist' | 'dups' | 'years';
   focusListId: 'epars' | 'source' | 'playlist-source' | 'playlist-tracks';
   lastCueTrack: PlaylistTrackLite | null;
+  /** EPIC-035 : style choisi par fichier épars (clé = fullpath). Choix de
+   *  SESSION (perdu au reload) ; consommé par l'aperçu `e` → copies par dossier
+   *  cible. Toujours réaffecter une nouvelle Map (événement). */
+  styleChoices: Map<string, StyleChoice>;
 }
 
 export interface EparsSelection {
@@ -180,6 +185,7 @@ const _state: AppState = {
   page: 'sync',
   focusListId: 'epars',
   lastCueTrack: null,
+  styleChoices: new Map(),
 };
 
 export const state = new Proxy<AppState>(_state, {
