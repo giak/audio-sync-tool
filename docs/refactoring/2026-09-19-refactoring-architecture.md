@@ -10,15 +10,14 @@
 
 **Verdict principal : ne PAS migrer vers un framework.** Le verdict est donné par les mesures, pas par goût :
 
-| Mesure | Valeur | Lecture |
-|---|---|---|
 | TypeScript frontend | **10 425 LOC** (hors tests) | petite app mono-développeur |
+| Duplication concrète | ~450–550 LOC (≈ 4–5 %) — 27 `toLocaleString`, 27 `statusText.textContent`, 6 wipes de listes, 6 gardes `hidden`, 2 tris identiques | réel mais **faible** ; ne justifie ni framework ni réécriture |
 | Tests existants | **1 095 vitest / 46 fichiers + 317 pytest** ; les tests pèsent **17 417 LOC TS** (ratio tests/code ≈ 1,7) | le plus gros actif du projet — une migration le détruirait |
-| Doublons détectés | ~450–550 LOC (3–4 % du frontend) | réel mais **faible** ; ne justifie ni framework ni réécriture |
-| Dette identifiée | 1 test flaky reproduit, 45/1 listeners, 2 boucles de filtre en double passe, ~12 classes CSS réellement mortes | corrigeable par refactorings ciblés |
+| Doublons détectés | ~450–550 LOC (≈ 4–5 % du frontend) — décompte §1.4 vérifié | réel mais **faible** ; ne justifie ni framework ni réécriture |
+| Dette identifiée | 1 test flaky reproduit, 45/1 listeners, 2 boucles de filtre en double passe, classes CSS mortes : nombre inconnu (échantillon vérifié = 8/8 faux positifs) | corrigeable par refactorings ciblés |
 | Bundle | build esbuild OK, aucune plainte de perf à l'usage | pas de problème de perf utilisateur constaté |
 
-Les vrais gains sont dans l'ordre : **1)** extraire 5 modules utilitaires partagés (~30 % des doublons), **2)** hygiène test (isolation → flaky zéro), **3)** hygiène DOM (listeners, classes mortes), **4)** CSS factorisé en couches. Tout cela en vanilla TS, incrémental, sans régression possible (tests verts à chaque étape).
+Les vrais gains sont dans l'ordre : **1)** extraire 4-5 modules utilitaires partagés (les motifs mesurés §1.4), **2)** hygiène test (isolation → flaky zéro), **3)** hygiène DOM (audit listeners), **4)** CSS factorisé en couches. Tout cela en vanilla TS, incrémental, sans régression possible (tests verts à chaque étape).
 
 **Ce que ce document refuse explicitement** : React/Vue/Svelte (§6), réécriture des pages, virtual scrolling (§7), un design system complet.
 
@@ -63,7 +62,7 @@ Tests                            1 095 vitest (46 fichiers) + 317 pytest
 | D2 | **45 `addEventListener` vs 1 `removeEventListener`** | grep global | risque de fuites cumulées (re-renders) ; audit nécessaire, la plupart sont sur des nœuds à vie courte mais `document`/`window` (7 sites) sont suspects |
 | D3 | Boucle de filtre épars **en double passe** : `matchesTokens` appelé une fois au rendu et une fois au recomptage | `eparsUI.ts` 2 blocs identiques | 2× le coût de filtrage sur 5 092 fichiers |
 | D4 | Suggestions recalculées **à chaque paint** de cellule, sans mémoïsation | `styleCell.ts` P2 | lot de 1 347 → ~7 M lectures de state au prochain re-render complet |
-| D5 | ~12 classes CSS réellement mortes après déduction des faux positifs (templates dynamiques) | audit regex + vérif manuelle | bruit de maintenance, pas un bug |
+| D5 | Classes CSS mortes : **nombre inconnu** — le grep en trouve 66 candidates, mais un échantillon vérifié de 8 toutes FAUX POSITIFS (classes vivantes dans des template literals) ; seule certitude : l'audit requiert un outil (knip/PurgeCSS), pas du regex | échantillon vérifié 2026-09-19 | inconnu jusqu'à l'outil — possiblement zéro |
 | D6 | `app.py` : 1 608 lignes, routes hétérogènes, helpers métier (`_artist_title`, `_build_source_index`, `_load_years_caches`) mélangés aux routes | lecture | testabilité Python correcte mais découpage naturel évident |
 
 ### 1.4 Duplication concrète (la matière du refactoring)
@@ -73,14 +72,14 @@ Mesurée par grep, chacune compte ses occurrences **hors tests** :
 | Motif dupliqué | Occurrences | Coût réel | Cible d'extraction |
 |---|---|---|---|
 | `toLocaleString('fr')` sur compteurs + pluriel artisanal | **27** + 1 `function plural` réimplémentée (`stylePreview.ts`) | cohérence fr-FR risque de diverger | `format.ts` : `fmtCount(n)`, `plural(n, 'fichier')` |
-| `document.getElementById('status-text').textContent = …` | ~12 sites | sémantique floue (statut vs toast vs dialog) | `feedback.ts` : `setStatus(msg)` |
+| `document.getElementById('status-text').textContent = …` | **27 sites** | sémantique floue (statut vs toast vs dialog) | `feedback.ts` : `setStatus(msg)` |
 | `confirmDialog/showToast/statusText` mélangés dans le même module | `actions.ts` 19 hits, `cueEditor.ts` 10 | chaque page choisit son canal à la main | règle : status = guidage, toast = confirmation d'action, dialog = décision |
-| Wipe-and-rebuild render (`container.innerHTML = ''` + boucle) | **15 sites** | scroll/focus perdus si oubli du pattern save/restore (déjà dupliqué 2×) | `dom.ts` : `renderList(container, items, buildRow, opts)` |
-| Tri « volume décroissant puis alpha » | 3 sites (hotkeys, palette, suggestions) | subtile divergence possible | `sort.ts` : `byCountThenId` |
-| Écoute `:changed` + garde `classList.contains('hidden')` | `render.ts` ×4 | faible mais le garde est subtil (bug latent si copié sans comprendre) | `subscribeVisible(event, fn)` |
+| Wipe-and-rebuild render (`container.innerHTML = ''` + boucle) | 15 sites au grep brut, dont **6 wipes de listes de pages** (6 dans cueEditor = canvas/modale, hors motif) | scroll/focus perdus si oubli du save/restore (dupliqué ×3 modules : epars, playlist, source) | `dom.ts` : `renderList(container, build, opts)` |
+| Tri « volume décroissant puis alpha » | **2 sites exactement** (`styles.ts:165`, `stylePalette.ts:184` — pattern identique au caractère près) | divergence future possible, coût actuel minuscule | `format.ts` : `byCountThenId` (une ligne, pas un module) |
+| Écoute `:changed` + garde `classList.contains('hidden')` | `render.ts` ×6 | faible mais le garde est subtil (bug latent si copié sans comprendre) | `subscribeVisible(event, fn)` |
 | Modale custom + focus trap + fermeture Échap | réimplémentée par `stylePalette` (couche DOM) et modales (`ui.ts`) | 2 implémentations du trap | `focusTrap(el)` partagé |
 
-**Total estimé : 450–550 LOC de doublons** (hors tests). C'est 3–4 % du frontend — suffisant pour justifier 5 petits modules, pas une usine à gaz.
+**Total estimé : ~450–550 LOC de doublons** (hors tests), soit ≈ 4–5 % du frontend. Révision de la première passe : les 6 « wipes » de cueEditor sont des clears de canvas (motif liste = 6 sites, pas 15) mais les sites `statusText` sont 27 (pas 12) — les deux erreurs se compensent partiellement. Suffisant pour justifier 4-5 petits modules, pas une usine à gaz.
 
 ### 1.5 CSS/HTML
 
@@ -186,8 +185,8 @@ export function renderList(
 }
 ```
 
-- Les 5 pages migrent **une par une**, un commit chacune, tests existants verts (les tests jsdom vérifient déjà le contenu rendu — ils ne changent pas, c'est le filet).
-- Gain mesurable : −60 à −80 LOC, et surtout **plus aucune page ne peut oublier** le restore de scroll.
+- Les pages concernées (epars, source, playlist ×2, years, dups) migrent **une par une**, un commit chacune, tests existants verts (les tests jsdom vérifient déjà le contenu rendu — ils ne changent pas, c'est le filet).
+- Gain mesurable : −40 à −60 LOC, et surtout **plus aucune page ne peut oublier** le restore de scroll (le save/restore dupliqué ×3 modules est le vrai gain, pas le compte de sites).
 
 ### 3.2 Exemple concret 2 — `core/format.ts`
 
@@ -324,11 +323,11 @@ Phase 0 (dette) ──► Phase 1 (core utils) ──► Phase 2 (listes) ──
 ### Phase 0 — Dette urgente (EPIC à ouvrir, priorité haute)
 1. Corriger le flaky `sourceTree.test.ts` (isolation `beforeEach`) + activer **`--sequence.shuffle` sur 3 graines dans le gate CI** (garde anti-régression du gate lui-même).
 2. Audit des 7 listeners `document`/`window` (fuites réelles ?) — corriger si trouvé, sinon consigner.
-3. Supprimer les ~12 classes CSS mortes confirmées (via knip/PurgeCSS, pas au regex).
+3. Classes CSS mortes : **inconnu à ce jour** — le grep brut trouve 66 candidates mais l'échantillon vérifié de 8 classes a donné 8/8 faux positifs (template literals : `class="filter-clear"`, `class="scanned"`, etc.). Le premier document annonçait « ~12 mortes » : c'était une estimation infirmée par la vérification. knip/PurgeCSS tranchera en Phase 0 ; s'il en trouve peu, la phase CSS perd ce poste (et c'est très bien).
 **Critère de sortie** : gate shuffle-proof 3 graines × 2 runs ; zéro listener suspect non tracé.
 
 ### Phase 1 — Extraction `core/` (1 jour, ~10 commits)
-Créer `core/format.ts`, `core/feedback.ts`, `core/subscribe.ts`, `core/dom.ts` (dans cet ordre de risque croissant) en **remplaçant les usages existants** (27 + 12 + 4 + 15 sites) page par page.
+Créer `core/format.ts`, `core/feedback.ts`, `core/subscribe.ts`, `core/dom.ts` (dans cet ordre de risque croissant) en **remplaçant les usages existants** (27 + 27 + 6 + 6 sites de listes) page par page.
 **Critère de sortie** : 0 duplication restante des motifs §1.4 ; `wc -l` net négatif ; tests d'assertion inchangés (diff vérifié au commit).
 **Risque** : faible — chaque substitution est mécanique et couverte par les tests existants.
 
@@ -374,13 +373,18 @@ Si un jour le backend redevient actif (P4+ d'EPIC-035, EPIC-033-bis) : séparer 
 
 ```
 wc -l static/src/**/*.ts            → 27 842 total (dont 17 417 de tests = 10 425 hors tests)
-grep -rc "toLocaleString('fr')"     → 27 occurrences hors tests
+grep -rn "toLocaleString('fr')"     → 27 occurrences hors tests
+grep -rn "statusText.textContent =" → 27 sites (≈ tous les modules render)
 grep -rn "function plural"          → 1 réimplémentation (stylePreview.ts)
 grep -rc "document.createElement"   → 15+13+12+12+10+8+7… par module
-grep -rn "\.innerHTML = ''"         → 15 sites de wipe-and-rebuild
+grep -rn "\.innerHTML = ''"         → 15 sites au total ; décompte honnête :
+                                      6 = cueEditor (clears canvas/modale, PAS des listes)
+                                      9 = autres ; dont 6 wipes de listes de pages
+                                      (epars, source, playlist ×2, years, dups)
 grep -c add/removeEventListener     → 45 add, 1 remove
-audit classes CSS                   → 193 définies, ~66 mortes au regex,
-                                      ~12 réellement mortes après faux positifs
+audit classes CSS                   → 193 définies, 66 candidates mortes au regex,
+                                      échantillon de 8 vérifiées à la main : 8/8 VIVANTES
+                                      (template literals) → compte réel inconnu, outil requis
 npx vitest run sourceTree --sequence.shuffle → 1/34 FAILED (reproduit)
 npx vitest run (gate complet)       → 1 095 passed
 ```
@@ -391,7 +395,7 @@ npx vitest run (gate complet)       → 1 095 passed
 |---|---|---|---|
 | 0 dette | 1–2 h | haute | nul (corrections test + suppression CSS mort) |
 | 1 core/ | ~1 jour | haute | faible (substitutions couvertes) |
-| 2 listes | 2–3 jours | moyenne — les 5 pages ont des subtilités (focus, sélection, patches) | moyen — d'où page par page |
+| 2 listes | 2–3 jours | moyenne — les pages ont des subtilités (focus, sélection, patches) et le gain est plus modeste qu'estimé initialement | moyen — d'où page par page |
 | 3 CSS | 1–2 jours | moyenne — les captures avant/après sont le vrai filet | visuel si négligent |
 | 4 perf | 1 jour | haute (mesure, pas de code si pas besoin) | nul |
 
