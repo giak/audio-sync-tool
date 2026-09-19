@@ -1,7 +1,7 @@
 # Design — Rangement par style : palette clavier `g`, destination calculée, suggestions locales, écriture TCON
 
-> **Date** : 2026-09-19 · **Statut** : design validé (brainstorm session 2026-09-19), non implémenté — **fact-checké contre le cache et le code le 2026-09-19** (8 corrections, voir « Errata du fact-check » en fin de document)
-> **EPIC liée** : EPIC-035 (⚪ Backlog) · **Plan P1** : `plans/2026-09-19-rangement-par-style.md`
+> **Date** : 2026-09-19 · **Statut** : design validé (brainstorm session 2026-09-19) — **fact-checké contre le cache et le code le 2026-09-19** (8 corrections, voir « Errata du fact-check » en fin de document) · **P1 et P2 implémentés** (`c6fcfdf` → `09705b3`) — écarts as-built dans l'annexe « As-built P2 »
+> **EPIC liée** : EPIC-035 (🟡 P1+P2 livrés) · **Plan P1** : `plans/2026-09-19-rangement-par-style.md`
 > **Socles** : EPIC-030 (filtre chips), EPIC-031 (registry clavier + matrice), EPIC-033 (pattern
 > preview → apply, journal additif, `--undo`), EPIC-034 (pastille « déjà rangé », reveal post-copie)
 
@@ -167,18 +167,19 @@ interface StyleSuggestion {
 }
 ```
 
-| Signal | Poids | Détail | Évidence affichée |
-|---|---|---|---|
-| Segment de chemin épars aliasé (`_techno`, `_schranz`, `techno clashy`) | 0,50 | **tous** les segments du chemin relatif, le plus profond aliasable gagne | « dossier `_techno/techno clashy` → techno_clash » |
-| **Voisinage artiste** : même artiste déjà rangé à droite | 0,45 | parser artiste/titre de `collect_years.py` (porté en TS ou exposé par l'API), comptage par style dans l'index droit | « Adam Beyer : 4× techno_1995 · 1× techno_hard_2000 » |
-| Choix de session sur le **même dossier épars** | 0,25 | les N derniers choix de l'utilisateur dans ce dossier | « 12 derniers de `2008_08` → techno_acid » |
-| Genre ID3 aliasé | 0,20 | via `aliases` ; `null` = ignoré | « ID3 `Acid Techno` » |
-| BPM Traktor (`nml.py` lit `TEMPO BPM`) — **non engagé** | 0,15 | ≥ 160 → hardcore/drumbass ; 118–126 → house ; 128–145 → techno/trance (ne départage pas ces deux‑là) ; le BPM n'est pas dans le cache du scan | « 168 BPM (NML) » |
+| Signal | Poids spec | Poids as-built | Détail | Évidence affichée |
+|---|---|---|---|---|
+| Segment de chemin épars aliasé (`_techno`, `_schranz`, `techno clashy`) | 0,50 | **0,50** | **tous** les segments du chemin relatif, le plus profond aliasable gagne | (as-built : % seul) « dossier `_techno/techno clashy` → techno_clash » |
+| **Voisinage artiste** : même artiste déjà rangé à droite | 0,45 | **0,40** | index `sourceIndex` construit **au scan** (`_build_source_index`, app.py) + `parseArtistTitle` (portage TS simplifié) ; fréquence normalisée | « Adam Beyer : 4× techno_1995 · 1× techno_hard_2000 » |
+| Choix de session sur le **même dossier épars** | 0,25 | **0,20** | les choix de session du même sous-dossier épars | « 12 derniers de `2008_08` → techno_acid » |
+| Genre ID3 aliasé | 0,20 | **0,15** | via alias embarqués ; non listé = ignoré | « ID3 `Acid Techno` » |
+| BPM Traktor (`nml.py` lit `TEMPO BPM`) — **non engagé** | 0,15 | — | ≥ 160 → hardcore/drumbass ; 118–126 → house ; 128–145 → techno/trance (ne départage pas ces deux‑là) ; le BPM n'est pas dans le cache du scan | « 168 BPM (NML) » |
 
 Règles :
 - Les poids **s'additionnent par style** ; le style le mieux noté gagne ; `confidence`
-  bornée à 1. Deux styles ex æquo → **pas de suggestion de style** (évidences quand
-  même affichées) : jamais de choix silencieux (règle D4 EPIC-033).
+  bornée à 1 (as-built : = score / somme des poids 1,25 ; **seuil 0,25**). Deux styles
+  ex æquo → **pas de suggestion de style** : jamais de choix silencieux (règle D4
+  EPIC-033).
 - Si le sous-dossier ne donne qu'une **racine** (`_techno`) et que le voisinage précise
   un sous-style (`techno_acid`), le sous-style gagne s'il est compatible (même racine).
 - **Tranche** quand l'année manque : `min(borne_acquisition, tranche du voisinage)` si
@@ -395,3 +396,29 @@ Confirmé sans réserve : 86 dossiers à plat, 9 tranches toutes multiples de 5,
 1 679 avec année (33 %), `g` et `e` libres en page sync, `isContextMenuOpen` existant,
 `artist_title()` dans `collect_years.py`, `_trash` élagué du scan, `data/` git-ignoré,
 `get_audio_meta` ne lit aucun genre.
+
+## As-built P2 (2026-09-19, commit `09705b3`)
+
+Ce qui a été livré, et où la spec a été ajustée en route (honnêteté forensique) :
+
+| Point de spec | As-built | Pourquoi |
+|---|---|---|
+| Poids 0,50 / 0,45 / 0,25 / 0,20 (somme 1,40) | **0,50 / 0,40 / 0,20 / 0,15** (somme 1,25), confiance = score/1,25, seuil **0,25** | la hiérarchie chemin > artiste > session > genre est conservée ; le seuil 0,30 de la 1ʳᵉ implé ne laissait passer ni « genre seul » ni « genre + 1 session » — 0,25 les admet (suggestion visible = matière à trancher, l'humain valide toujours) |
+| Voisinage artiste « porté en TS ou exposé par l'API » | `_build_source_index` **au scan** (Python, réutilise le vrai `_artist_title`), servi par `/scan` et `/load` + `parseArtistTitle` TS **simplifié** côté client pour parser le nom du fichier épars | le lookup côté client a besoin de l'artiste du fichier ÉPARS (pas indexé par le scan Python) ; le portage simplifié rate des cas exotiques → pas de signal, jamais une mauvaise suggestion |
+| `StyleSuggestion.evidence[]` (lignes lisibles) | réduit au **seul %** de confiance (tooltip court « Suggéré (72 %) — g pour valider », hint palette « → techno_acid (72 %) — Enter = accepter ») | KISS ; les évidences détaillées n'avaient pas de consommateur réel — à réintroduire si la calibration montre des acceptations à tort |
+| Borne d'acquisition (`YYYY_MM` → tranche ≤ `trancheOf(YYYY)`), `_oldies` → 1990, tranche proposée | **non implémenté** : `suggestStyle` ne suggère que le style, jamais la tranche ; l'étape tranche de la palette reste le seul chemin | séparer les deux décisions (style = subjectif → suggérable ; tranche = dérivée de l'année → clavier) ; la borne d'acquisition transformait une donnée objective en guess |
+| Mémoïsation par fullpath | non faite — calcul au paint + à l'ouverture de palette | coût réel non mesuré ; à mémoïser sur l'identité `styleChoices` (pattern `currentTaxonomy`) si un lot de 1 347 ralentit le re-render |
+| `FileIndex.genre` requis | **optionnel** (`genre?`) | 84 fixtures de tests existantes restent valides — diff de 0 ligne là où un champ requis aurait imposé 84 éditions |
+| Filtre sur le `style` choisi (chip) | non fait — seul `genre` ajouté au `FilterSubject` | YAGNI : filtrer sur la colonne Style n'a pas encore de consommateur |
+| `/styles/review` (P3), `data/styles.json` (P4) | inchangés, non faits | phasage respecté |
+
+Ajouts hors spec : `_build_source_index` renvoie des **listes triées** (déterminisme des
+fréquences) ; l'alias vers un style absent de la taxonomie est **ignoré** (testé) —
+un dossier renommé ne produit jamais de suggestion fantôme ; le genre `STYLE` (Vorbis)
+est lu en fallback de `GENRE`.
+
+Validation as-built : 19 tests `styleSuggest` (segments, chaque signal isolé, cumul,
+ex æquo → null, alias hors taxonomie, seuils) · chip testé dans `styleCell.test.ts`
+· `Enter` = accepter testé dans `stylePalette.test.ts` · pytest genre + source_index.
+**Non fait** : live P2 + calibration des poids (critère de réussite réel du moteur —
+prochaine étape après un premier usage).

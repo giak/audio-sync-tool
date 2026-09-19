@@ -1,6 +1,6 @@
 # EPIC-035 — Rangement par style : palette `g`, destination `style_tranche` calculée, suggestions locales, écriture TCON
 
-> **Statut** : 🟡 **P1 livré (2026-09-19)** — socle clavier (palette `g`, colonne Style, aperçu `e`, filtre par sous-dossier) testé en live headless sur données réelles ; P2 (suggestions) / P3 (TCON) / P4 en backlog
+> **Statut** : 🟡 **P1+P2 livrés (2026-09-19)** — socle clavier (palette `g`, colonne Style, aperçu `e`, filtre par sous-dossier) testé en live headless sur données réelles ; suggestions locales P2 (genre ID3, voisinage artiste, segments de chemin, session) ; P3 (TCON) / P4 en backlog
 > **Créée** : 2026-09-19 · **Dernière mise à jour** : 2026-09-19
 > **Priorité** : Haute (goulot du workflow de rangement : 5 092 épars pour 1 430 rangés)
 > **Docs liées** : spec `specs/2026-09-19-rangement-par-style-design.md` · **plan P1** `plans/2026-09-19-rangement-par-style.md` · EPIC-030 (chips) · EPIC-031 (registry/matrice clavier) · EPIC-033 (pattern preview → apply, journal, undo) · EPIC-034 (pastille « déjà rangé », reveal post-copie)
@@ -65,13 +65,38 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
       `🏷 N assignés · e = aperçu` dans `#epars-status-line` (zéro souscription ajoutée)
 - [x] `data/styles.json` : **reporté en P4** (YAGNI — hotkeys dérivées suffisent au socle)
 
-### P2 — Suggestions locales
-- [ ] `get_audio_meta` + `genre` (TCON / GENRE / ©gen, additif) → cache + `FileIndex`
-- [ ] `static/src/styleSuggest.ts` (pur) : **tous les segments** du chemin épars aliasés
-      (le plus profond gagne), voisinage artiste (`artist_title()` de `collect_years.py`
-      porté en TS), choix de session même dossier, genre ID3 aliasé, borne d'acquisition ;
-      cumul par style, ex æquo → null ; mémoïsation par fullpath
-- [ ] Chip « suggéré » avec confiance + évidences ; `Enter` = accepter dans la palette
+### P2 — Suggestions locales ✅ livré 2026-09-19 (`09705b3`)
+- [x] `get_audio_meta` → 4-tuple `(year, duration, codec, genre)` : lecture additive
+      `TCON` (MP3), `GENRE` (FLAC/Vorbis, essaie aussi `STYLE`), `©gen` (M4A) →
+      `_scan_file` + cache + `/copy` `_resp` + `_move_cache_update` ; **3 pytest**
+      (genre MP3 mocké, genre absent, `_build_source_index`)
+- [x] `_build_source_index(source_files)` (app.py) : index
+      `{artiste_normalisé: [styles triés]}` dérivé des dossiers source au scan via
+      `_artist_title()` (le style = nom du dossier sans tranche) ; servi par `/scan`
+      et `/load` (`source_index`)
+- [x] `state.sourceIndex: Record<string, string[]>` + `genre?: string | null` dans
+      `SourceFileEntry` (optionnel — les fixtures de tests existantes ne bougent pas) ;
+      chargé dans `initApp` et `runScan`
+- [x] `FilterSubject.genre?` (optionnel) → le chip épars matche aussi le tag genre
+- [x] `static/src/styleSuggest.ts` (pur, **19 tests**) : **tous les segments** du chemin
+      épars aliasés (`pathSegments` — du plus profond au plus superficiel, `_` leading
+      retiré ; le plus profond aliasable gagne), voisinage artiste (lookup
+      `sourceIndex[artiste]`, fréquence normalisée), choix de session du même
+      sous-dossier épars, genre ID3 aliasé ; cumul pondéré par style,
+      **ex æquo → null**, seuil de confiance 0,25. `parseArtistTitle` (portage TS
+      **simplifié** de `_artist_title` : pattern `[artiste] titre` + split tiret)
+- [x] Poids as-built : **chemin 0,50 · artiste 0,40 · session 0,20 · genre 0,15**
+      (somme 1,25 ; confiance = score/1,25). Alias embarqués dans le module (21 genres,
+      17 segments : `schranz→techno_hard`, `acid/acid techno→techno_acid`,
+      `goa→trance`, `drum & bass→drumbass`, `disco/italo disco→italo_disco`…) ;
+      un alias vers un style absent de la taxonomie est ignoré (test)
+- [x] Chip « suggéré » (`style-chip.suggested`, pointillé, opacité 0,55) quand aucun
+      choix utilisateur — tooltip « Suggéré (N %) — g pour valider » ; cellule vide si
+      aucun signal (comportement P1 préservé)
+- [x] Palette : hint « → techno (50 %) — Enter = accepter · Lettre = style · Échap · ⌫ »
+      sur cible unique avec suggestion ; **`Enter` accepte la suggestion** (passe par
+      `pick` → étape tranche si nécessaire) ; la hotkey d'un autre style prime toujours
+      ; lot → pas de suggestion (hint standard)
 
 ### P3 — Écriture TCON (pattern EPIC-033 P2 : export → script)
 - [ ] `POST /styles/review` → `data/style_review.json` (pattern `/years/review`, 400 hors
@@ -138,7 +163,12 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
      `preventDefault` toujours F5, la palette ne le faisait pas) → corrigé `cd12601`, test
      dédié. L'agent navigateur automatique avait échoué (erreurs d'outil) : le live a été
      refait en CDP brut, script `/tmp/ast-live/live.mjs` (session).
-- [ ] P2/P3 : à venir
+- [x] **P2 (2026-09-19, gate complet)** : typecheck 0 · **1 091 vitest / 46 fichiers**
+      (1 066 → +25 : 19 styleSuggest, 3 state, 2 palette, 1 styleCell reprise) ·
+      lint 0 · build OK · **pytest 302** (298 → +4 : 2 genre, 2 source_index, 1 fix
+      `/load` vide). Live P2 non fait (suggestions visibles au prochain usage réel —
+      calibration des poids = critère de réussite, pas les tests unitaires)
+- [ ] P3 : à venir
 
 ## Traçabilité (commits)
 
@@ -154,6 +184,7 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
 | `b0df0ea` | feat(ui): aperçu e — plan de rangement groupé par dossier cible, copies enchaînées, récap 🏷 |
 | `890cfab` | fix(styles): destination jointe en `racine/nom` (convention sourceTree/dupDetect/copyFilesTo) + refresh en une passe, pending-year depuis la destination, accords |
 | `cd12601` | fix(palette): preventDefault systématique palette ouverte — F5 non annulé rechargeait la page |
+| `09705b3` | feat(P2): suggestions locales — genre ID3, voisinage artiste, segments de chemin, session history |
 
 ## Décisions
 
@@ -192,11 +223,33 @@ style est écrit dans `TCON` (journalisé, annulable) pour devenir une mémoire 
   recharge le journal une fois par dossier cible ; statut « traité » des lignes copiées
   dépend du journal serveur (non visible avec `/copy` mocké).
 
+## Constats de session (2026-09-19, P2)
+
+- **Écarts spec → as-built** (documentés dans la spec, annexe « As-built P2 ») : poids
+  recalés (0,40/0,20/0,15 vs 0,45/0,25/0,20 — somme 1,25, confiance normalisée dessus) ;
+  **borne d'acquisition** (`YYYY_MM` → tranche ≤ `trancheOf(YYYY)`) et `_oldies` → 1990
+  **non implémentés** : `suggestStyle` ne propose pas de tranche, seulement un style —
+  l'étape tranche de la palette reste le chemin normand ; évidences détaillées (lignes
+  « dossier `_techno` → … », « Adam Beyer 4× techno ») remplacées par le seul pourcentage
+  de confiance (KISS, le tooltip reste court) ; voisinage « même racine précise le
+  sous-style » émerge du cumul des scores plutôt que d'une règle explicite.
+- **Mémoïsation non faite** (prévue « par fullpath » dans la spec) : le calcul tourne au
+  paint de chaque cellule et à l'ouverture de palette. Risque mesuré : le scan de session
+  itère sur `styleChoices` par cellule — un lot de 1 347 choix sur 5 092 lignes = ~7 M
+  lectures au prochain re-render complet. Acceptable si l'usage le confirme ; sinon
+  mémoïser sur l'identité `styleChoices` (même pattern que `currentTaxonomy`).
+- **`parseArtistTitle` simplifié** vs Python : pas de gestion du noise `remix/vol/...`
+  identique, pas des cas `_YEARS_NOISE` complets. Suffisant pour le lookup artiste
+  (les noms exotiques ratent le lookup → pas de signal, jamais une mauvaise suggestion).
+- Fixtures de tests : `genre` **optionnel** dans `SourceFileEntry` → aucune des ~84
+  occurrences de fixtures `path/year/duration/codec` dans les tests n'a dû être touchée
+  (choix délibéré contre un champ requis qui aurait généré un diff de 84 lignes sans valeur).
+
 ## Notes / Risques
 
-- Le voisinage artiste dépend du parser `artist_title()` (`collect_years.py`) : à porter
-  en TS (avec ses tests de normalisation) ; homonymes → évidence double, suggestion
-  seulement si écart ≥ 2.
+- Le voisinage artiste utilise le portage TS **simplifié** de `artist_title()`
+  (`parseArtistTitle` dans `styleSuggest.ts`) ; homonymes → ex æquo → pas de suggestion
+  (testé). Calibration des poids sur échantillon réel = suite logique (P2-4 du plan).
 - Le BPM n'est pas dans le cache du scan : signal **non engagé** (P4 conditionnel).
 - **Régressions à anticiper** : colonne supplémentaire dans un `colgroup` fixe (EPIC-026,
   tests comptant les colonnes) ; extension de `FilterSubject` partagé avec l'arbre source

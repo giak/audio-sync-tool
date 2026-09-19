@@ -266,14 +266,39 @@ export async function openStylePreview(): Promise<void>; // plan vide → barre 
 
 ---
 
-## P2 — Suggestions locales (plan détaillé à écrire **après** P1, sur mesure d'usage)
+## P2 — Suggestions locales — ✅ livré 2026-09-19 (commit `09705b3`)
 
-Ordre proposé et décisions déjà prises (spec) :
-1. `app.py` `get_audio_meta` + `genre` (TCON / GENRE / ©gen, additif) + `FileIndex.genre` — 3 tests mock pytest (pattern `test_get_audio_meta_m4a_cday`).
-2. `static/src/styleSuggest.ts` (pur) : alias par défaut embarqués (`schranz→techno_hard`, `goa→trance`, `acid techno→techno_acid`, `techno (peak time / driving)→techno`, `blues/other/unknown/electronic→null`…), **tous les segments** du chemin (le plus profond aliasable gagne), genre ID3 aliasé, borne d'acquisition (`YYYY_MM[_DD]`, `select_YYYY_MM_DD` → tranche ≤ `trancheOf(YYYY)`), choix de session du même 1ᵉʳ segment ; voisinage artiste **après** portage testé de `artist_title()` (`collect_years.py:35`) ; cumul pondéré, ex æquo → `style: null`.
-3. Chip « suggéré » (pointillé + %) dans `styleCell`, `Enter` = accepter dans la palette, tooltip évidences.
-4. **Calibration** : mesurer sur les 1 848 fichiers stylés au 1ᵉʳ segment le taux d'accord suggestion/segment (doit être ~100 % par construction) puis, sur un échantillon de 50 fichiers sans signal de chemin, le taux d'acceptation réel de l'utilisateur — c'est cette mesure qui fixe les poids, pas la spec.
-5. `data/styles.json` optionnel (hotkeys figées, alias supplémentaires) servi via `/load` — seulement si les hotkeys dérivées gênent à l'usage.
+Ordre proposé et décisions déjà prises (spec) — as-built ci-dessous :
+1. ✅ `app.py` `get_audio_meta` → **4-tuple** `(year, duration, codec, genre)`
+   (TCON / GENRE+STYLE / ©gen, additif ; 3 appelants mis à jour : `_resp` de `/copy`,
+   maj cache `/copy`, `_move_cache_update`) + `FileIndex.genre` (**optionnel** —
+   zéro fixture de test modifiée) + `_build_source_index` (artiste→styles au scan,
+   servi par `/scan` et `/load` via `source_index`) — 5 pytest nouveaux/fixés
+   (2 genre, 2 source_index, 1 `/load` vide).
+2. ✅ `static/src/styleSuggest.ts` (pur, 19 tests) : alias par défaut embarqués
+   (21 genres, 17 segments — `schranz→techno_hard`, `goa→trance`,
+   `acid/acid techno→techno_acid`…) ; **tous les segments** du chemin (`pathSegments`,
+   du plus profond au plus superficiel, `_` leading retiré, le plus profond aliasable
+   gagne) ; genre ID3 aliasé ; choix de session du même sous-dossier épars ; voisinage
+   artiste via `sourceIndex` + `parseArtistTitle` (portage TS **simplifié** de
+   `artist_title()`). Cumul pondéré **chemin 0,50 · artiste 0,40 · session 0,20 ·
+   genre 0,15** (confiance = score/1,25, seuil 0,25), ex æquo → `null`.
+   ⚠ **Non fait** : borne d'acquisition (`YYYY_MM` → tranche ≤ `trancheOf(YYYY)`) et
+   `_oldies` → 1990 — le moteur ne suggère pas de tranche, l'étape tranche de la
+   palette reste le chemin normand ; `data/styles.json` non servi (P4).
+3. ✅ Chip « suggéré » (`style-chip.suggested` pointillé + % en tooltip) dans
+   `styleCell` quand aucun choix ; `Enter` = accepter dans la palette (hint
+   « → style (N %) — Enter = accepter » sur cible unique ; hotkey prime ; lot →
+   hint standard). Tooltip évidences détaillées **réduit au seul %** (KISS).
+4. ⏳ **Calibration** : mesurer sur les 1 848 fichiers stylés au 1ᵉʳ segment le taux
+   d'accord suggestion/segment (doit être ~100 % par construction) puis, sur un
+   échantillon de 50 fichiers sans signal de chemin, le taux d'acceptation réel de
+   l'utilisateur — c'est cette mesure qui fixe les poids, pas la spec.
+5. ⏳ `data/styles.json` optionnel (hotkeys figées, alias supplémentaires) servi via
+   `/load` — seulement si les hotkeys dérivées gênent à l'usage.
+
+Gate P2 : typecheck 0 · 1 091 vitest / 46 fichiers (+25) · lint 0 · build OK ·
+pytest 302 (+4).
 
 ## P3 — Écriture TCON (export → script, pattern EPIC-033 P2)
 
