@@ -393,11 +393,23 @@ Découpage mécanique par sections, preuves outillées (détails as-built dans l
 0 duplication de tokens restante, captures vérifiées ; gate vert (1 120 vitest ×3
 graines shuffle, 317 pytest).
 
-### Phase 4 — Mesure performance et décisions data-driven (1 jour)
-1. Profiler Chrome headless sur données réelles (rendu 5 092 lignes, frappe de filtre, re-render après copie).
-2. Si rendu > 50 ms : `content-visibility: auto` + `contain-intrinsic-size` sur les lignes (1 ligne CSS + mesure). Sinon : consigner « pas de problème » et **fermer le sujet perf** (YAGNI).
-3. Si suggestions P2 toujours lentes après mémoïsation Phase 2 : profiner `styleSuggest` (probablement inutile).
-**Critère de sortie** : rapport de mesure commité (chiffres avant/après), décision content-visibility motivée par un nombre, pas une intuition.
+### Phase 4 — Mesure performance et décisions data-driven — ✅ LIVRÉE 2026-09-19 (`d6c2e08`, EPIC-036)
+Mesures Chrome headless sur monde synthétique à l'échelle (5 092 épars, durées
+réalistes déterministes) — rapport complet `phase4/rapport-perf.md` :
+1. ✅ Rendu initial 1 589 → **1 363 ms** · frappe filtre **52-64 ms** · re-render
+   post-copie 195,7 → **102 ms** — seuil 50 ms dépassé sur le rendu et la copie.
+2. ✅ **`content-visibility` rejetée, pas « ajoutée »** : inapplicable aux `<tr>`
+   (internal table boxes, csswg-drafts#7658 — la remédiation « 1 ligne CSS »
+   envisagée ici était nulle pour nos tables réelles) et le profil est dominé par
+   la construction DOM (44 %), pas le layout/paint (~10 %). Le correctif appliqué,
+   motivé par le profil : mémoïsation `normalizeName` (14-22 % → ≤ 1,3 % du CPU,
+   iso-comportement prouvé). « Pas de problème » n'a pas pu être consigné — le
+   problème existe, la remédiation prescrite était mauvaise, une autre (1 fonction)
+   a suffi à ramener la copie sous la moitié du temps mesuré.
+3. ✅ `styleSuggest` : fermé par mesure (≤ 0,2 % des échantillons, seuil 5 %).
+**Critère de sortie — atteint** : rapport commité, décision motivée par des nombres ;
+réserves de représentativité consignées (corpus synthétique, headless) — rejouage
+possible via `scripts/perf_ui.py` sur les vraies données (EPIC-033-bis).
 
 ### Phase 5 (optionnelle, conditionnelle) — Découpage `app.py`
 Si un jour le backend redevient actif (P4+ d'EPIC-035, EPIC-033-bis) : séparer `routes/` (Flask), `domain/` (métier pur), `infra/` (cache, journal) — le découpage est déjà visible dans le code, il ne manque que les dossiers. **Pas urgent** : 1 608 LOC testées à 317, ce n'est pas une douleur aujourd'hui.

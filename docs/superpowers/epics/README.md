@@ -55,7 +55,7 @@
 | [EPIC-033](EPIC-033-enrichissement-annees-id3.md) | Enrichissement des années ID3 manquantes (57 % du corpus) : 7 sources — MusicBrainz (1ʳᵉ sortie, 1 req/s) → Deezer → Discogs (token) → iTunes → Discogs reformulé ×2 (junk-artiste/marqueurs/suffixes) → YouTube (Topic + tier vérifié) — consolidation **1 443 certaines / 782 à revue / 1 473 introuvables**, apply mutagen par vagues de confiance (**2 161 écritures au journal**, backup additif, `--undo`) + vue « Années manquantes » (preview → confirmation, jamais écraser) + **P2** : export des choix (**e**/💾 → `POST /years/review`) consommé par `apply_years.py --review` (override humain) | 🏁 **Clôturée (2026-09-18)** — revue soldée (692 choix, 59 rejets), apply final idempotent, **76 % du corpus avec année** (vs 43 %) ; restes = données inexistantes en ligne (voir bilan de clôture dans l'epic) | Haute | mémoires Mnemolite `9539d4ab`, `32392db0`, `357e89d8` (bilan final) |
 | [EPIC-034](EPIC-034-ux-rangement-sync-player-pastille.md) | UX rangement Sync : player audio des cartes (Années/Doublons, ▶/⏹ player global), pastille « déjà rangé » sur les épars jumeaux sous le filtre source, auto-expansion mémoire du dossier destination après F5 | 🟢 Livrée (2026-09-19, `c6546a0`, `ca21e21`, `6e02f87`) | Haute | EPIC-030/028/033 (socles) |
 | [EPIC-035](EPIC-035-rangement-par-style.md) | Rangement par style : palette clavier `g` (1 style parmi 25, chord tranche), destination `style_tranche` **calculée** depuis l'année, suggestions locales (segments du chemin épars, voisinage artiste, genre ID3 aliasé, borne d'acquisition), aperçu groupé par dossier → F5 batch, écriture `TCON` via export → `apply_styles.py` (journal `old_genre` + `--undo`) | 🟢 **P1+P2+P3 livrés (2026-09-19, `c6fcfdf` → `e6dfa82`)** — P1 socle clavier (live headless) · P2 suggestions locales (moteur 4 signaux, chip « suggéré », `Enter` = accepter) · P3 TCON (`/styles/review` + `apply_styles.py` : journal `old_genre`, `--undo`, tag épars + copie, chip « écrit » ✓) ; P4 backlog | Haute | spec `2026-09-19-rangement-par-style-design.md` · plan `2026-09-19-rangement-par-style.md` |
-| [EPIC-036](EPIC-036-refactoring-architecture.md) | Refactoring architecture : dette Phase 0 (flaky shuffle, gate 3 graines fixes, audit listeners, CSS mort via PurgeCSS), noyau `core/` (format/feedback/subscribe/dom), squelette de liste commun aux 5 pages, CSS en couches bundlées esbuild, perf mesurée — strangler fig, **pas de framework** (verdict mesuré) | 🟡 **Phases 0-3 livrées (2026-09-19, `e623dd0`+`a5e2e08`+`30f9400`+`b60d8dc`)** — CSS en couches avec preuve de cascade + captures 0 px ; Phase 4 (perf mesurée) backlog | Moyenne | étude `refactoring/2026-09-19-refactoring-architecture.md` |
+| [EPIC-036](EPIC-036-refactoring-architecture.md) | Refactoring architecture : dette Phase 0 (flaky shuffle, gate 3 graines fixes, audit listeners, CSS mort via PurgeCSS), noyau `core/` (format/feedback/subscribe/dom), squelette de liste commun aux 5 pages, CSS en couches bundlées esbuild, perf mesurée — strangler fig, **pas de framework** (verdict mesuré) | ✅ **Phases 0-4 livrées (2026-09-19, `e623dd0`+`a5e2e08`+`30f9400`+`b60d8dc`+`d6c2e08`)** — CSS en couches (preuve cascade + captures 0 px), perf mesurée (content-visibility rejetée sur spec+profil, normalizeName mémoïsé) | Moyenne | étude `refactoring/2026-09-19-refactoring-architecture.md` |
 
 ## État actuel du projet (2026-09-19)
 
@@ -125,9 +125,14 @@
   `appendPanelEmpty` ×5, domPatches conservé (verdict documenté), **wc -l net −34**.
   Gate P2 : 1 120 vitest / 317 pytest. Doc dev : `static/src/README.md` +
   `AGENT.md` %ARCHITECTURE.core.
-- Prochains chantiers : **EPIC-036 Phase 4** (perf mesurée : profilage rendu 5 092 lignes,
-  décision `content-visibility` chiffrée),
-  **EPIC-035 P4** (confort : reprise `style_review.json`, onglet
+- **EPIC-036 Phase 4 livrée** (2026-09-19, `d6c2e08`) : perf mesurée Chrome headless
+  (harnais `scripts/perf_ui.py`, 5 092 épars, durées réalistes) — rendu initial
+  1 363 ms, filtre 52-64 ms, re-render post-copie 102 ms ; `content-visibility`
+  **rejetée** (inapplicable aux `<tr>`, profil dominé par la construction DOM),
+  `styleSuggest` fermé (≤ 0,2 %) ; seul correctif : `normalizeName` mémoïsé
+  (rendu −14 %, copie −48 %, iso-comportement prouvé). Rapport :
+  `docs/refactoring/phase4/rapport-perf.md`.
+- Prochains chantiers : **EPIC-035 P4** (confort : reprise `style_review.json`, onglet
   Config Styles, dossier pré-surligné), **EPIC-033-bis** (re-scan du corpus puis collectes incrémentales sur les ~3 551 nouveaux fichiers sans année), **EPIC-031 P2**
   (ergonomie sync : M déplacer, écoute en chaîne), reprise **EPIC-030 P1**
   (chips playlist-tracks + dups), **EPIC-022** (backlog, priorité Haute — a11y + responsive

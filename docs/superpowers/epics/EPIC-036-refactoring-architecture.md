@@ -1,6 +1,6 @@
 # EPIC-036 — Refactoring architecture : dette Phase 0, noyau `core/`, squelette de liste, CSS en couches
 
-> **Statut** : 🟡 **Phases 0+1+2+3 livrées (2026-09-19, `e623dd0` + `a5e2e08` + `30f9400` + `b60d8dc`)** — Phase 4 en backlog
+> **Statut** : ✅ **Phases 0+1+2+3+4 livrées (2026-09-19, `e623dd0` + `a5e2e08` + `30f9400` + `b60d8dc` + `d6c2e08`)** — EPIC close (Phase 5 conditionnelle non déclenchée)
 > **Créée** : 2026-09-19 · **Dernière mise à jour** : 2026-09-19
 > **Priorité** : Moyenne (dette mesurée, pas urgente ; chaque phase découle de la mesure, pas de l'intuition)
 > **Docs liées** : **étude complète** `docs/refactoring/2026-09-19-refactoring-architecture.md` (mesures, verdicts, plan 5 phases, refus argumentés, annexes honnêteté)
@@ -169,10 +169,39 @@ dupliqué (arbres ×2, vides ×5, wipes ×6) sans dénaturer leurs différences.
 **Gate P3** : typecheck 0 · lint 0 · vitest 1 120 (×3 graines shuffle) ·
 build + validation OK · pytest 317.
 
-### ⬜ Phase 4 — Performance mesurée (~1 jour)
+### ✅ Phase 4 — Performance mesurée (2026-09-19, commit `d6c2e08`)
 
-Profilage Chrome réel (5 092 lignes, re-render arbre) → `content-visibility`
-uniquement si > 50 ms mesurés. Décision chiffrée, pas d'optimisation aveugle.
+1. ✅ **Harnais réutilisable** (`scripts/perf_ui.py`) : monde synthétique 5 092 épars
+   + ~510 rangés, durées réalistes **déterministes par nom** (même morceau = même
+   durée des deux côtés — les jumeaux restent matchables ; correction des MP3
+   minimaux qui dégénéraient les buckets dup-fuzzy et surestimaient le coût
+   similarité ×N). Instruments : longtask (seuil 50 ms), enveloppe rAF, métriques
+   Chrome (deltas), CPU-profiler **par comptage d'échantillons** (l'attribution
+   timeDeltas est unusable en headless : 14 s de « tâche » pour 2 s mural).
+2. ✅ **Chiffres** (rapport complet `docs/refactoring/phase4/rapport-perf.md`) :
+   rendu initial 1 589 → **1 363 ms** (après memo) · frappe filtre **52-64 ms** ·
+   re-render post-copie 195,7 → **102 ms**. Seuil 50 ms dépassé sur A et C.
+3. ✅ **`content-visibility` REJETÉE, double motif** : (a) inapplicable — nos listes
+   sont de vraies tables, la propriété ne s'applique pas aux internal table boxes
+   (`<tr>`) et la size containment n'a pas d'effet sur `<td>` cross-browser
+   (csswg-drafts#7658, résolu : spec inchangée) ; (b) inutile sur le profil — le
+   rendu est dominé par la construction DOM (beginRender/innerHTML 44 %), pas le
+   layout/paint (~10 %). Condition de révision : si le re-render post-copie devient
+   une douleur (> 200 ms durable), la piste est l'extension de `domPatches.ts`, PAS
+   un re-essai de la propriété.
+4. ✅ **`styleSuggest` fermé** : ≤ 0,2 % des échantillons (seuil d'action 5 % posé
+   a priori) — la mémoïsation P2 suffisait.
+5. ✅ **Seul correctif retenu** : mémoïsation `normalizeName` (pure ; 14-22 % →
+   0,3-1,3 % du CPU — recalculée sur des noms inchangés à chaque rendu/détection).
+   Gain : rendu −14 %, copie −48 %. Iso-comportement : 27/27 tests dupDetect,
+   gate complet vert.
+6. ℹ️ **Réserves consignées** : corpus synthétique (noms gabarits = bornes hautes
+   pour les similarités ; headless = temps absolus plafonnés CPU) — un rejouage sur
+   les vraies données (EPIC-033-bis) confirmera les ordres de grandeur.
+
+**Critère de sortie atteint** : rapport commité avec chiffres avant/après ; décision
+`content-visibility` motivée par un nombre ET la spec ; virtual scrolling toujours
+exclu (profil : scrollIntoView 0,6-1,2 %, aucun coût scroll dominant).
 
 ## Critères de réussite globaux
 
