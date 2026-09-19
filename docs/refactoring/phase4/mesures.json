@@ -1,0 +1,309 @@
+{
+  "n_epars": 5092,
+  "A_rendu_initial": {
+    "raf_durs_ms": [
+      {
+        "dur": 1362.6
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0.1
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 1.5
+      }
+    ],
+    "longtasks": [
+      {
+        "dur": 179,
+        "start": 211
+      },
+      {
+        "dur": 1731,
+        "start": 391
+      }
+    ],
+    "metrics_delta": {
+      "ScriptDuration": 0.5,
+      "RecalcStyleDuration": 0.3,
+      "LayoutDuration": 1.0,
+      "TaskDuration": 2.2
+    },
+    "top_self_time_pct": [
+      [
+        "beginRender",
+        44.4,
+        895
+      ],
+      [
+        "(program)",
+        26.8,
+        540
+      ],
+      [
+        "makeFileEl",
+        6.4,
+        130
+      ],
+      [
+        "levenshtein",
+        5.6,
+        112
+      ],
+      [
+        "paint",
+        3.4,
+        68
+      ],
+      [
+        "appendChild",
+        2.0,
+        40
+      ],
+      [
+        "(garbage collector)",
+        1.8,
+        37
+      ],
+      [
+        "tokenSetRatio",
+        1.5,
+        31
+      ],
+      [
+        "renderEpars",
+        1.5,
+        31
+      ],
+      [
+        "insertStyleCell",
+        1.2,
+        25
+      ],
+      [
+        "(idle)",
+        0.7,
+        14
+      ],
+      [
+        "parseArtistTitle",
+        0.6,
+        12
+      ],
+      [
+        "(anonyme)",
+        0.5,
+        11
+      ],
+      [
+        "createElement",
+        0.5,
+        10
+      ],
+      [
+        "detectDuplicates",
+        0.4,
+        8
+      ]
+    ],
+    "named": {
+      "makeFileEl": "6.4%",
+      "renderEpars": "1.5%",
+      "normalizeName": "0.3%",
+      "suggest": "0.2%"
+    },
+    "verdict_50ms": "2 longtask(s), max 1731 ms",
+    "raf_top5_ms": [
+      1362.6,
+      1.5,
+      0.1,
+      0,
+      0
+    ]
+  },
+  "B_frappe_filtre": {
+    "raf_durs_ms": [
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0.1
+      }
+    ],
+    "longtasks": [
+      {
+        "dur": 52,
+        "start": 2357
+      }
+    ],
+    "metrics_delta": {
+      "ScriptDuration": 0.1,
+      "RecalcStyleDuration": 0.0,
+      "LayoutDuration": 0.0,
+      "TaskDuration": 0.1
+    },
+    "rows_after": 640,
+    "verdict_50ms": "1 longtask(s), max 52 ms",
+    "raf_top5_ms": [
+      0.1,
+      0
+    ]
+  },
+  "C_copie": {
+    "raf_durs_ms": [
+      {
+        "dur": 0.6
+      },
+      {
+        "dur": 101.9
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0
+      },
+      {
+        "dur": 0.6
+      }
+    ],
+    "longtasks": [
+      {
+        "dur": 171,
+        "start": 3014
+      },
+      {
+        "dur": 192,
+        "start": 3185
+      }
+    ],
+    "metrics_delta": {
+      "ScriptDuration": 0.1,
+      "RecalcStyleDuration": 0.0,
+      "LayoutDuration": 0.1,
+      "TaskDuration": 0.4
+    },
+    "top_self_time_pct": [
+      [
+        "(idle)",
+        81.1,
+        1533
+      ],
+      [
+        "levenshtein",
+        6.0,
+        114
+      ],
+      [
+        "(program)",
+        4.8,
+        90
+      ],
+      [
+        "beginRender",
+        1.9,
+        35
+      ],
+      [
+        "tokenSetRatio",
+        1.6,
+        30
+      ],
+      [
+        "scrollIntoView",
+        1.2,
+        22
+      ],
+      [
+        "makeFileEl",
+        0.7,
+        13
+      ],
+      [
+        "detectDuplicates",
+        0.3,
+        6
+      ],
+      [
+        "renderEpars",
+        0.3,
+        6
+      ],
+      [
+        "matchesTokens",
+        0.3,
+        6
+      ],
+      [
+        "appendChild",
+        0.2,
+        4
+      ],
+      [
+        "(anonyme)",
+        0.2,
+        4
+      ],
+      [
+        "(garbage collector)",
+        0.2,
+        3
+      ],
+      [
+        "normalizeName",
+        0.2,
+        3
+      ],
+      [
+        "countAllEparsFiles",
+        0.1,
+        2
+      ]
+    ],
+    "named": {
+      "renderEpars": "0.3%",
+      "matchesTokens": "0.3%"
+    },
+    "status_after": "✓ Adam Beyer - Dark Bells 00578.mp3 copié vers /tmp/epic036_perf/src/techno_1990",
+    "verdict_50ms": "2 longtask(s), max 192 ms",
+    "raf_top5_ms": [
+      101.9,
+      0.6,
+      0.6,
+      0,
+      0
+    ]
+  }
+}

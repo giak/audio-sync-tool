@@ -60,8 +60,15 @@ const NOISE_PATTERNS: RegExp[] = [
   /^\d{1,3}[-.\s]+/,
 ];
 
-/** Normalise un nom de fichier pour comparaison floue. */
+/** Normalise un nom de fichier pour comparaison floue.
+ *  Mémoïsé (EPIC-036 P4) : pure, appelée sur les mêmes noms à chaque rendu de
+ *  l'arbre / détection de doublons — profil P4 : 14-22 % du CPU sur 5 092
+ *  fichiers (regex NFD + 12 patterns × 2 passes). Cache sans borne assumé :
+ *  les noms d'un corpus réel ≈ 10⁴, une entrée ≈ 100 octets. */
+const normalizeNameCache = new Map<string, string>();
 export function normalizeName(filename: string): string {
+  const cached = normalizeNameCache.get(filename);
+  if (cached !== undefined) return cached;
   let name = filename;
   // Extension retirée avant tout (le point n'est pas un séparateur de mots ici)
   const dot = name.lastIndexOf('.');
@@ -81,6 +88,7 @@ export function normalizeName(filename: string): string {
   // Séparateurs → espaces, collapse
   name = name.replace(/[_\-.]+/g, ' ');
   name = name.replace(/\s+/g, ' ').trim();
+  normalizeNameCache.set(filename, name);
   return name;
 }
 
