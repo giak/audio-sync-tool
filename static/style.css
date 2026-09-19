@@ -220,6 +220,78 @@ header h1 {
 }
 .style-chip.pending-year { border-style: dashed; opacity: 0.8; }
 
+/* EPIC-035 — palette « g » : popover clavier ancré à la ligne (couche DOM). */
+.style-palette {
+  position: fixed;
+  z-index: 1200;
+  width: 440px;
+  max-width: calc(100vw - 16px);
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--amber);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  outline: none;
+  font-size: 12px;
+}
+.style-palette .sp-title {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.style-palette .sp-styles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+.style-palette .sp-style,
+.style-palette .sp-tranche {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.style-palette .sp-style:hover,
+.style-palette .sp-tranche:hover { border-color: var(--amber); }
+.style-palette kbd {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--amber);
+  color: #000;
+  font-weight: 700;
+  text-align: center;
+}
+.style-palette .sp-tranches {
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--amber);
+}
+.style-palette.tranche-step .sp-tranches { display: grid; }
+.style-palette.tranche-step .sp-styles { opacity: 0.45; }
+.style-palette .sp-dest {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .file-row > td {
   padding: 0 4px 0 0;
   vertical-align: middle;

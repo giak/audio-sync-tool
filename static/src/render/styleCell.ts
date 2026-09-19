@@ -59,7 +59,14 @@ export function insertStyleCell(
   const td = document.createElement('td');
   td.className = 'style-cell';
   td.dataset.fullpath = fullpath;
+  td.title = '';
   paint(td, fullpath, entry);
+  // Clic = palette à la souris (import dynamique : stylePalette importe ce
+  // module — pattern executeReplace dans fileRow.ts).
+  td.onclick = (e: MouseEvent) => {
+    e.stopPropagation();
+    void import('./stylePalette.js').then(m => m.openStylePalette([fullpath], row));
+  };
   row.insertBefore(td, row.querySelector('.codec'));
   return td;
 }

@@ -1,7 +1,10 @@
 // ─── Unit tests: render/styleCell.ts — cellule Style des lignes épars ──────
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from '../state.js';
 import { currentTaxonomy, destinationLabel, insertStyleCell, refreshStyleCell } from './styleCell.js';
+
+// jsdom n'a pas scrollIntoView → stub sur Element.prototype (pattern connu, cf. dupsUI.test).
+(Element.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = vi.fn();
 
 const ROOT = '/src/style/';
 const EPARS = '/media/epars';
@@ -99,6 +102,19 @@ describe('render/styleCell', () => {
     state.styleChoices = new Map();
     refreshStyleCell(fp);
     expect(row.querySelector('.style-chip')).toBeNull();
+  });
+
+  it('clic sur la cellule → ouvre la palette pour ce fichier (souris = même chemin que g)', async () => {
+    const fp = `${EPARS}/_techno/a.mp3`;
+    const row = makeRow(fp);
+    const td = insertStyleCell(row, fp, { year: '1992' });
+    document.getElementById('tb')!.appendChild(row);
+    td.click();
+    const m = await import('./stylePalette.js');
+    await new Promise(r => setTimeout(r, 0));
+    expect(m.isStylePaletteOpen()).toBe(true);
+    expect(document.querySelector('.style-palette .sp-title')?.textContent).toBe('a.mp3');
+    m.closeStylePalette();
   });
 
   it('refreshStyleCell : ligne non affichée → no-op', () => {
