@@ -353,11 +353,15 @@ d'assertion existant modifié** (22 tests core ajoutés). Écarts as-built, cons
 **Critère de sortie** : 0 duplication restante des motifs §1.4 ✅ (fmtCount/setStatus/hidden) ;
 tests d'assertion inchangés ✅.
 
-### Phase 2 — Squelette de liste commun (2-3 jours)
-Extraire le pattern complet « liste filtrée + compteur + ligne d'état + sélection » partagé par eparsUI/sourceTree/playlistUI/yearsUI/dupsUI — en **paramétrant** (fonction `buildRow`, prédicat de filtre, hook post-render), pas en héritant.
-- Fusionner la double passe de filtre (P1 §4) au passage (même code).
-- Évaluer `domPatches.ts` : si les patches deviennent inutiles avec le squelette, les retirer ; sinon les laisser (KISS).
-**Critère de sortie** : 5 pages sur le squelette commun ; double passe de filtre disparue (mesure : 1 appel `matchesTokens` par fichier) ; matrice clavier verte.
+### Phase 2 — Squelette de liste commun — ✅ LIVRÉE 2026-09-19 (`30f9400`)
+Double passe de filtre fusionnée (1 appel `matchesTokens`/fichier, preuve commitée) ;
+squelette d'arbre partagé `buildSourceTrees` + `finishSourcePanel` (bloc identique
+au caractère près ×2) ; 6ᵉ wipe sur `beginRender` ; `appendPanelEmpty` ×5 ; verdict
+`domPatches.ts` : conservé. **Écart de forme assumé** : composition paramétrée
+(2 fonctions par scope), pas le `buildList` générique à callbacks envisagé — le bloc
+réellement dupliqué était arbre+compteur+vide, pas les lignes (spécifiques par page).
+**Critère de sortie atteint** : double passe disparue, `wc -l` net **−34**, matrice
+clavier verte (1 120 vitest / 317 pytest).
 
 ### Phase 3 — CSS en couches (1-2 jours)
 Découpage mécanique §5 + extraction des 6 familles structurelles (.modal/.dialog, .chip, .toast, .kbd, table rows, .empty-state) + nettoyage fallbacks. **Capture avant/après obligatoire** pour chaque famille (l'app est visuelle, pas de test automatisé de pixel).

@@ -105,16 +105,19 @@
   journal `old_genre` = backup, `--undo` idempotent, tag épars + copie rangée), chip
   « écrit ✓ » quand le genre du scan == style. Gate P3 : 1 095 vitest / 317 pytest.
   Reste P4 (confort) + live P3 sur données réelles après un premier usage.
-- **EPIC-036 Phases 0+1 livrées** (2026-09-19, `e623dd0` + `a5e2e08`) : Phase 0 —
-  hygiène (2 flaky corrigés, shuffle 3 graines fixes en CI, audit listeners : zéro
-  fuite, PurgeCSS : ancienne table doublons supprimée). Phase 1 — noyau `core/`
-  (format / feedback / subscribe / dom) : 0 site `toLocaleString('fr')` et 0 accès
-  direct `#status-text` hors core, 6 gardes hidden centralisés, save/restore scroll
-  en un point, doublon local yearsUI éliminé, cueEditor exclu (setStatus slot-scopé).
-  Gate P1 : 1 117 vitest (+22 core, 0 test existant modifié) / 317 pytest. Doc dev :
-  `static/src/README.md` + `AGENT.md` %ARCHITECTURE.core.
-- Prochains chantiers : **EPIC-036 Phase 2** (squelette de liste commun aux 5 pages,
-  fusion double passe de filtre — le gain LOC net y est reporté),
+- **EPIC-036 Phases 0+1+2 livrées** (2026-09-19, `e623dd0` + `a5e2e08` + `30f9400`)
+  : Phase 0 — hygiène (2 flaky corrigés, shuffle 3 graines fixes en CI, audit
+  listeners : zéro fuite, PurgeCSS : ancienne table doublons supprimée). Phase 1 —
+  noyau `core/` (format / feedback / subscribe / dom) : 0 site `toLocaleString('fr')`
+  et 0 accès direct `#status-text` hors core, 6 gardes hidden centralisés,
+  save/restore scroll en un point, doublon local yearsUI éliminé, cueEditor exclu
+  (setStatus slot-scopé). Phase 2 — double passe de filtre fusionnée (1 appel
+  `matchesTokens`/fichier sur 5 092), squelette d'arbre partagé
+  (`buildSourceTrees` + `finishSourcePanel`), 6ᵉ wipe sur `beginRender`,
+  `appendPanelEmpty` ×5, domPatches conservé (verdict documenté), **wc -l net −34**.
+  Gate P2 : 1 120 vitest / 317 pytest. Doc dev : `static/src/README.md` +
+  `AGENT.md` %ARCHITECTURE.core.
+- Prochains chantiers : **EPIC-036 Phase 3** (CSS en 4 couches, captures avant/après),
   **EPIC-035 P4** (confort : reprise `style_review.json`, onglet
   Config Styles, dossier pré-surligné), **EPIC-033-bis** (re-scan du corpus puis collectes incrémentales sur les ~3 551 nouveaux fichiers sans année), **EPIC-031 P2**
   (ergonomie sync : M déplacer, écoute en chaîne), reprise **EPIC-030 P1**

@@ -1,6 +1,6 @@
 # EPIC-036 — Refactoring architecture : dette Phase 0, noyau `core/`, squelette de liste, CSS en couches
 
-> **Statut** : 🟡 **Phases 0+1 livrées (2026-09-19, `e623dd0` + `a5e2e08`)** — Phases 2-4 en backlog
+> **Statut** : 🟡 **Phases 0+1+2 livrées (2026-09-19, `e623dd0` + `a5e2e08` + `30f9400`)** — Phases 3-4 en backlog
 > **Créée** : 2026-09-19 · **Dernière mise à jour** : 2026-09-19
 > **Priorité** : Moyenne (dette mesurée, pas urgente ; chaque phase découle de la mesure, pas de l'intuition)
 > **Docs liées** : **étude complète** `docs/refactoring/2026-09-19-refactoring-architecture.md` (mesures, verdicts, plan 5 phases, refus argumentés, annexes honnêteté)
@@ -87,13 +87,34 @@ la dépassent. Le critère « net négatif » de l'étude est atteignable en Pha
 (squelette de liste, −40 à −60 LOC annoncés) ; le gain P1 est la déduplication
 (0 site restant) et le contrat testé, pas le volume.
 
-### ⬜ Phase 2 — Squelette de liste commun (~2-3 jours)
+### ✅ Phase 2 — Squelette de liste commun (2026-09-19, commit `30f9400`)
 
-Paramétrer le pattern « liste filtrée + compteur + ligne d'état + sélection »
-partagé par eparsUI/sourceTree/playlistUI/yearsUI/dupsUI (6 sites de wipe) :
-fonction `buildRow`, prédicat de filtre, hook post-render — **composition, pas
-d'héritage**. Fusionner la double passe de filtre `matchesTokens` au passage
-(2× → 1× le coût sur 5 092 fichiers).
+1. ✅ **Double passe de filtre fusionnée** (`eparsUI.ts`) : le compteur du chip est
+   dérivé de la passe de rendu — **1 appel `matchesTokens` par fichier** (preuve grep
+   commitée : 1 site dans `renderEpars`). Coût de filtrage divisé par 2 sur 5 092 fichiers.
+2. ✅ **Squelette d'arbre partagé** (`sourceTree.ts`) : `buildSourceTrees` (construction
+   arbre + compte total) + `finishSourcePanel` (compteur d'en-tête + bandeau vide) — le
+   bloc dupliqué **au caractère près** entre `renderSource` et `renderPlaylistSource`
+   vit à un seul endroit ; types locaux morts de `playlistUI.ts` supprimés.
+   Forme livrée : 2 fonctions paramétrées par scope/toggle (composition), PAS un
+   `buildList` générique à callbacks — le bloc réel partagé était arbre+compteur, pas
+   le rendu des lignes (chaque page a ses lignes propres, les généraliser aurait
+   été une abstraction anticipée).
+3. ✅ **6ᵉ wipe de page sur `beginRender`** : years, dups + playlist-source adoptent
+   le wipe centralisé (preuve : ni years ni dups ne lit `scrollTop`, le scroll passe
+   par `scrollIntoView` sur focus clavier → iso-comportement) ; playlist-source gagne
+   le save/restore scroll (panneau non-scrollable, no-op en pratique).
+4. ✅ **`appendPanelEmpty`** (core/dom.ts) : 5 créations `div.panel-empty` unifiées
+   (epars ×2, source ×2, playlist-source) + 3 tests.
+5. ✅ **Verdict `domPatches.ts` : CONSERVÉ** — patch en place du statut/compteurs +
+   insertion ciblée via `sourceNodeMap` reste moins cher qu'un re-render complet
+   (5 092 lignes) après chaque copie ; le squelette ne change pas ce modèle.
+
+**Critère de sortie — atteint** : double passe disparue (1 appel/fichier, preuve
+commitée) ; `wc -l` net **−34** (10 447 → 10 413, critère « net négatif » de l'étude
+atteint ici) ; matrice clavier + suite complète vertes (1 120 vitest, shuffle ×3,
+317 pytest). Les 5 pages consomment le squelette là où le code était réellement
+dupliqué (arbres ×2, vides ×5, wipes ×6) sans dénaturer leurs différences.
 
 ### ⬜ Phase 3 — CSS en 4 couches (~1-2 jours)
 

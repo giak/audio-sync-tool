@@ -25,7 +25,7 @@ static/src/
 | `core/format.ts` | `fmtCount(n)` · `plural(n, word, pl?)` · `byCountThenId(a, b)` | Formatage fr-FR partagé. `plural` : pluriel si n > 1 (0 = singulier, comportement historique des sites d'origine). Interdits hors core/ : `x.toLocaleString('fr')` à la main, pluriel fait main. |
 | `core/feedback.ts` | `setStatus(msg)` | Barre d'état `#status-text`, no-op sûr si absente. Sémantique des canaux : **status = guidage**, **toast = confirmation d'action**, **dialog = décision** — ne pas croiser. |
 | `core/subscribe.ts` | `subscribeVisible(event, containerId, render)` | S'abonne à un événement `:changed` du state et ne render que si le conteneur n'a pas `.hidden`. Renvoie la fonction de désabonnement (contrat `on()`). |
-| `core/dom.ts` | `beginRender(container)` → `restore(el)` | Wipe + save/restore du scrollTop (différé rAF). `restore` est no-op si le nœud a été détaché. Usage : `const restore = beginRender(c); …build…; restore(c);` |
+| `core/dom.ts` | `beginRender(container)` → `restore(el)` · `appendPanelEmpty(container, msg)` | Wipe + save/restore du scrollTop (différé rAF). `restore` est no-op si le nœud a été détaché. Usage : `const restore = beginRender(c); …build…; restore(c);`. `appendPanelEmpty` ajoute le bandeau d'état vide standard (EPIC-014). |
 
 ## Règle d'extraction (YAGNI)
 
