@@ -7,6 +7,7 @@ import { computeStatus, countAllEparsFiles, type FileStatus } from '../utils.js'
 import { makeFileEl, makeFileTable } from './fileRow.js';
 import { ensureFilterChip, getFilterTerm, updateFilterCount } from './filterChip.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
+import { insertStyleCell } from './styleCell.js';
 
 // ── File selection logic ─────────────────────────────────────────────────
 
@@ -135,7 +136,8 @@ export function renderEpars(): void {
     container.appendChild(fileList);
 
     const sorted = Object.entries(files).sort((a, b) => a[0].localeCompare(b[0]));
-    const fileTable = makeFileTable(false);
+    // EPIC-035 : 7ᵉ colonne « Style » (épars seulement) — cellule insérée ci-dessous.
+    const fileTable = makeFileTable(false, true);
     const tbody = fileTable.querySelector('tbody');
     for (const [filename, data] of sorted) {
       const relPath = data.path;
@@ -161,6 +163,7 @@ export function renderEpars(): void {
         selectEparsFile,
         startSourceRatingEdit,
       );
+      insertStyleCell(row, fullpath, data);
       const label2 = row.querySelector('.file') as HTMLElement;
       if (label2) {
         label2.dataset.epardir = dirPath;

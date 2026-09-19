@@ -5,7 +5,16 @@
 
 import { describe, expect, it } from 'vitest';
 import type { FileIndex } from './state.js';
-import { buildTaxonomy, deriveHotkeys, destFor, parseFolderName, TRANCHES, trancheOf, yearOf } from './styles.js';
+import {
+  buildTaxonomy,
+  deriveHotkeys,
+  destFor,
+  findEparsEntry,
+  parseFolderName,
+  TRANCHES,
+  trancheOf,
+  yearOf,
+} from './styles.js';
 
 const ROOT = '/home/giak/Music/select/style/';
 
@@ -244,6 +253,29 @@ describe('styles — destFor', () => {
       [],
     )!;
     expect(destFor(t2, 'techno', 1991)!.dir).toBe('/x/style/techno_1990');
+  });
+});
+
+describe('styles — findEparsEntry', () => {
+  const epars: Record<string, FileIndex> = {
+    '/media/epars': {
+      'a.mp3': { path: '_schranz/a.mp3', year: '1999', duration: null, codec: null },
+      'b.mp3': { path: 'b.mp3', year: null, duration: null, codec: null },
+    },
+    '/other': { 'a.mp3': { path: 'a.mp3', year: null, duration: null, codec: null } },
+  };
+  it('retrouve dossier, nom et entrée depuis le fullpath (homonymes dans 2 racines distingués)', () => {
+    expect(findEparsEntry(epars, '/media/epars/_schranz/a.mp3')).toEqual({
+      eparDir: '/media/epars',
+      filename: 'a.mp3',
+      entry: epars['/media/epars']['a.mp3'],
+    });
+    expect(findEparsEntry(epars, '/other/a.mp3')!.eparDir).toBe('/other');
+    expect(findEparsEntry(epars, '/media/epars/b.mp3')!.filename).toBe('b.mp3');
+  });
+  it('inconnu → null', () => {
+    expect(findEparsEntry(epars, '/media/epars/a.mp3')).toBeNull(); // mauvais sous-dossier
+    expect(findEparsEntry(epars, '/nope/x.mp3')).toBeNull();
   });
 });
 

@@ -136,6 +136,21 @@ export function destFor(
   return { name, dir: joinRoot(tax.root, name), exists: def.folders.has(name), needsYear: false };
 }
 
+/** Retrouve l'entrée épars d'un fullpath (`<eparDir>/<relPath>`) : dossier
+ *  racine épars qui préfixe le chemin + entrée par nom de fichier. null si
+ *  inconnu (fichier disparu, index périmé). */
+export function findEparsEntry(
+  eparsFiles: Record<string, FileIndex>,
+  fullpath: string,
+): { eparDir: string; filename: string; entry: FileIndex[string] } | null {
+  const filename = fullpath.slice(fullpath.lastIndexOf('/') + 1);
+  for (const [eparDir, files] of Object.entries(eparsFiles)) {
+    const entry = files[filename];
+    if (entry && `${eparDir}/${entry.path}` === fullpath) return { eparDir, filename, entry };
+  }
+  return null;
+}
+
 /** Hotkeys déterministes : styles par volume décroissant (puis id), chacun
  *  prend la première lettre libre parmi : initiales de ses segments, puis
  *  lettres de son id, puis n'importe quelle lettre libre a-z. Épuisé → null. */

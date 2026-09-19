@@ -197,6 +197,28 @@ header h1 {
 .file-table col:nth-child(5) { width: 110px; }
 .file-table col:nth-child(6) { width: 60px; }
 .file-table col:nth-child(7) { width: 54px; }
+/* EPIC-035 — table épars avec colonne « Style » (7 colonnes : play, nom,
+   note, année, STYLE, codec, durée). Règles plus spécifiques : les autres
+   tables gardent les largeurs ci-dessus. */
+.file-table.has-style col:nth-child(5) { width: 96px; }
+.file-table.has-style col:nth-child(6) { width: 110px; }
+.file-table.has-style col:nth-child(7) { width: 60px; }
+.style-cell { text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.style-chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+}
+.style-chip.pending-year { border-style: dashed; opacity: 0.8; }
 
 .file-row > td {
   padding: 0 4px 0 0;

@@ -19,11 +19,14 @@ import { getFilterTerm, isFileFilter } from './filterChip.js';
 // éparpillé reçoit SA table — les lignes partagent les colonnes.
 // withCuesCol=true pour tout l'arbre source / playlists (7 colonnes, bouton
 // Cues collé à droite) ; false pour l'épars (6 colonnes, durée collée à droite).
-export function makeFileTable(withCuesCol: boolean): HTMLTableElement {
+// withStyleCol=true (EPIC-035, épars seulement) : 7ᵉ colonne « Style » insérée
+// entre année et codec par l'appelant (styleCell.ts) — classe `has-style`
+// pour les largeurs dédiées du colgroup.
+export function makeFileTable(withCuesCol: boolean, withStyleCol = false): HTMLTableElement {
   const table = document.createElement('table');
-  table.className = 'file-table';
+  table.className = withStyleCol ? 'file-table has-style' : 'file-table';
   const colgroup = document.createElement('colgroup');
-  const cols = withCuesCol ? 7 : 6;
+  const cols = (withCuesCol ? 7 : 6) + (withStyleCol ? 1 : 0);
   for (let i = 0; i < cols; i++) colgroup.appendChild(document.createElement('col'));
   table.appendChild(colgroup);
   const tbody = document.createElement('tbody');

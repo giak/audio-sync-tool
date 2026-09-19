@@ -49,7 +49,7 @@ import { focusItemByElement, setActivePanel } from '../focus.js';
 import { getRating } from '../ratings.js';
 import { state } from '../state.js';
 import { showContextMenu } from '../ui.js';
-import { makeFileEl } from './fileRow.js';
+import { makeFileEl, makeFileTable } from './fileRow.js';
 import { setFileFilter, setFilterTerm } from './filterChip.js';
 
 function makeRow(
@@ -268,6 +268,24 @@ describe('pastille déjà rangé (dup-ranged)', () => {
 });
 
 // ── DOM structure ─────────────────────────────────────────────────────────
+
+describe('makeFileTable (colgroup fixe)', () => {
+  it('6 colonnes sans Cues, 7 avec Cues — sans classe has-style (non-régression EPIC-026)', () => {
+    const epars = makeFileTable(false);
+    expect(epars.querySelectorAll('col').length).toBe(6);
+    expect(epars.className).toBe('file-table');
+    const source = makeFileTable(true);
+    expect(source.querySelectorAll('col').length).toBe(7);
+    expect(source.className).toBe('file-table');
+  });
+
+  it('withStyleCol (EPIC-035, épars) : 7 colonnes + classe has-style', () => {
+    const t = makeFileTable(false, true);
+    expect(t.querySelectorAll('col').length).toBe(7);
+    expect(t.classList.contains('has-style')).toBe(true);
+    expect(t.classList.contains('file-table')).toBe(true);
+  });
+});
 
 describe('DOM structure', () => {
   it('creates a div with file-row class and data-focuspath', () => {

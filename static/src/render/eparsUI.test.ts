@@ -25,16 +25,16 @@ const { focusItemByElement, setActivePanel, computeStatus, countAllEparsFiles, m
 
 vi.mock('../focus.js', () => ({ focusItemByElement, setActivePanel }));
 vi.mock('../utils.js', () => ({ computeStatus, countAllEparsFiles }));
-vi.mock('./fileRow.js', () => ({
-  makeFileEl,
-  makeFileTable: () => {
+const { makeFileTable } = vi.hoisted(() => ({
+  makeFileTable: vi.fn(() => {
     const table = document.createElement('table');
     table.className = 'file-table';
     const tbody = document.createElement('tbody');
     table.appendChild(tbody);
     return table;
-  },
+  }),
 }));
+vi.mock('./fileRow.js', () => ({ makeFileEl, makeFileTable }));
 vi.mock('./ratingEdit.js', () => ({ startSourceRatingEdit }));
 
 import { renderEpars } from './eparsUI.js';
@@ -150,6 +150,23 @@ describe('render/eparsUI', () => {
       // makeFileEl should be called twice with filenames in order
       const filenames = calls.map(c => c[0]);
       expect(filenames).toEqual(['a.mp3', 'z.mp3']);
+    });
+
+    it('colonne Style (EPIC-035) : table épars en 7 colonnes + une .style-cell par ligne', () => {
+      const c = document.createElement('div');
+      c.id = 'epars-container';
+      document.body.appendChild(c);
+      state.eparsFiles = {
+        '/music': {
+          'a.mp3': { path: '_techno/a.mp3', year: '1992', duration: null, codec: null },
+          'b.mp3': { path: 'b.mp3', year: null, duration: null, codec: null },
+        },
+      };
+      renderEpars();
+      expect(makeFileTable).toHaveBeenCalledWith(false, true);
+      const cells = c.querySelectorAll('.file-row .style-cell');
+      expect(cells.length).toBe(2);
+      expect((cells[0] as HTMLElement).dataset.fullpath).toBe('/music/_techno/a.mp3');
     });
 
     it('le filtre matche le sous-dossier épars (EPIC-035 : F7 _schranz → lot)', () => {
