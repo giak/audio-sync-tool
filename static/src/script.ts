@@ -14,6 +14,7 @@ import './commands/modals.js';
 import './commands/replace.js';
 import './commands/dups.js';
 import './commands/years.js';
+import './commands/style.js'; // EPIC-035 — EN DERNIER : les index de la matrice clavier ne bougent pas
 import { createSourceFolder, initApp, initConfigUI, runScan } from './actions.js';
 import { initAudioUI } from './audio.js';
 import { saveCurrentPlaylist, showExportModal } from './commands/playlist.js';
