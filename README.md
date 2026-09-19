@@ -110,6 +110,8 @@ disponibles dans les pages.
 | **Échap** | Sortir du chip / fermer modale / stopper l'audio | |
 | **N** | Noter le fichier focusé (0-100, clic sur la zone de note aussi possible) | |
 | **R** / double-clic | Remplacer l'homonyme (l'ancien rangé → `_trash/<date>/`) — seulement sur les lignes à LED ambre | |
+| **G** | Poser un **style** (palette : lettre = style, puis chiffre 1-9 = tranche si l'année manque) sur la ligne focusée ou la sélection (Espace / Ctrl-clic) — voir « Rangement par style » | |
+| **E** | Aperçu du rangement par style (copies groupées par dossier cible → confirmation) | |
 
 ### Raccourcis clavier (page Doublons)
 
@@ -237,6 +239,26 @@ Les notes sont stockées globalement (pas par playlist) dans
 **Implémentation :** fonction partagée `_startInlineRatingEdit()` dans render.ts,
 avec deux points d'entrée `startRatingEdit()` (sidebar tracks) et
 `startSourceRatingEdit()` (file-rows dans l'arbre source).
+
+## Rangement par style (EPIC-035, P1)
+
+Les dossiers de Source Data suivent la grammaire `<style>_<tranche>` (tranche = palier de
+5 ans : `techno_acid_1990`) ou `<style>` seul pour les styles hors temps (`italo_disco`).
+La **taxonomie est dérivée des dossiers existants** (aucune liste à maintenir) ; le style est
+la seule décision humaine, la tranche se déduit de l'année du tag, le dossier cible est
+calculé.
+
+1. Colonne gauche : focus une ligne (ou sélectionne un lot : **F7** `_schranz` puis
+   **Espace** / Ctrl-clic) → **G** → lettre du style (affichée dans la palette) → si un
+   fichier n'a pas d'année : chiffre **1-9** = tranche (`1985 … 2025`), **Entrée** = style
+   seul. **Échap** annule, **⌫** retire le style. La colonne « Style » montre le choix et
+   la destination en tooltip (`→ techno_acid_1990`, `→ ➕ … (sera créé)`, `année manquante`).
+2. **E** → aperçu groupé par dossier cible (fichiers sans année et jumeaux déjà rangés
+   exclus et listés) → **Appliquer** = copies enchaînées via le flux F5 (journal,
+   auto-expansion du dossier, pastille « déjà rangé »). Les choix sont de **session**
+   (perdus au rechargement) ; rien n'est copié sans l'aperçu ; **aucune écriture ID3 en P1**.
+
+Le filtre de la colonne gauche matche aussi le **sous-dossier** épars (`_techno`, `2008_08`).
 
 ## Enrichissement des années (EPIC-033)
 

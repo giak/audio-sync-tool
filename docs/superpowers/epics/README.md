@@ -54,6 +54,7 @@
 | [EPIC-031](EPIC-031-clavier-centralise-grammaire-catalogue.md) | Clavier : matrice de caractérisation (touches × contextes — bindings morts/shadowés = rouge CI), légende **générée** depuis les bindings labellisés (test bijection), grammaire des touches (Échap = pile de fermeture explicite), ergonomie sync (Space→M déplacer, écoute en chaîne, `?` aide). KISS : pas de nouveau sous-système — visibilité plutôt qu'architecture | 🟡 P0+P1 livrés (P0 `b66d091`, P1 2026-09-17) — matrice 78 cellules + 5 invariants (IDX dérivés du registry : shuffle-proof), 4 findings corrigés (Échap modale>filtre, fallback menu remplacé par l'état `isContextMenuOpen`, Alt+←/→ vivants, clavier dups déshadowé), pile Échap complète menu→modale→filtre→dossier→audio (invariant 4), légende générée + bijection, `?` légende, menu contextuel clavier (Shift+F10, ↑↓+Enter) ; P2 ergonomie à venir | Haute | bugs clavier 2026-09-16 (bindings morts, touches volées) |
 | [EPIC-033](EPIC-033-enrichissement-annees-id3.md) | Enrichissement des années ID3 manquantes (57 % du corpus) : 7 sources — MusicBrainz (1ʳᵉ sortie, 1 req/s) → Deezer → Discogs (token) → iTunes → Discogs reformulé ×2 (junk-artiste/marqueurs/suffixes) → YouTube (Topic + tier vérifié) — consolidation **1 443 certaines / 782 à revue / 1 473 introuvables**, apply mutagen par vagues de confiance (**2 161 écritures au journal**, backup additif, `--undo`) + vue « Années manquantes » (preview → confirmation, jamais écraser) + **P2** : export des choix (**e**/💾 → `POST /years/review`) consommé par `apply_years.py --review` (override humain) | 🏁 **Clôturée (2026-09-18)** — revue soldée (692 choix, 59 rejets), apply final idempotent, **76 % du corpus avec année** (vs 43 %) ; restes = données inexistantes en ligne (voir bilan de clôture dans l'epic) | Haute | mémoires Mnemolite `9539d4ab`, `32392db0`, `357e89d8` (bilan final) |
 | [EPIC-034](EPIC-034-ux-rangement-sync-player-pastille.md) | UX rangement Sync : player audio des cartes (Années/Doublons, ▶/⏹ player global), pastille « déjà rangé » sur les épars jumeaux sous le filtre source, auto-expansion mémoire du dossier destination après F5 | 🟢 Livrée (2026-09-19, `c6546a0`, `ca21e21`, `6e02f87`) | Haute | EPIC-030/028/033 (socles) |
+| [EPIC-035](EPIC-035-rangement-par-style.md) | Rangement par style : palette clavier `g` (1 style parmi 25, chord tranche), destination `style_tranche` **calculée** depuis l'année, suggestions locales (segments du chemin épars, voisinage artiste, genre ID3 aliasé, borne d'acquisition), aperçu groupé par dossier → F5 batch, écriture `TCON` via export → `apply_styles.py` (journal `old_genre` + `--undo`) | 🟡 **P1 livré (2026-09-19, `c6fcfdf` → `cd12601`)** — socle clavier testé en live headless sur données réelles (`/copy` mocké) ; P2 suggestions / P3 TCON / P4 en backlog | Haute | spec `2026-09-19-rangement-par-style-design.md` · plan `2026-09-19-rangement-par-style.md` |
 
 ## État actuel du projet (2026-09-19)
 
@@ -89,7 +90,14 @@
 - **EPIC-030 P0 livré** (2026-09-16) : filtre rapide côté Sync — chips intégrés
   `sync-epars`/`sync-source`, moteur partagé nom+année+codec, palette flottante
   retirée, focus/caret conservés à travers les re-renders (`850584a` + `b109c12`).
-- Prochains chantiers : **EPIC-033-bis** (re-scan du corpus puis collectes incrémentales sur les ~3 551 nouveaux fichiers sans année), **EPIC-031 P2**
+- **EPIC-035 P1 livré** (2026-09-19, 10 commits `c6fcfdf` → `cd12601`) : rangement par
+  style au clavier — taxonomie dérivée des 86 dossiers (25 styles), palette `g` (couche
+  DOM, registry intact), colonne Style, filtre épars par sous-dossier, aperçu `e` groupé
+  par dossier → `copyFilesTo` (extrait du F5). Zéro backend. Live headless CDP sur
+  données réelles : 3 scénarios prouvés, 1 bug trouvé et corrigé (F5 rechargeait la page
+  palette ouverte). Suite : P2 suggestions (segments de chemin, voisinage artiste, genre
+  ID3 aliasé), P3 `TCON` via export → `apply_styles.py`.
+- Prochains chantiers : **EPIC-035** (rangement par style, P1 socle), **EPIC-033-bis** (re-scan du corpus puis collectes incrémentales sur les ~3 551 nouveaux fichiers sans année), **EPIC-031 P2**
   (ergonomie sync : M déplacer, écoute en chaîne), reprise **EPIC-030 P1**
   (chips playlist-tracks + dups), **EPIC-022** (backlog, priorité Haute — a11y + responsive
   cue editor) ; EPIC-028/029 : validation visuelle des vues Doublons sur données réelles.
