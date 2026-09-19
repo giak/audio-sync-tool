@@ -3,13 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DupMatch } from '../dupDetect.js';
 import { state } from '../state.js';
 
-const { copyFilesTo, confirmDialog, showToast } = vi.hoisted(() => ({
+const { copyFilesTo, confirmDialog, showToast, apiMock } = vi.hoisted(() => ({
   copyFilesTo: vi.fn(),
   confirmDialog: vi.fn(),
   showToast: vi.fn(),
+  apiMock: vi.fn(),
 }));
 vi.mock('../actions.js', () => ({ copyFilesTo }));
 vi.mock('../ui.js', () => ({ confirmDialog, showToast }));
+vi.mock('../api.js', () => ({ api: apiMock }));
 
 import { applyRangementPlan, buildRangementPlan, formatPlan, openStylePreview } from './stylePreview.js';
 
@@ -45,6 +47,7 @@ describe('render/stylePreview', () => {
     };
     state.dupMatches = new Map();
     state.styleChoices = new Map();
+    apiMock.mockResolvedValue({ ok: true, count: 0 });
   });
 
   describe('buildRangementPlan', () => {
@@ -138,6 +141,34 @@ describe('render/stylePreview', () => {
     expect([...state.styleChoices.keys()].sort()).toEqual([B, D].sort());
     expect(showToast).toHaveBeenCalledWith('✓ 1/3 copié · 2 dossiers');
     expect(document.querySelector('#epars-status-line .s-style')?.textContent).toBe('🏷 2 assignés · e = aperçu');
+  });
+
+  it('applyRangementPlan : exporte les choix copiés vers /styles/review (P3)', async () => {
+    state.styleChoices = new Map([
+      [A, { style: 'techno_acid', tranche: null }],
+      [D, { style: 'hardcore', tranche: null }],
+    ]);
+    copyFilesTo.mockImplementation(async (_d: string, files: Array<{ fullpath: string }>) =>
+      files.map(f => f.fullpath),
+    );
+    await applyRangementPlan(buildRangementPlan());
+    expect(apiMock).toHaveBeenCalledTimes(1);
+    const [url, opts] = apiMock.mock.calls[0] as [string, { method: string; body: string }];
+    expect(url).toBe('/styles/review');
+    expect(opts.method).toBe('POST');
+    const sent = JSON.parse(opts.body);
+    expect(sent.choices[A]).toEqual({ style: 'techno_acid', tranche: null });
+    expect(sent.choices[D]).toEqual({ style: 'hardcore', tranche: null });
+  });
+
+  it('applyRangementPlan : échec de l’export non bloquant (copies déjà réussies)', async () => {
+    state.styleChoices = new Map([[A, { style: 'techno_acid', tranche: null }]]);
+    copyFilesTo.mockResolvedValue([A]);
+    apiMock.mockRejectedValue(new Error('network down'));
+    const res = await applyRangementPlan(buildRangementPlan());
+    expect(res).toEqual({ copied: 1, total: 1 });
+    expect(document.getElementById('status-text')?.textContent).toContain('export des styles échoué');
+    expect(showToast).toHaveBeenCalled(); // le toast de copie passe quand même
   });
 
   describe('openStylePreview', () => {

@@ -2963,6 +2963,66 @@ def test_years_review_get_post_fusion_et_validation(client, tmp_path, monkeypatc
     assert rv.status_code == 400
 
 
+def test_styles_review_get_post_fusion_et_validation(client, tmp_path, monkeypatch):
+    """GET lit, POST fusionne ; style hors taxonomie → 400 rien écrit ;
+    null = retrait accepté et persisté."""
+    review_path = tmp_path / 'style_review.json'
+    monkeypatch.setattr('app.STYLES_REVIEW_PATH', str(review_path))
+
+    # Taxonomie : cache avec un fichier en techno_1990 → style 'techno'
+    cache = {'source': {'/src': {
+        'a.mp3': {'path': 'techno_1990/a.mp3', 'year': None, 'duration': None, 'codec': None},
+        'b.mp3': {'path': 'italo_disco/b.mp3', 'year': None, 'duration': None, 'codec': None},
+    }}}
+    monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
+    (tmp_path / 'cache.json').write_text(json.dumps(cache))
+
+    rv = client.get('/styles/review')
+    assert rv.status_code == 200 and rv.get_json() == {}
+
+    rv = client.post('/styles/review', json={'choices': {
+        '/e/techno/a.mp3': {'style': 'techno', 'tranche': 1990},
+        '/e/disco/b.mp3': {'style': 'italo_disco', 'tranche': None},
+    }})
+    assert rv.status_code == 200 and rv.get_json()['ok'] is True
+    assert json.loads(review_path.read_text()) == {
+        '/e/techno/a.mp3': {'style': 'techno', 'tranche': 1990},
+        '/e/disco/b.mp3': {'style': 'italo_disco', 'tranche': None},
+    }
+
+    # Fusion : une seconde POST ne perd pas la première clé
+    rv = client.post('/styles/review', json={'choices': {
+        '/e/techno/c.mp3': {'style': 'techno', 'tranche': None}}})
+    assert rv.status_code == 200
+    assert len(json.loads(review_path.read_text())) == 3
+
+    # Retrait (null) accepté et persisté
+    rv = client.post('/styles/review', json={'choices': {'/e/disco/b.mp3': None}})
+    assert rv.status_code == 200
+    assert json.loads(review_path.read_text())['/e/disco/b.mp3'] is None
+
+    # Style hors taxonomie → 400, fichier intact
+    before = review_path.read_text()
+    rv = client.post('/styles/review', json={'choices': {
+        '/e/x.mp3': {'style': 'polka', 'tranche': None}}})
+    assert rv.status_code == 400
+    assert 'style inconnu' in rv.get_json()['error']
+    assert review_path.read_text() == before
+
+    # tranche invalide (non int) → 400
+    rv = client.post('/styles/review', json={'choices': {
+        '/e/x.mp3': {'style': 'techno', 'tranche': '1990'}}})
+    assert rv.status_code == 400
+
+    # valeur absurde → 400
+    rv = client.post('/styles/review', json={'choices': {'/e/x.mp3': 'techno'}})
+    assert rv.status_code == 400
+
+    # payload absurde → 400
+    rv = client.post('/styles/review', json={'choices': 'pas-un-dict'})
+    assert rv.status_code == 400
+
+
 def test_years_review_fichier_corrompu_revanire_vide(client, tmp_path, monkeypatch):
     """year_review.json corrompu : GET rend {} (load_json éprouvé), pas de 500."""
     review_path = tmp_path / 'year_review.json'

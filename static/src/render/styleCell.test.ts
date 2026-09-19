@@ -73,6 +73,25 @@ describe('render/styleCell', () => {
     expect(td.title).toBe('→ techno_acid_1990');
   });
 
+  it('P3 : genre du scan == style choisi → chip « écrit » (✓ vert)', () => {
+    const fp = `${EPARS}/_techno/a.mp3`;
+    state.styleChoices = new Map([[fp, { style: 'techno_acid', tranche: null }]]);
+    const td = insertStyleCell(makeRow(fp), fp, { year: '1992', genre: 'techno_acid' });
+    const chip = td.querySelector('.style-chip') as HTMLElement;
+    expect(chip.classList.contains('written')).toBe(true);
+    expect(chip.textContent).toBe('✓ techno_acid');
+    expect(td.title).toContain('écrit dans le tag');
+  });
+
+  it('P3 : genre différent du style → pas « écrit » (chosen normal)', () => {
+    const fp = `${EPARS}/_techno/a.mp3`;
+    state.styleChoices = new Map([[fp, { style: 'techno_acid', tranche: null }]]);
+    const td = insertStyleCell(makeRow(fp), fp, { year: '1992', genre: 'Blues' });
+    const chip = td.querySelector('.style-chip') as HTMLElement;
+    expect(chip.classList.contains('written')).toBe(false);
+    expect(chip.textContent).toBe('techno_acid');
+  });
+
   it('style daté sans année → pending-year + tooltip explicite', () => {
     const fp = `${EPARS}/2008_08/b.mp3`;
     state.styleChoices = new Map([[fp, { style: 'techno_acid', tranche: null }]]);

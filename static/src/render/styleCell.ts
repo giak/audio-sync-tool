@@ -27,17 +27,27 @@ export function currentTaxonomy(): Taxonomy | null {
 }
 
 /** Destination résolue d'un choix + libellé du tooltip. `pendingYear` =
- *  style daté sans année ni tranche (la palette doit trancher). */
-function resolve(fullpath: string, entry: { year: string | null }): { label: string; pendingYear: boolean } | null {
+ *  style daté sans année ni tranche (la palette doit trancher). `written` =
+ *  le genre lu au scan (P2) est déjà le style choisi (P3 : TCON écrit par
+ *  apply_styles.py, visible au scan suivant). */
+function resolve(
+  fullpath: string,
+  entry: { year: string | null; genre?: string | null },
+): { label: string; pendingYear: boolean; written: boolean } | null {
   const choice = state.styleChoices.get(fullpath);
   if (!choice) return null;
   const tax = currentTaxonomy();
+  const written = entry.genre === choice.style;
   const dest = tax ? destFor(tax, choice.style, yearOf(entry), choice.tranche) : null;
-  if (!dest) return { label: `→ ${choice.style} (style inconnu des dossiers actuels)`, pendingYear: false };
+  if (!dest) return { label: `→ ${choice.style} (style inconnu des dossiers actuels)`, pendingYear: false, written };
   if (dest.needsYear) {
-    return { label: `→ ${dest.name}_? (année manquante — g puis chiffre pour trancher)`, pendingYear: true };
+    return { label: `→ ${dest.name}_? (année manquante — g puis chiffre pour trancher)`, pendingYear: true, written };
   }
-  return { label: dest.exists ? `→ ${dest.name}` : `→ ➕ ${dest.name} (sera créé)`, pendingYear: false };
+  return {
+    label: dest.exists ? `→ ${dest.name}` : `→ ➕ ${dest.name} (sera créé)`,
+    pendingYear: false,
+    written,
+  };
 }
 
 /** Texte du tooltip de destination pour un choix ('' sans choix). */
@@ -75,9 +85,13 @@ function paint(
   const r = resolve(fullpath, entry);
   if (r) {
     const chip = document.createElement('span');
-    chip.className = r.pendingYear ? 'style-chip chosen pending-year' : 'style-chip chosen';
-    chip.textContent = state.styleChoices.get(fullpath)?.style ?? '';
-    td.title = r.label;
+    chip.className = r.written
+      ? 'style-chip chosen written'
+      : r.pendingYear
+        ? 'style-chip chosen pending-year'
+        : 'style-chip chosen';
+    chip.textContent = (r.written ? '✓ ' : '') + (state.styleChoices.get(fullpath)?.style ?? '');
+    td.title = r.written ? `${r.label} · écrit dans le tag` : r.label;
     td.appendChild(chip);
     return;
   }

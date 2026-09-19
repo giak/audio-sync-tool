@@ -220,6 +220,7 @@ header h1 {
 }
 .style-chip.pending-year { border-style: dashed; opacity: 0.8; }
 .style-chip.suggested { border-style: dotted; opacity: 0.55; color: var(--text-secondary, #999); border-color: var(--text-secondary, #999); background: none; }
+.style-chip.written { color: var(--accent-green); border-color: var(--accent-green); background: color-mix(in srgb, var(--accent-green) 14%, transparent); }
 
 /* EPIC-035 — palette « g » : popover clavier ancré à la ligne (couche DOM). */
 .style-palette {

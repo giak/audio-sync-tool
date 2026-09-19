@@ -7,6 +7,7 @@
 // des dossiers. Rien n'est copié sans passer par l'aperçu.
 
 import { copyFilesTo } from '../actions.js';
+import { api } from '../api.js';
 import { state } from '../state.js';
 import { type Destination, destFor, findEparsEntry, yearOf } from '../styles.js';
 import { confirmDialog, showToast } from '../ui.js';
@@ -96,7 +97,9 @@ export function formatPlan(plan: RangementPlan): string {
 
 /** Enchaîne les copies dossier par dossier (séquentiel : copyFilesTo mute
  *  l'index et recharge le journal), retire des choix les fichiers copiés,
- *  laisse les échecs/exclus en session. Renvoie {copied, total}. */
+ *  laisse les échecs/exclus en session. Exporte les choix (style →
+ *  /styles/review, EPIC-035 P3) pour apply_styles.py --review. Renvoie
+ *  {copied, total}. */
 export async function applyRangementPlan(plan: RangementPlan): Promise<{ copied: number; total: number }> {
   const done: string[] = [];
   let total = 0;
@@ -105,6 +108,7 @@ export async function applyRangementPlan(plan: RangementPlan): Promise<{ copied:
     done.push(...(await copyFilesTo(g.dest.dir, g.files)));
   }
   if (done.length) {
+    await exportStyleChoices(done);
     const next = new Map(state.styleChoices);
     for (const fp of done) next.delete(fp);
     state.styleChoices = next;
@@ -113,6 +117,28 @@ export async function applyRangementPlan(plan: RangementPlan): Promise<{ copied:
   updateStyleRecap();
   showToast(`✓ ${done.length}/${total} copié${done.length > 1 ? 's' : ''} · ${plural(plan.groups.length, 'dossier')}`);
   return { copied: done.length, total };
+}
+
+/** POST /styles/review : persiste {fullpath: {style, tranche}} pour
+ *  apply_styles.py --review (écriture TCON hors navigateur). Échec non
+ *  bloquant : la copie a réussi, un simple message d'état suffit. */
+async function exportStyleChoices(fullpaths: string[]): Promise<void> {
+  const choices: Record<string, { style: string; tranche: number | null }> = {};
+  for (const fp of fullpaths) {
+    const c = state.styleChoices.get(fp);
+    if (c) choices[fp] = { style: c.style, tranche: c.tranche };
+  }
+  if (Object.keys(choices).length === 0) return;
+  try {
+    await api('/styles/review', {
+      method: 'POST',
+      body: JSON.stringify({ choices }),
+    });
+  } catch (err) {
+    const statusText = document.getElementById('status-text');
+    if (statusText)
+      statusText.textContent = `Copies ok — export des styles échoué : ${err instanceof Error ? err.message : String(err)}`;
+  }
 }
 
 /** `e` : aperçu → confirmation → apply. Plan vide → barre d'état. */

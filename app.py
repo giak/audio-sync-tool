@@ -1115,6 +1115,64 @@ def years_review():
     return jsonify(load_json(REVIEW_PATH, {}))
 
 
+# ── EPIC-035 P3 : persistance des choix de style (vue Sync → apply_styles --review)
+
+STYLES_REVIEW_PATH = os.path.join(DATA_DIR, 'style_review.json')
+
+
+def _known_styles():
+    """Ensemble des styles connus, dérivé des dossiers source du cache
+    (même grammaire que la taxonomie client : style = 1er segment de path,
+    sans la tranche YYYY éventuelle). Cache vide → ensemble vide."""
+    cache = load_json(CACHE_PATH, {})
+    styles = set()
+    for files in cache.get('source', {}).values():
+        for meta in files.values():
+            path = meta.get('path', '')
+            slash = path.find('/')
+            if slash <= 0:
+                continue  # fichier à la racine, pas de style
+            folder = path[:slash]
+            m = re.match(r'^(.+)_(\d{4})$', folder)
+            styles.add(m.group(1) if m else folder)
+    return styles
+
+
+@app.route('/styles/review', methods=['GET', 'POST'])
+def styles_review():
+    """Choix de style humains (vue Sync, palette g) — pattern /years/review :
+    fichier data/style_review.json, clé = fullpath épars, valeur = {"style":
+    "…", "tranche": AAAA|null} ou null (retrait). GET lit, POST fusionne puis
+    sauvegarde. Style hors taxonomie (dossiers source du cache) → 400, rien
+    n'est écrit. Ne touche JAMAIS aux fichiers audio : l'écriture TCON reste
+    scripts/apply_styles.py --review."""
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        choices = data.get('choices')
+        if not isinstance(choices, dict):
+            return jsonify({'ok': False, 'error': 'choices (dict) requis'}), 400
+        known = _known_styles()
+        clean = {}
+        for k, v in choices.items():
+            if not isinstance(k, str) or not k:
+                return jsonify({'ok': False, 'error': f'clé invalide : {k!r}'}), 400
+            if v is None:
+                clean[k] = None
+            elif (isinstance(v, dict) and isinstance(v.get('style'), str) and v['style']
+                  and (v.get('tranche') is None or (isinstance(v.get('tranche'), int)
+                                                    and 1980 <= v['tranche'] <= 2100))):
+                if v['style'] not in known:
+                    return jsonify({'ok': False, 'error': f'style inconnu : {v["style"]!r}'}), 400
+                clean[k] = {'style': v['style'], 'tranche': v.get('tranche')}
+            else:
+                return jsonify({'ok': False, 'error': f'valeur invalide pour {k!r}'}), 400
+        reviews = load_json(STYLES_REVIEW_PATH, {})
+        reviews.update(clean)
+        save_json(STYLES_REVIEW_PATH, reviews)
+        return jsonify({'ok': True, 'count': len(reviews)})
+    return jsonify(load_json(STYLES_REVIEW_PATH, {}))
+
+
 # ── Playlist routes ────────────────────────────────────────────────────────
 
 
