@@ -25,28 +25,34 @@ export function currentTaxonomy(): Taxonomy | null {
   return _memoTax;
 }
 
-/** Texte du tooltip de destination pour un choix. */
-export function destinationLabel(fullpath: string, entry: { year: string | null }): string {
+/** Destination résolue d'un choix + libellé du tooltip. `pendingYear` =
+ *  style daté sans année ni tranche (la palette doit trancher). */
+function resolve(fullpath: string, entry: { year: string | null }): { label: string; pendingYear: boolean } | null {
   const choice = state.styleChoices.get(fullpath);
-  if (!choice) return '';
+  if (!choice) return null;
   const tax = currentTaxonomy();
   const dest = tax ? destFor(tax, choice.style, yearOf(entry), choice.tranche) : null;
-  if (!dest) return `→ ${choice.style} (style inconnu des dossiers actuels)`;
-  if (dest.needsYear) return `→ ${dest.name}_? (année manquante — g puis chiffre pour trancher)`;
-  return dest.exists ? `→ ${dest.name}` : `→ ➕ ${dest.name} (sera créé)`;
+  if (!dest) return { label: `→ ${choice.style} (style inconnu des dossiers actuels)`, pendingYear: false };
+  if (dest.needsYear) {
+    return { label: `→ ${dest.name}_? (année manquante — g puis chiffre pour trancher)`, pendingYear: true };
+  }
+  return { label: dest.exists ? `→ ${dest.name}` : `→ ➕ ${dest.name} (sera créé)`, pendingYear: false };
+}
+
+/** Texte du tooltip de destination pour un choix ('' sans choix). */
+export function destinationLabel(fullpath: string, entry: { year: string | null }): string {
+  return resolve(fullpath, entry)?.label ?? '';
 }
 
 function paint(td: HTMLTableCellElement, fullpath: string, entry: { year: string | null }): void {
   td.innerHTML = '';
   td.title = '';
-  const choice = state.styleChoices.get(fullpath);
-  if (!choice) return;
+  const r = resolve(fullpath, entry);
+  if (!r) return;
   const chip = document.createElement('span');
-  chip.className = 'style-chip chosen';
-  chip.textContent = choice.style;
-  const label = destinationLabel(fullpath, entry);
-  if (label.includes('année manquante')) chip.classList.add('pending-year');
-  td.title = label;
+  chip.className = r.pendingYear ? 'style-chip chosen pending-year' : 'style-chip chosen';
+  chip.textContent = state.styleChoices.get(fullpath)?.style ?? '';
+  td.title = r.label;
   td.appendChild(chip);
 }
 
@@ -59,7 +65,6 @@ export function insertStyleCell(
   const td = document.createElement('td');
   td.className = 'style-cell';
   td.dataset.fullpath = fullpath;
-  td.title = '';
   paint(td, fullpath, entry);
   // Clic = palette à la souris (import dynamique : stylePalette importe ce
   // module — pattern executeReplace dans fileRow.ts).
@@ -93,19 +98,22 @@ export function updateStyleRecap(): void {
   line.appendChild(span);
 }
 
-/** Re-rend en place la cellule d'une ligne épars (après un choix), sans
- *  re-render du panneau. No-op si la ligne n'est pas affichée. */
-export function refreshStyleCell(fullpath: string): void {
-  // Recherche par dataset (pas de sélecteur d'attribut : chemins avec guillemets,
-  // CSS.escape absent de jsdom) — appelé au commit d'un choix, pas au render.
-  let td: HTMLTableCellElement | null = null;
-  for (const el of document.querySelectorAll<HTMLTableCellElement>('#epars-container .style-cell')) {
-    if (el.dataset.fullpath === fullpath) {
-      td = el;
-      break;
-    }
+/** Re-rend en place les cellules des lignes épars affichées pour `fullpaths`
+ *  (après un choix / une copie), sans re-render du panneau. UNE passe sur le
+ *  DOM quel que soit le nombre de cibles (lot de 1 347 sur 5 092 lignes) ;
+ *  recherche par dataset (chemins avec guillemets, CSS.escape absent de jsdom). */
+export function refreshStyleCells(fullpaths: Iterable<string>): void {
+  const wanted = new Set(fullpaths);
+  if (wanted.size === 0) return;
+  for (const td of document.querySelectorAll<HTMLTableCellElement>('#epars-container .style-cell')) {
+    const fp = td.dataset.fullpath ?? '';
+    if (!wanted.has(fp)) continue;
+    const found = findEparsEntry(state.eparsFiles, fp);
+    paint(td, fp, found?.entry ?? { year: null });
   }
-  if (!td) return;
-  const found = findEparsEntry(state.eparsFiles, fullpath);
-  paint(td, fullpath, found?.entry ?? { year: null });
+}
+
+/** Cas unitaire de refreshStyleCells. No-op si la ligne n'est pas affichée. */
+export function refreshStyleCell(fullpath: string): void {
+  refreshStyleCells([fullpath]);
 }

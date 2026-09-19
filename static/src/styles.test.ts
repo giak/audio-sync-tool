@@ -193,10 +193,15 @@ describe('styles — buildTaxonomy', () => {
     expect(buildTaxonomy({}, [])).toBeNull();
     expect(buildTaxonomy({ [ROOT]: {} }, [])).toBeNull();
   });
-  it('extra dir sous la racine ajouté (dossier vide créé via ➕), hors racine ignoré', () => {
-    const tax = buildTaxonomy(realSourceFiles(), [`${ROOT}techno_percu_2010`, '/elsewhere/house_1990']);
+  it('extra dir sous la racine ajouté (dossier vide créé via ➕, joint serveur OU UI), hors racine ignoré', () => {
+    const tax = buildTaxonomy(realSourceFiles(), [
+      `${ROOT}techno_percu_2010`, // os.path.join côté serveur (slash simple)
+      `${ROOT}/trance_hard_2020`, // convention UI (double slash)
+      '/elsewhere/house_1990',
+    ]);
     expect(tax!.styles.get('techno_percu')!.folders.has('techno_percu_2010')).toBe(true);
     expect(tax!.styles.get('techno_percu')!.count).toBe(1);
+    expect(tax!.styles.get('trance_hard')!.folders.has('trance_hard_2020')).toBe(true);
     expect(tax!.styles.get('house')!.folders.has('house_1990')).toBe(false);
   });
   it('fichier à la racine ou dossier hors grammaire → ignorés sans erreur', () => {
@@ -212,13 +217,16 @@ describe('styles — buildTaxonomy', () => {
 
 describe('styles — destFor', () => {
   const tax = buildTaxonomy(realSourceFiles(), [])!;
-  it('style daté + année → dossier existant', () => {
+  it('style daté + année → dossier existant — chemin = racine + "/" + nom (convention sourceTree/dupDetect/copyFilesTo, double slash si la racine porte un slash final)', () => {
     expect(destFor(tax, 'techno_acid', 1992)).toEqual({
       name: 'techno_acid_1990',
-      dir: `${ROOT}techno_acid_1990`,
+      dir: `${ROOT}/techno_acid_1990`,
       exists: true,
       needsYear: false,
     });
+    // Le dossier calculé doit être reconnu par la recherche de racine de copyFilesTo.
+    const dir = destFor(tax, 'techno_acid', 1992)!.dir;
+    expect(dir === ROOT || dir.startsWith(`${ROOT}/`)).toBe(true);
   });
   it('style daté sans année → needsYear', () => {
     expect(destFor(tax, 'techno_acid', null)).toEqual({ name: 'techno_acid', dir: '', exists: false, needsYear: true });
@@ -226,7 +234,7 @@ describe('styles — destFor', () => {
   it('style hors temps → dossier sans tranche, année ignorée', () => {
     expect(destFor(tax, 'italo_disco', null)).toEqual({
       name: 'italo_disco',
-      dir: `${ROOT}italo_disco`,
+      dir: `${ROOT}/italo_disco`,
       exists: true,
       needsYear: false,
     });
@@ -235,7 +243,7 @@ describe('styles — destFor', () => {
   it('dossier inexistant → exists false (sera créé par /copy)', () => {
     expect(destFor(tax, 'techno_percu', 2012)).toEqual({
       name: 'techno_percu_2010',
-      dir: `${ROOT}techno_percu_2010`,
+      dir: `${ROOT}/techno_percu_2010`,
       exists: false,
       needsYear: false,
     });

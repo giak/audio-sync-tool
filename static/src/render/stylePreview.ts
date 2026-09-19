@@ -10,7 +10,7 @@ import { copyFilesTo } from '../actions.js';
 import { state } from '../state.js';
 import { type Destination, destFor, findEparsEntry, yearOf } from '../styles.js';
 import { confirmDialog, showToast } from '../ui.js';
-import { currentTaxonomy, refreshStyleCell, updateStyleRecap } from './styleCell.js';
+import { currentTaxonomy, refreshStyleCells, updateStyleRecap } from './styleCell.js';
 
 export interface PlanFile {
   filename: string;
@@ -78,15 +78,18 @@ export function formatPlan(plan: RangementPlan): string {
     const suffix = g.dest.exists ? '' : ' (sera créé)';
     lines.push(`${mark} ${g.dest.name} — ${plural(g.files.length, 'fichier')}${suffix}`);
   }
+  const ign = (n: number) => `ignoré${n > 1 ? 's' : ''}`;
   if (plan.noYear.length)
-    lines.push(`⚠ ${plural(plan.noYear.length, 'fichier')} sans année — ignorés (g puis chiffre pour trancher)`);
+    lines.push(
+      `⚠ ${plural(plan.noYear.length, 'fichier')} sans année — ${ign(plan.noYear.length)} (g puis chiffre pour trancher)`,
+    );
   if (plan.twinInDest.length)
     lines.push(
-      `⤷ ${plan.twinInDest.length} déjà rangé${plan.twinInDest.length > 1 ? 's' : ''} dans le dossier cible — ignorés`,
+      `⤷ ${plan.twinInDest.length} déjà rangé${plan.twinInDest.length > 1 ? 's' : ''} dans le dossier cible — ${ign(plan.twinInDest.length)}`,
     );
   if (plan.unknownStyle.length)
     lines.push(
-      `? ${plural(plan.unknownStyle.length, 'style')} inconnu${plan.unknownStyle.length > 1 ? 's' : ''} des dossiers actuels — ignorés`,
+      `? ${plural(plan.unknownStyle.length, 'style')} inconnu${plan.unknownStyle.length > 1 ? 's' : ''} des dossiers actuels — ${ign(plan.unknownStyle.length)}`,
     );
   return lines.join('\n');
 }
@@ -105,7 +108,7 @@ export async function applyRangementPlan(plan: RangementPlan): Promise<{ copied:
     const next = new Map(state.styleChoices);
     for (const fp of done) next.delete(fp);
     state.styleChoices = next;
-    for (const fp of done) refreshStyleCell(fp);
+    refreshStyleCells(done);
   }
   updateStyleRecap();
   showToast(`✓ ${done.length}/${total} copié${done.length > 1 ? 's' : ''} · ${plural(plan.groups.length, 'dossier')}`);

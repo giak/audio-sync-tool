@@ -60,7 +60,7 @@ describe('render/stylePreview', () => {
         ['techno_acid_1990', true, ['a.mp3', 'b.mp3']],
       ]);
       expect(plan.groups[1].files[0]).toEqual({ filename: 'a.mp3', eparDir: EPARS, fullpath: A });
-      expect(plan.groups[0].dest.dir).toBe(`${ROOT}hardcore_1995`);
+      expect(plan.groups[0].dest.dir).toBe(`${ROOT}/hardcore_1995`); // convention `${root}/${name}` (double slash toléré)
     });
 
     it('sans année (style daté) → noYear ; tranche forcée → groupe ; hors temps → groupe', () => {
@@ -80,9 +80,10 @@ describe('render/stylePreview', () => {
     it('jumeau déjà dans le dossier cible → twinInDest ; jumeau ailleurs → copié', () => {
       const twin = (src: string): DupMatch =>
         ({ eparsFullPath: '', sourceFullPath: src, eparsFilename: '', sourceFilename: '' }) as DupMatch;
+      // sourceFullPath tel que dupDetect le construit : `${baseDir}/${path}` (baseDir = racine config, slash final inclus)
       state.dupMatches = new Map([
-        [A, twin(`${ROOT}techno_1990/a.mp3`)],
-        [B, twin(`${ROOT}techno_acid_1990/b.mp3`)],
+        [A, twin(`${ROOT}/techno_1990/a.mp3`)],
+        [B, twin(`${ROOT}/techno_acid_1990/b.mp3`)],
       ]);
       state.styleChoices = new Map([
         [A, { style: 'techno', tranche: null }],
@@ -115,7 +116,7 @@ describe('render/stylePreview', () => {
       [
         '→ ➕ techno_2020 — 1 fichier (sera créé)', // tri par nom : '2' < 'a'
         '→ techno_acid_1990 — 2 fichiers',
-        '⚠ 1 fichier sans année — ignorés (g puis chiffre pour trancher)',
+        '⚠ 1 fichier sans année — ignoré (g puis chiffre pour trancher)',
       ].join('\n'),
     );
   });
@@ -132,8 +133,8 @@ describe('render/stylePreview', () => {
     const res = await applyRangementPlan(buildRangementPlan());
     expect(res).toEqual({ copied: 1, total: 3 });
     expect(copyFilesTo).toHaveBeenCalledTimes(2);
-    expect(copyFilesTo.mock.calls[0][0]).toBe(`${ROOT}hardcore_1995`);
-    expect(copyFilesTo.mock.calls[1][0]).toBe(`${ROOT}techno_acid_1990`);
+    expect(copyFilesTo.mock.calls[0][0]).toBe(`${ROOT}/hardcore_1995`);
+    expect(copyFilesTo.mock.calls[1][0]).toBe(`${ROOT}/techno_acid_1990`);
     expect([...state.styleChoices.keys()].sort()).toEqual([B, D].sort());
     expect(showToast).toHaveBeenCalledWith('✓ 1/3 copié · 2 dossiers');
     expect(document.querySelector('#epars-status-line .s-style')?.textContent).toBe('🏷 2 assignés · e = aperçu');

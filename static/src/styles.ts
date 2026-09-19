@@ -72,8 +72,13 @@ export function yearOf(entry: { year: string | null } | undefined): number | nul
   return m ? Number(m[1]) : null;
 }
 
+/** MÊME convention que le reste de l'app (`sourceTree` : `${basePath}/${name}`,
+ *  `dupDetect` : `${baseDir}/${path}`, `copyFilesTo` : `destDir.startsWith(`${dir}/`)`) :
+ *  la racine est jointe TELLE QUELLE, slash final inclus → `…/style//techno_1990`
+ *  quand la config porte un slash final. Normaliser ici casserait le patch
+ *  d'index, le reveal post-copie et l'exclusion des jumeaux (vérifié en revue). */
 function joinRoot(root: string, name: string): string {
-  return root.endsWith('/') ? `${root}${name}` : `${root}/${name}`;
+  return `${root}/${name}`;
 }
 
 function addFolder(styles: Map<string, StyleDef>, folder: string, count: number): void {
@@ -109,9 +114,11 @@ export function buildTaxonomy(sourceFiles: Record<string, FileIndex>, extraDirs:
   const styles = new Map<string, StyleDef>();
   for (const [folder, n] of counts) addFolder(styles, folder, n);
 
+  // Extra dirs : joints par le serveur (os.path.join → slash simple) ou par
+  // l'UI (double slash possible) — comparaison du parent sans slashs finaux.
   const rootNoSlash = root.replace(/\/+$/, '');
   for (const extra of extraDirs) {
-    const parent = extra.slice(0, extra.lastIndexOf('/'));
+    const parent = extra.slice(0, extra.lastIndexOf('/')).replace(/\/+$/, '');
     if (parent !== rootNoSlash) continue;
     addFolder(styles, extra.slice(extra.lastIndexOf('/') + 1), 0);
   }

@@ -10,7 +10,7 @@
 import { focusItemByElement, navigateFocus } from '../focus.js';
 import { state } from '../state.js';
 import { deriveHotkeys, findEparsEntry, type StyleChoice, TRANCHES, yearOf } from '../styles.js';
-import { currentTaxonomy, refreshStyleCell, updateStyleRecap } from './styleCell.js';
+import { currentTaxonomy, refreshStyleCells, updateStyleRecap } from './styleCell.js';
 
 let _el: HTMLElement | null = null;
 let _targets: string[] = [];
@@ -39,12 +39,12 @@ function setHint(text: string): void {
   if (hint) hint.textContent = text;
 }
 
-function commit(styleId: string, tranche: number | null): void {
+function commit(styleId: string, tranche: number | null, needing: string[]): void {
   const next = new Map<string, StyleChoice>(state.styleChoices);
-  const noYear = new Set(targetsNeedingYear(styleId));
+  const noYear = new Set(needing);
   for (const fp of _targets) next.set(fp, { style: styleId, tranche: noYear.has(fp) ? tranche : null });
   state.styleChoices = next;
-  for (const fp of _targets) refreshStyleCell(fp);
+  refreshStyleCells(_targets);
   updateStyleRecap();
   const single = _targets.length === 1;
   closeStylePalette();
@@ -56,18 +56,22 @@ function removeChoices(): void {
   const next = new Map(state.styleChoices);
   for (const fp of _targets) next.delete(fp);
   state.styleChoices = next;
-  for (const fp of _targets) refreshStyleCell(fp);
+  refreshStyleCells(_targets);
   updateStyleRecap();
   closeStylePalette();
 }
 
+/** Cibles sans année du style en attente (calculées une fois dans pick). */
+let _pendingNeeding: string[] = [];
+
 function pick(styleId: string): void {
   const needing = targetsNeedingYear(styleId);
   if (needing.length === 0) {
-    commit(styleId, null);
+    commit(styleId, null, []);
     return;
   }
   _pending = styleId;
+  _pendingNeeding = needing;
   _el?.classList.add('tranche-step');
   setHint(
     `${styleId} — ${needing.length} fichier${needing.length > 1 ? 's' : ''} sans année : chiffre 1-9 = tranche, Enter = style seul`,
@@ -94,12 +98,12 @@ function onKeydown(e: KeyboardEvent): void {
   if (_pending) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      commit(_pending, null);
+      commit(_pending, null, _pendingNeeding);
       return;
     }
     if (/^[1-9]$/.test(e.key)) {
       e.preventDefault();
-      commit(_pending, TRANCHES[Number(e.key) - 1]);
+      commit(_pending, TRANCHES[Number(e.key) - 1], _pendingNeeding);
       return;
     }
     return;
@@ -193,7 +197,7 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
     b.innerHTML = `<kbd>${i + 1}</kbd> ${t}`;
     b.onclick = (ev: MouseEvent) => {
       ev.stopPropagation();
-      if (_pending) commit(_pending, t);
+      if (_pending) commit(_pending, t, _pendingNeeding);
     };
     tr.appendChild(b);
   });
@@ -219,6 +223,7 @@ export function closeStylePalette(): void {
   _el.remove();
   _el = null;
   _pending = null;
+  _pendingNeeding = [];
   const container = eparsContainer();
   if (container && _anchor?.isConnected) focusItemByElement(container, _anchor, { noHistory: true });
   _anchor = null;
