@@ -212,3 +212,34 @@ export function subjectMatches(scope: string, subject: FilterSubject): boolean {
   const term = getFilterTerm(scope);
   return term === '' || matchesTokens(foldTerm(term), subject);
 }
+
+// ── Scope courant & liste associée (EPIC-037 P4) ──────────────────────────
+// Partagé par le clavier : F7/`/` (commands/filter.ts) choisit le chip à
+// focuser, et ↓/Tab (commands/navigation.ts) entrent dans LA liste de ce chip
+// — au lieu de sauter vers une colonne codée en dur.
+
+/** Scope du chip de la liste focusée (page + focus). */
+export function currentFilterScope(): string {
+  if (state.page === 'dups') return 'dups';
+  if (state.page === 'years') return 'years';
+  if (state.playlistMode) return state.playlistFocus === 'sidebar' ? 'playlist-tracks' : 'playlist-source';
+  return state.activePanel === 'source' ? 'sync-source' : 'sync-epars';
+}
+
+/** Conteneur DOM de la liste d'un scope — null si la liste n'est pas rendue
+ *  (page inactive) ou n'existe pas encore (chip `dups`/`playlist-tracks` :
+ *  EPIC-030 P1). Les pages à cartes (Années/Doublons) gardent leur propre
+ *  navigation : leur conteneur n'a ni `.directory` ni `.file-row`, donc
+ *  `focusItemByPath` y est un no-op (le ↓ suivant est pris par la page). */
+export function filterScopeContainer(scope: string): HTMLElement | null {
+  const ids: Record<string, string> = {
+    'sync-epars': 'epars-container',
+    'sync-source': 'source-container',
+    'playlist-source': 'playlist-source-container',
+    'playlist-tracks': 'playlist-panel',
+    years: 'years-list',
+    dups: 'dups-list',
+  };
+  const id = ids[scope];
+  return id ? document.getElementById(id) : null;
+}

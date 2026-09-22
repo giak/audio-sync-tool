@@ -353,6 +353,34 @@ describe('Click interactions', () => {
     expect(document.getElementById('panel-right')!.classList.contains('panel-active')).toBe(true);
     expect(document.getElementById('panel-left')!.classList.contains('panel-active')).toBe(false);
   });
+
+  // EPIC-037 P3 : le clic dans le champ de filtre ne doit ni basculer le
+  // panneau actif (donc pas de re-focus) ni scroller la liste en dessous.
+  it('clic dans le chip de filtre : panneau inchangé, aucun scroll de liste', async () => {
+    state.activePanel = 'source';
+    setActivePanel('source');
+    renderEpars();
+    renderSource();
+    await flush();
+
+    // Sans item, focusItemByPath sort tôt et le bug ne pourrait pas se voir.
+    expect(document.querySelectorAll('#epars-container .file-row').length).toBeGreaterThan(0);
+
+    const scrollSpy = vi.fn();
+    (Element.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = scrollSpy;
+    try {
+      const input = document.querySelector<HTMLInputElement>('.filter-chip[data-scope="sync-epars"] .filter-input');
+      expect(input).not.toBeNull();
+      input!.click(); // bulle jusqu'au handler de #panel-left
+      await flush();
+
+      expect(state.activePanel).toBe('source');
+      expect(document.getElementById('panel-left')!.classList.contains('panel-active')).toBe(false);
+      expect(scrollSpy).not.toHaveBeenCalled();
+    } finally {
+      (Element.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = () => {};
+    }
+  });
 });
 
 describe('Keyboard navigation', () => {

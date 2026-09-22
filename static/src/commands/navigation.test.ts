@@ -439,24 +439,103 @@ describe('commands/navigation', () => {
       expect(revalidateFocus).toHaveBeenCalled();
     });
 
-    it('↓ in filter input blurs then setActivePanel("source")', () => {
+    /** Input `filter-input` focusé (comme le vrai champ) + liste fournie. */
+    function mountFilterInput(): HTMLInputElement {
       const input = document.createElement('input');
+      input.className = 'filter-input';
       document.body.appendChild(input);
       input.focus();
       vi.spyOn(input, 'blur');
+      return input;
+    }
+
+    function mountList(id: string, rowClass: string, path: string): HTMLElement {
+      const c = document.createElement('div');
+      c.id = id;
+      const row = document.createElement('div');
+      row.className = rowClass;
+      row.dataset.focuspath = path;
+      c.appendChild(row);
+      document.body.appendChild(c);
+      return c;
+    }
+
+    // EPIC-037 P4 : ↓ entre dans la liste DU CHIP, plus de saut de colonne.
+    it('↓ dans le filtre épars : focus le 1ᵉʳ item de #epars-container, sans basculer de panneau', () => {
+      state.page = 'sync';
+      state.activePanel = 'epars';
+      state.eparsFocusPath = null;
+      const input = mountFilterInput();
+      const c = mountList('epars-container', 'file-row', '/music/a.mp3');
+
       B['Filter ↓'].handler();
+
+      expect(input.blur).toHaveBeenCalled();
+      expect(setActivePanel).not.toHaveBeenCalled(); // plus de saut vers la droite
+      expect(c.querySelector('.file-row')!.classList.contains('focused')).toBe(true);
+    });
+
+    it('↓ dans le filtre source : focus #source-container (jamais l’autre colonne)', () => {
+      state.page = 'sync';
+      state.activePanel = 'source';
+      state.sourceFocusPath = null;
+      const input = mountFilterInput();
+      const c = mountList('source-container', 'directory', '/music');
+
+      B['Filter ↓'].handler();
+
+      expect(input.blur).toHaveBeenCalled();
+      expect(setActivePanel).not.toHaveBeenCalled();
+      expect(c.querySelector('.directory')!.classList.contains('focused')).toBe(true);
+    });
+
+    it('↓ sur une page à cartes : blur, aucun focus jeté sur un panneau sync masqué', () => {
+      state.page = 'years';
+      state.activePanel = 'epars';
+      const input = mountFilterInput();
+
+      B['Filter ↓'].handler();
+
+      expect(input.blur).toHaveBeenCalled();
+      expect(setActivePanel).not.toHaveBeenCalled();
+      expect(focusItemByElement).not.toHaveBeenCalled();
+      state.page = 'sync';
+    });
+
+    // EPIC-037 P4 : Tab garde la convention « bascule de colonne » en page sync,
+    // désormais symétrique (avant : épars → épars, source → épars).
+    it('Tab depuis le filtre épars → setActivePanel("source")', () => {
+      state.page = 'sync';
+      state.activePanel = 'epars';
+      const input = mountFilterInput();
+
+      B['Filter Tab'].handler();
+
       expect(input.blur).toHaveBeenCalled();
       expect(setActivePanel).toHaveBeenCalledWith('source');
     });
 
-    it('Tab in filter input blurs then setActivePanel("epars")', () => {
-      const input = document.createElement('input');
-      document.body.appendChild(input);
-      input.focus();
-      vi.spyOn(input, 'blur');
+    it('Tab depuis le filtre source → setActivePanel("epars")', () => {
+      state.page = 'sync';
+      state.activePanel = 'source';
+      const input = mountFilterInput();
+
       B['Filter Tab'].handler();
+
       expect(input.blur).toHaveBeenCalled();
       expect(setActivePanel).toHaveBeenCalledWith('epars');
+    });
+
+    it('Tab hors page sync (Années) : rend le focus à la liste du scope, sans panneau sync', () => {
+      state.page = 'years';
+      state.activePanel = 'epars';
+      const input = mountFilterInput();
+
+      B['Filter Tab'].handler();
+
+      expect(input.blur).toHaveBeenCalled();
+      expect(setActivePanel).not.toHaveBeenCalled();
+      state.page = 'sync';
     });
   });
 });

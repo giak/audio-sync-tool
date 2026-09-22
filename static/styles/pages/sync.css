@@ -98,6 +98,24 @@ header h1 {
   color: var(--text-primary);
 }
 
+/* ===== Chip de filtre collé (EPIC-037 P2) ============================ */
+/* Le slot du chip est enfant du panneau (le conteneur scrollable) : il se colle
+   en haut pendant le scroll de SA colonne — même pattern que
+   #filter-slot-playlist-source (playlist.css) et #filter-slot-years.
+   top:-10px = padding du panneau (le chip vient à ras du bord haut) ; les
+   marges négatives latérales couvrent ce padding (aucune fente, pas de
+   scrollbar horizontale : la boîte atteint exactement clientWidth) ; fond
+   opaque = le contenu défile DERRIÈRE, z-index 3 au-dessus des lignes.
+   PAS de marge négative en haut : la ligne d'état épars reste intacte au
+   repos (le chip ne la chevauche qu'une fois collé). */
+#panel-left > #filter-slot-sync-epars,
+#panel-right > #filter-slot-sync-source {
+  position: sticky; top: -10px; z-index: 3;
+  background: var(--bg-panel);
+  margin-left: -10px; margin-right: -10px;
+  padding: 10px 10px 6px;
+}
+
 /* ===== Source Container (2-column layout) ============================ */
 #source-container { column-count: 2; column-gap: 14px; }
 

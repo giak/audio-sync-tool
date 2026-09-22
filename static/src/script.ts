@@ -133,8 +133,17 @@ renderKeyboardLegend();
 });
 
 // ── Panel click ───────────────────────────────────────────────────────────
-(document.getElementById('panel-left') as HTMLElement | null)!.onclick = () => setActivePanel('epars');
-(document.getElementById('panel-right') as HTMLElement | null)!.onclick = () => setActivePanel('source');
+// EPIC-037 P3 : un clic DANS le chip de filtre (slot + input, tous deux enfants
+// du panneau) ne doit pas ré-activer le panneau — setActivePanel re-focus la
+// liste et la scrolle (scrollIntoView), ce qui faisait sauter la liste sous le
+// curseur au moment où l'on cliquait dans le champ.
+function onPanelClick(panel: 'epars' | 'source', e: MouseEvent): void {
+  const target = e.target as HTMLElement | null;
+  if (target?.closest('.filter-chip, [id^="filter-slot-"]')) return;
+  setActivePanel(panel);
+}
+(document.getElementById('panel-left') as HTMLElement | null)!.onclick = (e: MouseEvent) => onPanelClick('epars', e);
+(document.getElementById('panel-right') as HTMLElement | null)!.onclick = (e: MouseEvent) => onPanelClick('source', e);
 
 // ── Modal backdrop/close ──────────────────────────────────────────────────
 document.addEventListener('click', (e: MouseEvent) => {

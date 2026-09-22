@@ -1,7 +1,7 @@
 // ─── Unit tests: filterEngine.ts — matcher tokens partagé ─────────────────
 
 import { describe, expect, it } from 'vitest';
-import { foldTerm, matchesTokens, subjectFromName } from './filterEngine.js';
+import { foldTerm, isYearLike, matchesTokens, subjectFromName } from './filterEngine.js';
 
 describe('filterEngine', () => {
   describe('foldTerm', () => {
@@ -56,6 +56,62 @@ describe('filterEngine', () => {
     it('subjectFromName gives name-only subject', () => {
       expect(matchesTokens(foldTerm('rock'), subjectFromName('Rock Classics'))).toBe(true);
       expect(matchesTokens(foldTerm('jazz'), subjectFromName('Rock Classics'))).toBe(false);
+    });
+  });
+
+  // ─── EPIC-037 P1 : le token année ne matche plus le sous-dossier daté ───
+  describe('année honnête (EPIC-037)', () => {
+    const inDatedFolder = {
+      name: 'track.mp3',
+      year: '1993',
+      codec: 'MP3 320kbps',
+      path: '2020_02_25/mix/track.mp3',
+    };
+
+    it('isYearLike reconnaît 19xx/20xx seulement', () => {
+      expect(isYearLike('2020')).toBe(true);
+      expect(isYearLike('1993')).toBe(true);
+      expect(isYearLike('202')).toBe(false);
+      expect(isYearLike('2020_02')).toBe(false);
+      expect(isYearLike('0000')).toBe(false);
+      expect(isYearLike('2999')).toBe(false);
+    });
+
+    it('ne matche plus le sous-dossier daté quand le fichier a une autre année', () => {
+      expect(matchesTokens(foldTerm('2020'), inDatedFolder)).toBe(false);
+    });
+
+    it('matche l’année exacte du fichier', () => {
+      expect(matchesTokens(foldTerm('1993'), inDatedFolder)).toBe(true);
+      expect(matchesTokens(foldTerm('2020'), { ...inDatedFolder, year: '2020' })).toBe(true);
+    });
+
+    it('matche le sous-dossier daté si le fichier n’a PAS d’année', () => {
+      expect(matchesTokens(foldTerm('2020'), { ...inDatedFolder, year: null })).toBe(true);
+    });
+
+    it('le nom de fichier reste souverain (texte explicite)', () => {
+      const live = { name: 'Live 2020.mp3', year: '2019', codec: null, path: 'x/Live 2020.mp3' };
+      expect(matchesTokens(foldTerm('2020'), live)).toBe(true);
+    });
+
+    it('échappatoire : un préfixe non year-like continue de chercher le dossier', () => {
+      expect(matchesTokens(foldTerm('2020_02'), inDatedFolder)).toBe(true);
+    });
+
+    it('AND mixte : année exacte + texte', () => {
+      const s = { name: '_schranz/x.mp3', year: '1995', codec: null, path: '_schranz/x.mp3' };
+      expect(matchesTokens(foldTerm('schranz 1995'), s)).toBe(true);
+      expect(matchesTokens(foldTerm('schranz 2020'), s)).toBe(false);
+    });
+
+    it('non-régression : les tokens non year-like gardent le haystack complet', () => {
+      expect(matchesTokens(foldTerm('mix'), inDatedFolder)).toBe(true); // sous-dossier
+      expect(matchesTokens(foldTerm('2020_02_25'), inDatedFolder)).toBe(true); // sous-dossier daté, préfixe
+      expect(matchesTokens(foldTerm('320'), inDatedFolder)).toBe(true); // codec
+      expect(matchesTokens(foldTerm('1993 mp3'), inDatedFolder)).toBe(true); // AND année exacte + codec
+      // Un fichier taggé d'une année ne se repêche PAS par son sous-dossier.
+      expect(matchesTokens(foldTerm('2020'), { ...inDatedFolder, year: 'x' })).toBe(false);
     });
   });
 });

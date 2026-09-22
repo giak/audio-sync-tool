@@ -2,6 +2,7 @@
 
 import {
   focusItemByElement,
+  focusItemByPath,
   getFocusedItem,
   getItems,
   navigateColumn,
@@ -10,7 +11,7 @@ import {
   revalidateFocus,
   setActivePanel,
 } from '../focus.js';
-import { hideFilterChip } from '../render/filterChip.js';
+import { currentFilterScope, filterScopeContainer, hideFilterChip } from '../render/filterChip.js';
 import { toggleSourceDir } from '../render/sourceTree.js';
 import { state } from '../state.js';
 import { getFocusedExpandedDir, registry } from './registry.js';
@@ -239,9 +240,15 @@ registry.bind({
   handler: () => navigateHistory(1),
 });
 
-// Filter chip (EPIC-030) — Échap, Tab, ↓ dans l'input filtre : blur + cache
-// le chip (F7 le ré-affiche) et rend le focus à la liste. Le terme reste
-// mémorisé par scope tant que la session vit.
+// Filter chip (EPIC-030, sortie clavier revue EPIC-037 P4) — Échap, ↓, Tab dans
+// l'input filtre. Le terme reste mémorisé par scope tant que la session vit.
+//   ↓   : blur + entrée dans la liste DU CHIP (scope → conteneur) — avant, un
+//         `setActivePanel('source')` codé en dur envoyait le focus à droite
+//         depuis n'importe quel chip (et sur un panneau masqué depuis les pages
+//         Années/Playlist).
+//   Tab : en page sync, bascule épars ↔ source (convention EPIC-031, désormais
+//         symétrique) ; sur les autres pages, rend le focus à la liste du scope.
+//   Échap : blur + hide + revalidate (inchangé).
 // FINDING 1 (EPIC-031 P1) : garde activeModal — sous une modale, Échap doit
 // fermer LA MODALE (bindings modals.ts) et non voler la fermeture pour cacher
 // le filtre derrière.
@@ -257,24 +264,38 @@ registry.bind({
     revalidateFocus();
   },
 });
+/** Blur du champ + entrée dans la liste du chip : chemin mémorisé s'il est
+ *  encore rendu, sinon 1ᵉʳ item (contrat `focusItemByPath`). No-op si la liste
+ *  n'est pas rendue — le ↓ suivant est alors pris par la page (cartes Années,
+ *  Doublons). */
+function focusFilterScopeList(): void {
+  const scope = currentFilterScope();
+  const container = filterScopeContainer(scope);
+  (document.activeElement as HTMLElement | null)?.blur();
+  if (!container) return;
+  focusItemByPath(container, scope === 'sync-epars' ? state.eparsFocusPath : state.sourceFocusPath);
+}
+
 registry.bind({
   key: 'ArrowDown',
   isFilterInputFocused: true,
-  label: 'Du filtre → liste Source Data',
+  label: 'Du filtre → liste de la colonne du filtre',
   group: 'sync',
-  handler: () => {
-    (document.activeElement as HTMLElement | null)?.blur();
-    setActivePanel('source');
-  },
+  handler: focusFilterScopeList,
 });
 registry.bind({
   key: 'Tab',
   isFilterInputFocused: true,
-  label: 'Du filtre → liste épars',
+  label: 'Du filtre → colonne voisine (Sync) ou liste de la colonne',
   group: 'sync',
   handler: () => {
-    (document.activeElement as HTMLElement | null)?.blur();
-    setActivePanel('epars');
+    // Page sync : la convention Tab = bascule de colonne s'applique (symétrique).
+    if (state.page === 'sync' && !state.playlistMode) {
+      (document.activeElement as HTMLElement | null)?.blur();
+      setActivePanel(currentFilterScope() === 'sync-source' ? 'epars' : 'source');
+      return;
+    }
+    focusFilterScopeList();
   },
 });
 

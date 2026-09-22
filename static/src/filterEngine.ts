@@ -27,10 +27,29 @@ export function subjectFromName(name: string): FilterSubject {
   return { name, year: null, codec: null };
 }
 
+/** Token « année plausible » : 4 chiffres 19xx/20xx (ex. « 2020 »).
+ *  Un tel token est traité à part dans `matchesTokens` : il vise une ANNÉE
+ *  EXACTE, pas une sous-chaîne — sinon « 2020 » gardait les fichiers d'un
+ *  sous-dossier daté (`2020_02_25/mix/…`) quelle que soit leur année
+ *  (constaté en usage réel : 493 lignes dont 333 d'une autre année, dont
+ *  14 × 1993 et 9 × 1997 — EPIC-037). La recherche reste LIBRE : aucun préfixe
+ *  à taper, un token non-year-like garde le comportement historique. */
+export function isYearLike(token: string): boolean {
+  return /^(19|20)\d{2}$/.test(token);
+}
+
 /**
  * Match AND de tokens : chaque token doit matcher au moins un champ.
- * Tokens numériques matchent l'année (ex. « 2023 ») — mais aussi le nom
- * (« 01 - » d'un préfixe de piste), ce qui est le comportement voulu.
+ *
+ * Deux régimes :
+ *  - token NON year-like (texte, `202`, `_schranz`…) : sous-chaîne sur
+ *    l'ensemble nom + année + codec + sous-dossier + genre (historique intact) ;
+ *  - token year-like (`1993`, `2020`…) : l'ANNÉE d'abord et exactement, puis le
+ *    NOM de fichier (texte explicite), puis le sous-dossier — mais uniquement
+ *    si le fichier n'a PAS d'année (fichier non taggé dans un dossier daté).
+ *    Le sous-dossier ne peut donc plus faire mentir le filtre par année
+ *    (échappatoire pour retrouver un dossier daté : préfixe non year-like,
+ *    ex. « 2020_02 »).
  */
 export function matchesTokens(foldedTerm: string, subject: FilterSubject): boolean {
   const foldedName = foldText(subject.name);
@@ -43,7 +62,13 @@ export function matchesTokens(foldedTerm: string, subject: FilterSubject): boole
   return foldedTerm
     .split(/\s+/)
     .filter(t => t.length > 0)
-    .every(token => haystack.includes(token));
+    .every(token => {
+      if (!isYearLike(token)) return haystack.includes(token);
+      if (foldedYear === token) return true;
+      if (foldedName.includes(token)) return true;
+      if (!foldedYear && foldedPath.includes(token)) return true;
+      return false;
+    });
 }
 
 /** Pli + parse du terme : renvoie le terme plié prêt pour matchesTokens. */

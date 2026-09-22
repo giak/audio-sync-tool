@@ -6,22 +6,27 @@
 // scope tant que la session vit — ré-afficher restaure le filtre.
 
 import { setActivePanel } from '../focus.js';
-import { focusFilterChip, hideFilterChip } from '../render/filterChip.js';
+// EPIC-037 P4 : `currentFilterScope` vit dans filterChip.ts (couche liste) — le
+// clavier (F7/`/` ici, ↓/Tab dans navigation.ts) partage la même table
+// scope → liste, sans dépendance navigation → filter (ordre du registry intact).
+import { currentFilterScope, focusFilterChip, hideFilterChip } from '../render/filterChip.js';
 import { state as st } from '../state.js';
 import { registry } from './registry.js';
 
-/** Scope du chip à focus selon la page et la liste focusée. */
-function currentFilterScope(): string {
-  if (st.page === 'dups') return 'dups';
-  if (st.page === 'years') return 'years';
-  if (st.playlistMode) return st.playlistFocus === 'sidebar' ? 'playlist-tracks' : 'playlist-source';
-  return st.activePanel === 'source' ? 'sync-source' : 'sync-epars';
+/** Marque le panneau actif SANS passer par setActivePanel quand il l'est déjà
+ *  (EPIC-037 P3) : setActivePanel re-focus la liste et la scrolle
+ *  (scrollIntoView) — c'est ce qui faisait sauter la colonne à chaque F7. */
+function ensurePanelActiveMarker(): void {
+  const panelId = st.activePanel === 'source' ? 'panel-right' : 'panel-left';
+  if (!document.getElementById(panelId)?.classList.contains('panel-active')) {
+    setActivePanel(st.activePanel);
+  }
 }
 
 function focusCurrentChip(): void {
   // Page sync : la colonne focusée détermine le scope (le panel actif suit le focus)
   if (!st.playlistMode && st.page === 'sync') {
-    setActivePanel(st.activePanel);
+    ensurePanelActiveMarker();
   }
   focusFilterChip(currentFilterScope());
 }

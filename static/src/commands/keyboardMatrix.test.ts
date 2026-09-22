@@ -155,16 +155,24 @@ vi.mock('../ui.js', async importOriginal => {
     isContextMenuOpen: isContextMenuOpenMock,
   };
 });
-vi.mock('../render/filterChip.js', () => ({
-  focusFilterChip,
-  hideFilterChip,
-  getFilterTerm: vi.fn(() => ''),
-  setFilterTerm: vi.fn(),
-  isFilterActive: vi.fn(() => false),
-  updateFilterCount: vi.fn(),
-  ensureFilterChip: vi.fn(() => document.createElement('div')),
-  subjectMatches: vi.fn(() => true),
-}));
+vi.mock('../render/filterChip.js', async () => {
+  // EPIC-037 P4 : `currentFilterScope`/`filterScopeContainer` vivent désormais
+  // dans filterChip.ts et sont consommés par le clavier (F7/`/` et ↓/Tab) —
+  // on garde leur LOGIQUE RÉELLE (elle lit le state que chaque cellule pilote).
+  const actual = await vi.importActual<typeof import('../render/filterChip.js')>('../render/filterChip.js');
+  return {
+    focusFilterChip,
+    hideFilterChip,
+    getFilterTerm: vi.fn(() => ''),
+    setFilterTerm: vi.fn(),
+    isFilterActive: vi.fn(() => false),
+    updateFilterCount: vi.fn(),
+    ensureFilterChip: vi.fn(() => document.createElement('div')),
+    subjectMatches: vi.fn(() => true),
+    currentFilterScope: actual.currentFilterScope,
+    filterScopeContainer: actual.filterScopeContainer,
+  };
+});
 vi.mock('../render/sourceTree.js', async importOriginal => {
   const mod = await importOriginal<typeof import('../render/sourceTree.js')>();
   return {
@@ -551,18 +559,21 @@ const CELLS: Cell[] = [
     check: () => expect(hideFilterChip).toHaveBeenCalledTimes(1),
   },
   {
-    name: 'sync: ↓ dans filtre → panel source',
+    // EPIC-037 P4 : ↓ entre dans la liste DU CHIP — plus de saut de colonne.
+    name: 'sync: ↓ dans filtre → liste de sa colonne (aucun changement de panneau)',
     w: { fi: true },
     key: 'ArrowDown',
     expect: IDX.filterDown,
-    check: () => expect(setActivePanel).toHaveBeenCalledWith('source'),
+    check: () => expect(setActivePanel).not.toHaveBeenCalled(),
   },
   {
-    name: 'sync: Tab dans filtre → panel épars',
+    // EPIC-037 P4 : Tab = bascule de colonne, désormais SYMÉTRIQUE
+    // (avant : épars → épars, source → épars).
+    name: 'sync: Tab dans filtre épars → colonne voisine (panel source)',
     w: { fi: true },
     key: 'Tab',
     expect: IDX.filterTab,
-    check: () => expect(setActivePanel).toHaveBeenCalledWith('epars'),
+    check: () => expect(setActivePanel).toHaveBeenCalledWith('source'),
   },
   { name: 'sync: ← dans filtre = caret (non intercepté)', w: { fi: true }, key: 'ArrowLeft', expect: null },
   { name: 'sync: Espace dans filtre = texte (non intercepté)', w: { fi: true }, key: ' ', expect: null },
