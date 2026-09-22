@@ -4,11 +4,14 @@
 // EPIC-041 : `g` est scope-aware — il agit sur le MORCEAU surligné de la
 // colonne qui porte le focus (Éparpillé ou Source Data), plus sur le seul
 // panneau épars (avant, un clic dans la colonne droite rendait `g` muet).
+// EPIC-044 : troisième binding, `a` — alignement du genre des rangés sur leur
+// dossier (aperçu → confirmation → écriture).
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { bind, openStylePalette, openStylePreview } = vi.hoisted(() => ({
+const { bind, openGenreAudit, openStylePalette, openStylePreview } = vi.hoisted(() => ({
   bind: vi.fn(),
+  openGenreAudit: vi.fn(),
   openStylePalette: vi.fn(),
   openStylePreview: vi.fn(),
 }));
@@ -16,6 +19,7 @@ const { bind, openStylePalette, openStylePreview } = vi.hoisted(() => ({
 vi.mock('./registry.js', () => ({ registry: { bind } }));
 vi.mock('../render/stylePalette.js', () => ({ openStylePalette }));
 vi.mock('../render/stylePreview.js', () => ({ openStylePreview }));
+vi.mock('../render/styleAudit.js', () => ({ openGenreAudit }));
 
 import { state } from '../state.js';
 import './style.js';
@@ -23,6 +27,7 @@ import './style.js';
 type Binding = Record<string, unknown> & { handler: () => void };
 let binding: Binding;
 let bindingE: Binding;
+let bindingA: Binding;
 let bindCount = 0;
 
 beforeAll(() => {
@@ -30,6 +35,7 @@ beforeAll(() => {
   bindCount = bind.mock.calls.length;
   binding = bind.mock.calls[0][0] as Binding;
   bindingE = bind.mock.calls[1][0] as Binding;
+  bindingA = bind.mock.calls[2][0] as Binding;
 });
 
 beforeEach(() => {
@@ -54,8 +60,13 @@ afterAll(() => {
 });
 
 describe('style command (g)', () => {
-  it('deux bindings : g (page sync, panneau épars) et e (page sync), hors input/modale/menu, labellisés', () => {
-    expect(bindCount).toBe(2);
+  it('trois bindings : g, e et a (page sync), hors input/modale/menu, labellisés', () => {
+    expect(bindCount).toBe(3);
+    expect(bindingA.key).toBe('a');
+    expect(bindingA.page).toBe('sync');
+    expect(bindingA.isInput).toBe(false);
+    expect(bindingA.activeModal).toBeNull();
+    expect(bindingA.label).toContain('Aligner');
     expect(bindingE.key).toBe('e');
     expect(bindingE.page).toBe('sync');
     expect(bindingE.isInput).toBe(false);
@@ -107,6 +118,12 @@ describe('style command (g)', () => {
   it('e → openStylePreview', () => {
     bindingE.handler();
     expect(openStylePreview).toHaveBeenCalledTimes(1);
+  });
+
+  it('a → openGenreAudit (aperçu avant écriture, EPIC-044)', () => {
+    bindingA.handler();
+    expect(openGenreAudit).toHaveBeenCalledTimes(1);
+    expect(openStylePalette).not.toHaveBeenCalled();
   });
 
   it('focus sur un dossier épars (pas une ligne fichier) → pas de cible, message honnête', () => {

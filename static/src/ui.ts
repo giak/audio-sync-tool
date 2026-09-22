@@ -91,6 +91,57 @@ export function confirmDialog(msg: string, onConfirm: () => void, confirmLabel =
   openModal('dialog');
 }
 
+/** Dialog à DEUX actions (EPIC-044) : une principale, une seconde action
+ *  explicite — le mode conservateur — plus Annuler. Le libellé de chaque bouton
+ *  DIT ce qu'il fait (« Corriger 1 023 + remplir 258 » / « Remplir seulement les
+ *  258 vides ») : le choix est visible au moment où il compte, sans toucher
+ *  ajouté ailleurs dans l'interface.
+ *
+ *  Renvoie `true` si les deux actions sont atteignables. Un template d'une autre
+ *  version (pas de `#dialog-alt`) perd la seconde : c'est **signalé** (retour
+ *  false → l'appelant le dit à l'écran) plutôt que silencieux — la leçon des
+ *  sections effacées d'EPIC-042, où une information disparaissait sans bruit. */
+export function choiceDialog(
+  msg: string,
+  primary: { label: string; run: () => void },
+  secondary?: { label: string; run: () => void },
+): boolean {
+  const msgEl = document.getElementById('dialog-msg');
+  const confirmBtn = document.getElementById('dialog-confirm');
+  const cancelBtn = document.getElementById('dialog-cancel');
+  const inputEl = document.getElementById('dialog-input');
+  const altBtn = document.getElementById('dialog-alt');
+  if (!msgEl || !confirmBtn || !cancelBtn) return false;
+  msgEl.textContent = msg;
+  inputEl?.classList.add('hidden');
+  confirmBtn.textContent = primary.label;
+  confirmBtn.onclick = () => {
+    closeAllModals();
+    primary.run();
+  };
+  cancelBtn.onclick = () => closeAllModals();
+  let bothReachable = false;
+  if (altBtn) {
+    if (secondary) {
+      altBtn.textContent = secondary.label;
+      altBtn.classList.remove('hidden');
+      altBtn.onclick = () => {
+        closeAllModals();
+        secondary.run();
+      };
+      bothReachable = true;
+    } else {
+      altBtn.classList.add('hidden');
+      altBtn.onclick = null;
+    }
+  }
+  if (secondary && !bothReachable) {
+    console.warn("#dialog-alt absent (template d'une autre version) : seconde action indisponible");
+  }
+  openModal('dialog');
+  return bothReachable;
+}
+
 /** Prompt custom : champ texte pré-rempli, onOk(value) si validé. */
 export function promptDialog(
   msg: string,

@@ -3304,3 +3304,180 @@ def test_move_vers_trash_ne_tague_pas(client, monkeypatch, tmp_path):
     assert body['ok'] is True
     assert get_audio_meta(str(trash / 'hit.mp3'))[3] == 'Blues'
     assert not style_journal.exists()
+
+
+# ── EPIC-044 : le tag genre des RANGÉS rejoint l'arborescence ──────────────
+# Le dossier de style EST la déclaration de l'app : l'alignement rend au tag ce
+# que le rangement déclare, avec aperçu avant écriture (GET /styles/audit), deux
+# modes (tous / vides seulement), le disque autoritaire, et le journal PARTAGÉ
+# des scripts (`apply_styles.py --undo` reste la sortie de secours).
+# Périmètre : les rangés — sous une racine épars, les mêmes noms sont des dates
+# ou des humeurs (`2007_04`, `_techno`, `calme`), pas des styles.
+
+def _align_env(client, monkeypatch, tmp_path, overrides=None):
+    """Monde rangé : trois fichiers d'un dossier de style (genre externe / sans
+    genre / déjà aligné), un hors grammaire (daté), un .wma, un absent du
+    disque. Le cache joue le dernier scan ; le journal est redirigé.
+
+    `overrides` : {nom de fichier: genre} dans l'entrée de cache — pour fabriquer
+    un cache périmé (le disque est la vérité à l'écriture)."""
+    from app import STYLE_JOURNAL
+    src = tmp_path / 'style'
+    style_dir = src / 'techno_acid_1990'
+    style_dir.mkdir(parents=True)
+    (src / '2008_08').mkdir()
+    make_tagged_mp3(style_dir / 'a.mp3', year='1992', genre='Techno')
+    make_tagged_mp3(style_dir / 'b.mp3', year='1993')
+    make_tagged_mp3(style_dir / 'c.mp3', year='1994', genre='techno_acid')
+    make_tagged_mp3(src / '2008_08' / 'd.mp3', year='2008', genre='Dance')
+    (style_dir / 'e.wma').write_bytes(b'')          # extension non gérée
+    meta = {
+        'a.mp3': {'path': 'techno_acid_1990/a.mp3', 'year': '1992', 'duration': 200,
+                  'codec': 'MP3 320kbps', 'genre': 'Techno'},
+        'b.mp3': {'path': 'techno_acid_1990/b.mp3', 'year': '1993', 'duration': 200,
+                  'codec': 'MP3 320kbps', 'genre': None},
+        'c.mp3': {'path': 'techno_acid_1990/c.mp3', 'year': '1994', 'duration': 200,
+                  'codec': 'MP3 320kbps', 'genre': 'techno_acid'},
+        'd.mp3': {'path': '2008_08/d.mp3', 'year': '2008', 'duration': 200,
+                  'codec': 'MP3 320kbps', 'genre': 'Dance'},
+        'e.wma': {'path': 'techno_acid_1990/e.wma', 'year': None, 'duration': None,
+                  'codec': 'WMA', 'genre': None},
+        'ghost.mp3': {'path': 'techno_acid_1990/ghost.mp3', 'year': None, 'duration': None,
+                      'codec': None, 'genre': None},
+    }
+    for fn, genre in (overrides or {}).items():
+        meta[fn]['genre'] = genre
+    style_journal = tmp_path / 'style_journal.jsonl'
+    monkeypatch.setattr('app.STYLE_JOURNAL', str(style_journal))
+    # POST /config change de config active → il EFFACE le cache : à écrire après.
+    client.post('/config', json=make_cfg(source_data=str(src)))
+    (tmp_path / 'cache.json').write_text(json.dumps({'source': {str(src): meta}, 'epars': {}}))
+    assert STYLE_JOURNAL
+    return src, style_journal
+
+
+def _journal_lines(style_journal):
+    if not style_journal.exists():
+        return []
+    return [json.loads(x) for x in style_journal.read_text().splitlines() if x]
+
+
+def test_genre_audit_verdicts(client, monkeypatch, tmp_path):
+    """L'aperçu classe chaque rangé et ne touche à RIEN : hors grammaire exclu,
+    .wma et absent comptés « sans genre » (l'écriture les rattrapera)."""
+    src, style_journal = _align_env(client, monkeypatch, tmp_path)
+    body = client.get('/styles/audit').get_json()
+    assert body['ok'] is True
+    assert (body['total'], body['avec_style'], body['hors_grammaire']) == (6, 5, 1)
+    assert (body['alignes'], body['a_corriger'], body['sans_genre']) == (1, 1, 3)
+    assert body['par_style'][0] == {'style': 'techno_acid', 'a_corriger': 1,
+                                    'sans_genre': 3, 'total': 4}
+    assert body['exemples'] == [{'path': str(src / 'techno_acid_1990' / 'a.mp3'),
+                                 'genre': 'Techno', 'style': 'techno_acid'}]
+    assert not style_journal.exists()
+
+
+def test_align_vides_remplit_sans_ecraser(client, monkeypatch, tmp_path):
+    """Mode « vides » : seuls les fichiers SANS genre sont écrits (b), le genre
+    externe de a reste intact, et le journal porte source=align + old=None."""
+    src, style_journal = _align_env(client, monkeypatch, tmp_path)
+    body = client.post('/styles/align', json={'mode': 'vides'}).get_json()
+    assert body['ok'] is True and body['plan'] == 3
+    assert [w['path'] for w in body['written']] == [str(src / 'techno_acid_1990' / 'b.mp3')]
+    assert body['written'][0]['style'] == 'techno_acid' and body['written'][0]['old'] is None
+    assert body['skipped'] == {'deja': 0, 'non_vide': 0, 'absent': 1, 'extension': 1}
+    assert body['by_style'] == {'techno_acid': 1}
+    assert get_audio_meta(str(src / 'techno_acid_1990' / 'b.mp3'))[3] == 'techno_acid'
+    assert get_audio_meta(str(src / 'techno_acid_1990' / 'a.mp3'))[3] == 'Techno'
+    lines = _journal_lines(style_journal)
+    assert len(lines) == 1 and 'ts' in lines[0]          # horodatée (_journal_line)
+    assert {k: v for k, v in lines[0].items() if k != 'ts'} == {
+        'path': str(src / 'techno_acid_1990' / 'b.mp3'), 'old': None,
+        'new': 'techno_acid', 'source': 'align', 'frame': 'TCON', 'ok': True}
+
+
+def test_align_tous_corrige_et_met_le_cache_a_jour(client, monkeypatch, tmp_path):
+    """Mode « tous » : le genre externe est corrigé, l'année intacte, et le cache
+    suit (sinon l'affichage suivant contredirait le disque)."""
+    src, style_journal = _align_env(client, monkeypatch, tmp_path)
+    body = client.post('/styles/align', json={'mode': 'tous'}).get_json()
+    assert body['plan'] == 4
+    assert sorted((str(w['old']) for w in body['written'])) == ['None', 'Techno']
+    assert body['skipped']['extension'] == 1 and body['skipped']['absent'] == 1
+    a = src / 'techno_acid_1990' / 'a.mp3'
+    assert get_audio_meta(str(a))[3] == 'techno_acid'
+    assert get_audio_meta(str(a))[0] == '1992'          # l'année n'est pas touchée
+    cache = json.loads((tmp_path / 'cache.json').read_text())
+    assert cache['source'][str(src)]['a.mp3']['genre'] == 'techno_acid'
+    assert cache['source'][str(src)]['b.mp3']['genre'] == 'techno_acid'
+    assert cache['source'][str(src)]['ghost.mp3']['genre'] is None   # jamais écrit
+    assert len(_journal_lines(style_journal)) == 2
+
+
+def test_align_deja_align_sur_le_disque_ne_reecrit_pas(client, monkeypatch, tmp_path):
+    """Cache périmé (il dit « Techno »), disque déjà au style : aucune écriture,
+    aucune ligne de journal — compté `deja`."""
+    src, style_journal = _align_env(client, monkeypatch, tmp_path, overrides={'a.mp3': 'Techno'})
+    make_tagged_mp3(src / 'techno_acid_1990' / 'a.mp3', year='1992', genre='techno_acid')
+    body = client.post('/styles/align', json={'mode': 'tous'}).get_json()
+    assert body['skipped']['deja'] == 1
+    assert all('a.mp3' not in w['path'] for w in body['written'])
+    assert all('a.mp3' not in e['path'] for e in _journal_lines(style_journal))
+
+
+def test_align_vides_cache_menteur_n_ecrase_pas(client, monkeypatch, tmp_path):
+    """Le disque est autoritaire : le cache dit « pas de genre », le disque porte
+    'House' → mode « vides » NE TOUCHE PAS (compté non_vide)."""
+    src, style_journal = _align_env(client, monkeypatch, tmp_path, overrides={'b.mp3': None})
+    make_tagged_mp3(src / 'techno_acid_1990' / 'b.mp3', year='1993', genre='House')
+    body = client.post('/styles/align', json={'mode': 'vides'}).get_json()
+    assert body['skipped']['non_vide'] == 1
+    assert [w['path'] for w in body['written']] == []
+    assert get_audio_meta(str(src / 'techno_acid_1990' / 'b.mp3'))[3] == 'House'
+    assert not style_journal.exists()
+
+
+def test_align_dry_run_n_ecrit_rien(client, monkeypatch, tmp_path):
+    """dry_run : le plan est annoncé, rien n'est écrit, aucun journal."""
+    src, style_journal = _align_env(client, monkeypatch, tmp_path)
+    body = client.post('/styles/align', json={'mode': 'tous', 'dry_run': True}).get_json()
+    assert body['dry_run'] is True and len(body['written']) == 2
+    assert get_audio_meta(str(src / 'techno_acid_1990' / 'a.mp3'))[3] == 'Techno'
+    assert not style_journal.exists()
+    cache = json.loads((tmp_path / 'cache.json').read_text())
+    assert cache['source'][str(src)]['a.mp3']['genre'] == 'Techno'
+
+
+def test_align_mode_invalide_400(client, monkeypatch, tmp_path):
+    _align_env(client, monkeypatch, tmp_path)
+    rv = client.post('/styles/align', json={'mode': 'tout'})
+    assert rv.status_code == 400 and rv.get_json()['ok'] is False
+
+
+def test_align_sans_mutagen_non_bloquant(client, monkeypatch, tmp_path):
+    """mutagen absent : le dry-run reste possible, l'écriture est refusée."""
+    _align_env(client, monkeypatch, tmp_path)
+    monkeypatch.setattr('app.HAS_MUTAGEN', False)
+    assert client.post('/styles/align', json={'mode': 'tous', 'dry_run': True}).status_code == 200
+    rv = client.post('/styles/align', json={'mode': 'tous'})
+    assert rv.status_code == 500 and rv.get_json()['error'] == 'mutagen indisponible'
+
+
+def test_align_journal_restaure_par_le_script_undo(client, monkeypatch, tmp_path):
+    """Le journal de l'alignement est celui des scripts : apply_styles.py --undo
+    restaure les valeurs d'avant SANS modification du script."""
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scripts'))
+    import apply_styles
+    if not apply_styles.HAS_MUTAGEN:
+        pytest.skip('mutagen requis')
+    src, style_journal = _align_env(client, monkeypatch, tmp_path)
+    body = client.post('/styles/align', json={'mode': 'tous'}).get_json()
+    assert len(body['written']) == 2
+    a = src / 'techno_acid_1990' / 'a.mp3'
+    b = src / 'techno_acid_1990' / 'b.mp3'
+    assert apply_styles.current_genre(str(a)) == 'techno_acid'
+    monkeypatch.setattr(apply_styles, 'JOURNAL', str(style_journal))
+    apply_styles.do_undo()
+    assert apply_styles.current_genre(str(a)) == 'Techno'   # valeur d'avant restaurée
+    assert apply_styles.current_genre(str(b)) is None        # frame retiré (old=None)

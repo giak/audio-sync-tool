@@ -99,7 +99,7 @@ vi.hoisted(() => {
 <div id="modal-legend" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>❓ Raccourcis</h3><button class="modal-close" data-modal="legend">✕</button></div><div id="legend-grid"></div></div></div>
 <div id="modal-journal" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>📋 Journal</h3><button class="modal-close" data-modal="journal">✕</button></div><div id="journal-content"></div></div></div>
 <div id="modal-playlists" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h3>🎵 Playlists</h3><button class="modal-close">✕</button></div><div id="pl-manager-content"></div></div></div>
-<div id="modal-dialog" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content modal-sm"><p id="dialog-msg"></p><input id="dialog-input" class="dialog-input hidden" type="text"><div class="dialog-buttons"><button id="dialog-confirm">Copier</button><button id="dialog-cancel">Annuler</button></div></div></div>`;
+<div id="modal-dialog" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-content modal-sm"><p id="dialog-msg"></p><input id="dialog-input" class="dialog-input hidden" type="text"><div class="dialog-buttons"><button id="dialog-confirm">Copier</button><button id="dialog-alt" class="hidden"></button><button id="dialog-cancel">Annuler</button></div></div></div>`;
 });
 
 // ── Import SCRIPT.TS (executes on the real DOM set up above) ────────────────

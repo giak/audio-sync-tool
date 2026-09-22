@@ -251,6 +251,9 @@
     <input id="dialog-input" class="dialog-input hidden" type="text" autocomplete="off">
     <div class="dialog-buttons">
       <button id="dialog-confirm">Copier</button>
+      <!-- Seconde action explicite (EPIC-044 : « remplir seulement les vides »)
+           — masquée quand le dialogue n'a qu'un choix. -->
+      <button id="dialog-alt" class="hidden"></button>
       <button id="dialog-cancel">Annuler</button>
     </div>
   </div>

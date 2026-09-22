@@ -21,6 +21,7 @@
 // bougent pas.
 
 import { setStatus } from '../core/feedback.js';
+import { openGenreAudit } from '../render/styleAudit.js';
 import { openStylePalette } from '../render/stylePalette.js';
 import { openStylePreview } from '../render/stylePreview.js';
 import { state } from '../state.js';
@@ -127,4 +128,18 @@ registry.bind({
   label: 'Aperçu du rangement par style',
   group: 'sync',
   handler: () => openStylePreview(),
+});
+
+// a — aligner le genre des fichiers RANGÉS sur leur dossier (EPIC-044). Aperçu
+// avant écriture, deux modes au choix, journal partagé. Libre en page sync
+// (vérifié : aucune touche `a`/`A` dans les 13 modules de commandes).
+registry.bind({
+  key: 'a',
+  page: 'sync',
+  isInput: false,
+  activeModal: null,
+  isContextMenuOpen: false,
+  label: 'Aligner le genre des rangés sur leur dossier',
+  group: 'sync',
+  handler: () => void openGenreAudit(),
 });

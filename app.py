@@ -630,9 +630,10 @@ def _style_of_dest_dir(dest_dir, source_data):
     return _style_of_folder(rel.split(os.sep)[0])
 
 
-def _write_style_at_copy(path, style, role):
+def _write_style_at_copy(path, style, role, source='copy-f5'):
     """Écrit le style sur un fichier de la paire épars/copie. Ne lève jamais :
     la copie a réussi, un échec de tag est RAPPORTÉ (jamais bloquant).
+    `source` marque l'origine dans le journal partagé (`copy-f5`, `align`).
     Idempotent : déjà au bon genre → ni écriture, ni ligne de journal
     (`changed: False`) — les copies sont fréquentes, le journal d'annulation
     (`apply_styles.py --undo`) doit rester lisible."""
@@ -652,7 +653,7 @@ def _write_style_at_copy(path, style, role):
                 read_back = get_audio_meta(path)[3]
                 ok = read_back == style
                 _journal_line(STYLE_JOURNAL, {'path': path, 'old': old, 'new': style,
-                                              'source': 'copy-f5', 'frame': frame,
+                                              'source': source, 'frame': frame,
                                               'ok': ok})
                 res.update({'ok': ok, 'changed': True, 'frame': frame, 'style': read_back})
                 if not ok:
@@ -756,6 +757,171 @@ def copy_file():
 
     return _resp(True, _src=dst, style=style, style_writes=style_writes,
                  style_error=style_error)
+
+
+# ── EPIC-044 : le tag genre des RANGÉS rejoint l'arborescence ──────────────
+# EPIC-043 a fermé la fuite pour le futur (chaque copie écrit le style du
+# dossier cible) ; le STOCK est resté tel quel. Mesuré sur la collection : sur
+# 1 604 fichiers rangés, 324 seulement portent un genre cohérent avec leur
+# dossier, 1 022 le contredisent (genres externes : « Techno », « Electronic »,
+# « Dance »…) et 258 n'en ont aucun. Le dossier EST la déclaration de style de
+# l'app : l'alignement rend au tag ce que le rangement déclare.
+# Deux temps, comme les années (EPIC-033/040) : un aperçu qui ne touche à rien,
+# puis une écriture confirmée, journalisée dans le journal PARTAGÉ des scripts
+# (`apply_styles.py --undo` restaure, y compris `old: None`).
+# PÉRIMÈTRE : les rangés uniquement. Sous une racine épars, les mêmes noms ne
+# sont pas des styles mais des dates, des humeurs, des états (`2007_04`,
+# `_techno`, `to_listen`, `calme`, `-to-process/2011_10_03`) — `acid` et `calme`
+# matchent même la grammaire, les appliquer écrirait des tags faux ; et leur
+# genre est une ENTRÉE du moteur de suggestion (`styleSuggest`, 0,15), l'écraser
+# appauvrirait la suggestion au lieu de l'enrichir.
+
+
+def _source_style_of(rel_path):
+    """Style déclaré par un fichier RANGÉ, depuis son chemin relatif à la
+    racine Source Data : premier segment, grammaire stricte (`_style_of_folder`,
+    la même qu'à la copie). None si le fichier est à la racine du dossier de
+    style ou si le segment ne déclare rien (`2008_08`, `_trash`, `Techno`)."""
+    rel = (rel_path or '').replace('\\', '/')
+    slash = rel.find('/')
+    if slash <= 0:
+        return None
+    return _style_of_folder(rel[:slash])
+
+
+def _genre_audit():
+    """Verdicts de genre des fichiers RANGÉS, d'après le cache du dernier scan.
+    Aucune écriture, aucun accès disque : c'est l'APERÇU (le dialogue le dit).
+    Retourne (items, hors_grammaire). Un verdict par fichier :
+      aligne      — le genre du cache est déjà le style du dossier (casse ignorée)
+      a_corriger  — il dit autre chose
+      sans_genre  — aucun genre lu au dernier scan
+    """
+    cache = load_json(CACHE_PATH, {})
+    items = []
+    hors = 0
+    for root, files in (cache.get('source') or {}).items():
+        for fn, meta in (files or {}).items():
+            rel = (meta or {}).get('path') or fn
+            style = _source_style_of(rel)
+            if not style:
+                hors += 1
+                continue
+            genre = str((meta or {}).get('genre') or '').strip()
+            if not genre:
+                verdict = 'sans_genre'
+            elif genre.lower() == style.lower():
+                verdict = 'aligne'
+            else:
+                verdict = 'a_corriger'
+            items.append({'path': os.path.join(root, rel), 'style': style,
+                          'genre': genre or None, 'verdict': verdict})
+    return items, hors
+
+
+@app.route('/styles/audit')
+def styles_audit():
+    """Aperçu de l'alignement genre ↔ dossier (LECTURE SEULE). Borné : les 12
+    styles les plus concernés et 20 exemples — le dialogue montre le dessus de
+    la pile, pas 1 280 lignes."""
+    items, hors = _genre_audit()
+    counts = {'aligne': 0, 'a_corriger': 0, 'sans_genre': 0}
+    by_style = {}
+    for it in items:
+        counts[it['verdict']] += 1
+        if it['verdict'] == 'aligne':
+            continue
+        acc = by_style.setdefault(it['style'], {'a_corriger': 0, 'sans_genre': 0})
+        acc[it['verdict']] += 1
+    par_style = [{'style': s, 'a_corriger': c['a_corriger'], 'sans_genre': c['sans_genre'],
+                  'total': c['a_corriger'] + c['sans_genre']}
+                 for s, c in by_style.items()]
+    par_style.sort(key=lambda d: (-d['total'], d['style']))
+    exemples = [{'path': i['path'], 'genre': i['genre'], 'style': i['style']}
+                for i in items if i['verdict'] == 'a_corriger'][:20]
+    return jsonify({
+        'ok': True,
+        'total': len(items) + hors,
+        'avec_style': len(items),
+        'alignes': counts['aligne'],
+        'a_corriger': counts['a_corriger'],
+        'sans_genre': counts['sans_genre'],
+        'hors_grammaire': hors,
+        'par_style': par_style[:12],
+        'exemples': exemples,
+    })
+
+
+@app.route('/styles/align', methods=['POST'])
+def styles_align():
+    """Alignement genre ↔ dossier des fichiers RANGÉS (EPIC-044).
+    Body : {"mode": "tous" | "vides", "dry_run": bool}.
+      tous  — tout rangé dont le genre du DISQUE diffère du style du dossier ;
+      vides — seulement ceux SANS genre (l'action purement additive).
+    Le serveur RECALCULE tout : aucun style ne vient du client. Le disque est
+    autoritaire : le genre est relu avant chaque écriture, donc un cache périmé
+    ne fait jamais écraser une valeur existante en mode « vides » (compté
+    `non_vide`). Jamais bloquant : absent / extension non gérée / échec de tag
+    incrémentent un compteur et le lot continue."""
+    body = request.get_json(silent=True) or {}
+    mode = body.get('mode', 'tous')
+    if mode not in ('tous', 'vides'):
+        return jsonify({'ok': False, 'error': f'mode invalide : {mode!r}'}), 400
+    dry_run = bool(body.get('dry_run'))
+    if not HAS_MUTAGEN and not dry_run:
+        return jsonify({'ok': False, 'error': 'mutagen indisponible'}), 500
+
+    items, _hors = _genre_audit()
+    plan = [i for i in items
+            if i['verdict'] != 'aligne' and (mode == 'tous' or i['verdict'] == 'sans_genre')]
+    written = []
+    failed = []
+    skipped = {'deja': 0, 'non_vide': 0, 'absent': 0, 'extension': 0}
+    by_style = {}
+    cache = load_json(CACHE_PATH, {})
+    cache_dirty = False
+
+    for it in plan:
+        path, style = it['path'], it['style']
+        if os.path.splitext(path)[1].lower() not in AUDIO_EXTS:
+            skipped['extension'] += 1
+            continue
+        if not os.path.isfile(path):
+            skipped['absent'] += 1
+            continue
+        # Le DISQUE est autoritaire, y compris en dry-run pour le mode « vides »
+        # (sinon l'aperçu promettrait des écritures que l'écriture refuserait).
+        if mode == 'vides' and (get_audio_meta(path)[3] or '').strip():
+            skipped['non_vide'] += 1          # le cache disait vide, le disque non
+            continue
+        if dry_run:
+            written.append({'path': path, 'style': style, 'old': it['genre'], 'frame': None})
+            by_style[style] = by_style.get(style, 0) + 1
+            continue
+        res = _write_style_at_copy(path, style, 'range', source='align')
+        if res.get('changed'):
+            if res.get('ok'):
+                written.append({'path': path, 'style': style, 'old': res.get('old'),
+                                'frame': res.get('frame')})
+                by_style[style] = by_style.get(style, 0) + 1
+            else:
+                failed.append({'path': path, 'error': res.get('error') or 'écriture non relue'})
+        elif res.get('ok'):
+            skipped['deja'] += 1
+        else:
+            failed.append({'path': path, 'error': res.get('error') or 'écriture refusée'})
+        if res.get('ok') and _cache_update_meta(cache, path, {'genre': style}):
+            cache_dirty = True
+
+    if cache_dirty:
+        save_json(CACHE_PATH, cache)
+
+    return jsonify({
+        'ok': True, 'mode': mode, 'dry_run': dry_run, 'plan': len(plan),
+        'written': written, 'skipped': skipped,
+        'failed': failed[:50], 'failed_total': len(failed),
+        'by_style': by_style, 'journal': os.path.basename(STYLE_JOURNAL),
+    })
 
 
 @app.route('/move', methods=['POST'])

@@ -22,6 +22,7 @@ vi.hoisted(() => {
         <p id="dialog-msg"></p>
         <input id="dialog-input" class="dialog-input hidden" type="text">
         <button id="dialog-confirm">OK</button>
+        <button id="dialog-alt" class="hidden"></button>
         <button id="dialog-cancel">Annuler</button>
       </div>
     </div>
@@ -59,7 +60,7 @@ vi.mock('./state.js', () => ({
 }));
 
 import { revalidateFocus } from './focus.js';
-import { closeAllModals, confirmDialog, openModal, promptDialog, showToast } from './ui.js';
+import { choiceDialog, closeAllModals, confirmDialog, openModal, promptDialog, showToast } from './ui.js';
 
 // Mock revalidateFocus
 vi.mock('./focus.js', () => ({
@@ -213,6 +214,50 @@ describe('dialog custom (EPIC-014)', () => {
     input.value = '   ';
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     expect(onOk).not.toHaveBeenCalled();
+  });
+});
+
+describe('choiceDialog — deux actions (EPIC-044)', () => {
+  const alt = () => document.getElementById('dialog-alt') as HTMLButtonElement;
+
+  it('expose les deux actions, chacune exécute la sienne', () => {
+    const primary = vi.fn();
+    const secondary = vi.fn();
+    const both = choiceDialog(
+      'Aperçu',
+      { label: 'Corriger 1 023 + remplir 258', run: primary },
+      { label: 'Remplir seulement les 258 vides', run: secondary },
+    );
+    expect(both).toBe(true);
+    expect(document.getElementById('dialog-msg')!.textContent).toBe('Aperçu');
+    expect(document.getElementById('dialog-confirm')!.textContent).toBe('Corriger 1 023 + remplir 258');
+    expect(alt().textContent).toBe('Remplir seulement les 258 vides');
+    expect(alt().classList.contains('hidden')).toBe(false);
+    alt().click();
+    expect(secondary).toHaveBeenCalledTimes(1);
+    expect(primary).not.toHaveBeenCalled();
+    expect(mockState.activeModal).toBeNull(); // fermée avant d'agir
+  });
+
+  it('sans seconde action, le bouton alternatif est masqué (et false renvoyé)', () => {
+    const primary = vi.fn();
+    expect(choiceDialog('Aperçu', { label: 'Seule', run: primary })).toBe(false);
+    expect(alt().classList.contains('hidden')).toBe(true);
+    (document.getElementById('dialog-confirm') as HTMLButtonElement).click();
+    expect(primary).toHaveBeenCalledTimes(1);
+  });
+
+  it("template sans #dialog-alt : false + alerte — l'action perdue est DITE", () => {
+    const el = alt();
+    el.remove();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const primary = vi.fn();
+    const both = choiceDialog('Aperçu', { label: 'Principale', run: primary }, { label: 'Vides', run: vi.fn() });
+    expect(both).toBe(false);
+    expect(warn).toHaveBeenCalled();
+    expect(document.getElementById('dialog-confirm')!.textContent).toBe('Principale');
+    document.getElementById('modal-dialog')!.appendChild(el); // restaure la fixture
+    warn.mockRestore();
   });
 });
 
