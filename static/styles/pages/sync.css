@@ -196,12 +196,20 @@ header h1 {
 .style-chip.suggested { border-style: dotted; opacity: 0.55; color: var(--text-secondary, #999); border-color: var(--text-secondary, #999); background: none; }
 .style-chip.written { color: var(--accent-green); border-color: var(--accent-green); background: color-mix(in srgb, var(--accent-green) 14%, transparent); }
 
-/* EPIC-035 — palette « g » : popover clavier ancré à la ligne (couche DOM). */
+/* EPIC-035/041 — palette « g » : popover clavier ancré à la ligne (couche DOM).
+   Deux listes visibles d'un coup : tous les styles et toutes les années
+   (EPIC-041 — avant, seuls 9 paliers étaient affichés, dans une étape cachée).
+   Colonne flex bornée à la fenêtre : les ANNÉES ne sont jamais poussées hors
+   écran (c'est la décision principale) — si la taxonomie est très longue, la
+   grille des styles défile seule. La palette n'est jamais rognée. */
 .style-palette {
   position: fixed;
   z-index: 1200;
-  width: 440px;
+  display: flex;
+  flex-direction: column;
+  width: 560px;
   max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 24px);
   padding: 10px 12px;
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -210,6 +218,7 @@ header h1 {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
   outline: none;
   font-size: 12px;
+  overflow: hidden;
 }
 .style-palette .sp-title {
   font-size: 12px;
@@ -219,13 +228,18 @@ header h1 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Grille des styles : plafonnée à 45 % de la fenêtre, défilante au-delà (une
+   taxonomie très longue ne pousse jamais les années hors de l'écran). */
 .style-palette .sp-styles {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px 8px;
+  max-height: 45vh;
+  overflow-y: auto;
+  flex: 0 1 auto;
 }
 .style-palette .sp-style,
-.style-palette .sp-tranche {
+.style-palette .sp-year {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -242,7 +256,8 @@ header h1 {
   text-overflow: ellipsis;
 }
 .style-palette .sp-style:hover,
-.style-palette .sp-tranche:hover { border-color: var(--amber); }
+.style-palette .sp-year:hover { border-color: var(--amber); }
+.style-palette .sp-style.applied { color: var(--accent-green); border-color: var(--accent-green); }
 .style-palette kbd {
   min-width: 16px;
   padding: 0 4px;
@@ -252,16 +267,35 @@ header h1 {
   font-weight: 700;
   text-align: center;
 }
-.style-palette .sp-tranches {
-  display: none;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px 8px;
+/* Les années : toute la plage, groupée par décennie (10 colonnes), TOUJOURS
+   entièrement visible (jamais dans la zone défilante des styles). */
+.style-palette .sp-years {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 2px 4px;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed var(--amber);
+  border-top: 1px dashed var(--border-panel);
+  flex: 0 0 auto;
 }
-.style-palette.tranche-step .sp-tranches { display: grid; }
-.style-palette.tranche-step .sp-styles { opacity: 0.45; }
+.style-palette .sp-year {
+  display: block;
+  padding: 2px 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font: inherit;
+}
+/* Année du tag de la ligne : repère visuel discret. */
+.style-palette .sp-year.current { color: var(--accent); border-color: var(--border-active); }
+/* Année en cours de saisie au clavier. */
+.style-palette .sp-year.pending { background: var(--amber); color: #000; font-weight: 700; }
+/* Cibles sans année : la rangée d'années attire l'il sans masquer les styles. */
+.style-palette .sp-years.needs-year { border-top-color: var(--amber); }
 .style-palette .sp-dest {
   margin-top: 8px;
   color: var(--text-muted);

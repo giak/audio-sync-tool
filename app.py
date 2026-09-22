@@ -1174,6 +1174,162 @@ def styles_review():
     return jsonify(load_json(STYLES_REVIEW_PATH, {}))
 
 
+# ── EPIC-041 : écriture IMMÉDIATE des tags depuis la palette « g » ─────———
+# La palette ne faisait que poser un choix de session : le style n'atteignait
+# le tag TCON qu'après un aperçu « e » (copie) puis `apply_styles.py --review`,
+# hors navigateur, et l'année n'était jamais écrite (la tranche ne servait qu'à
+# choisir le dossier). Ces deux routes écrivent le tag tout de suite.
+#
+# Le JOURNAL est le MÊME que celui des scripts (`style_apply_journal.jsonl`,
+# `year_apply_journal.jsonl`) : `apply_styles.py --undo` / `apply_years.py
+# --undo` annulent donc aussi ce qui a été écrit depuis le navigateur.
+# Sécurité : chemin confiné aux racines configurées (épars + source) et aux
+# extensions gérées ; l'ancienne valeur est journalisée avant écriture.
+
+STYLE_JOURNAL = os.path.join(DATA_DIR, 'style_apply_journal.jsonl')
+YEAR_JOURNAL = os.path.join(DATA_DIR, 'year_apply_journal.jsonl')
+AUDIO_EXTS = ('.mp3', '.flac', '.wav', '.m4a', '.mp4')
+
+
+@app.route('/styles/apply', methods=['POST'])
+def styles_apply():
+    """Écrit le style dans le tag genre, tout de suite, pour chaque cible.
+    Body : {"targets": [fullpath absolu…], "style": "techno_acid"}.
+    Retour : {ok, results: [{path, ok, genre, frame, error}]}."""
+    return _apply_tag(request.get_json(silent=True) or {}, 'style')
+
+
+@app.route('/years/apply', methods=['POST'])
+def years_apply():
+    """Écrit l'année dans le frame natif du format, tout de suite, pour chaque
+    cible. Body : {"targets": […], "year": "1991"}."""
+    return _apply_tag(request.get_json(silent=True) or {}, 'year')
+
+
+def _apply_tag(body, kind):
+    """Écriture commune style/année : validation → confinement → journal → tag.
+    `kind` = 'style' (TCON/GENRE/©gen) ou 'year' (TDRC/TYER/DATE/©day)."""
+    value = str(body.get('style' if kind == 'style' else 'year') or '').strip()
+    targets = body.get('targets')
+    if not value:
+        return jsonify({'ok': False, 'error': f'{kind} requis'}), 400
+    if not isinstance(targets, list) or not targets:
+        return jsonify({'ok': False, 'error': 'targets (liste non vide) requis'}), 400
+    if kind == 'year' and not (value.isdigit() and len(value) == 4):
+        return jsonify({'ok': False, 'error': f'année invalide : {value!r}'}), 400
+    if kind == 'style' and value not in _known_styles():
+        return jsonify({'ok': False, 'error': f'style inconnu : {value!r}'}), 400
+    if not HAS_MUTAGEN:
+        return jsonify({'ok': False, 'error': 'mutagen indisponible'}), 500
+
+    active = get_active_config()
+    roots = [active.get('source_data') or ''] + list(active.get('epars_dirs') or [])
+    roots = [os.path.abspath(r) for r in roots if r]
+    journal = STYLE_JOURNAL if kind == 'style' else YEAR_JOURNAL
+    results = []
+    for target in targets:
+        res = {'path': target, 'ok': False}
+        try:
+            path = os.path.abspath(str(target))
+            if not any(path.startswith(r + os.sep) for r in roots):
+                res['error'] = 'hors des racines configurées'
+            elif os.path.splitext(path)[1].lower() not in AUDIO_EXTS:
+                res['error'] = 'extension non gérée'
+            elif not os.path.isfile(path):
+                res['error'] = 'fichier absent'
+            else:
+                before = get_audio_meta(path)
+                old = before[0] if kind == 'year' else before[3]
+                frame = _write_tag(path, value, kind)
+                after = get_audio_meta(path)
+                read_back = after[0] if kind == 'year' else after[3]
+                ok = read_back == value
+                _journal_line(journal, {'path': path, 'old': old, 'new': value,
+                                        'source': 'palette', 'frame': frame,
+                                        'ok': ok})
+                res.update({'ok': ok, 'frame': frame,
+                            kind: read_back, 'old': old})
+                if not ok:
+                    res['error'] = f'relu {read_back!r}'
+        except Exception as exc:                      # pragma: no cover - filet
+            res['error'] = f'{type(exc).__name__}: {exc}'
+        results.append(res)
+    written = sum(1 for r in results if r['ok'])
+    return jsonify({'ok': written > 0, 'written': written, 'count': len(results),
+                    'results': results, kind: value})
+
+
+def _journal_line(journal, entry):
+    """Journal additif partagé avec les scripts (dossier data/ créé au besoin)."""
+    entry['ts'] = datetime.now().isoformat(timespec='seconds')
+    os.makedirs(os.path.dirname(journal), exist_ok=True)
+    with open(journal, 'a') as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + '\n')
+
+
+def _write_tag(path, value, kind):
+    """Miroir de apply_styles.write_genre / apply_years.write_year (mêmes
+    frames par format) — l'app n'importe pas scripts/, on garde les deux
+    implémentations alignées (vérifié par les tests des deux côtés)."""
+    from mutagen.flac import FLAC
+    from mutagen.id3 import ID3, ID3NoHeaderError, TCON, TDRC, TYER
+    from mutagen.mp4 import MP4
+    from mutagen.wave import WAVE
+
+    ext = os.path.splitext(path)[1].lower()
+    if ext == '.mp3':
+        try:
+            tags = ID3(path)
+        except ID3NoHeaderError:
+            tags = ID3()
+            tags.filename = path
+        if kind == 'year':
+            version = getattr(tags, 'version', (2, 4))
+            if version[0] < 2 or (version[0] == 2 and version[1] <= 3):
+                tags.add(TYER(encoding=0, text=value))
+                frame = 'TYER'
+            else:
+                tags.add(TDRC(encoding=0, text=value))
+                frame = 'TDRC'
+        else:
+            tags.add(TCON(encoding=0, text=value))
+            frame = 'TCON'
+        tags.save()
+        return frame
+    if ext == '.flac':
+        audio = FLAC(path)
+        if kind == 'year':
+            audio['DATE'] = value
+            audio.save()
+            return 'DATE'
+        audio['GENRE'] = value
+        audio.save()
+        return 'GENRE'
+    if ext == '.wav':
+        audio = WAVE(path)
+        if audio.tags is None:
+            audio.add_tags()
+        if kind == 'year':
+            audio.tags.add(TDRC(encoding=0, text=value))
+            audio.save()
+            return 'TDRC'
+        audio.tags.add(TCON(encoding=0, text=value))
+        audio.save()
+        return 'TCON'
+    if ext in ('.m4a', '.mp4'):
+        audio = MP4(path)
+        if audio.tags is None:
+            audio.add_tags()
+        if kind == 'year':
+            audio.tags['\xa9day'] = [value]
+            audio.save()
+            return '\xa9day'
+        audio.tags['\xa9gen'] = [value]
+        audio.save()
+        return '\xa9gen'
+    raise ValueError('format non gere : ' + ext)
+
+
 # ── Playlist routes ────────────────────────────────────────────────────────
 
 

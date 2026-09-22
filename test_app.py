@@ -3032,3 +3032,128 @@ def test_years_review_fichier_corrompu_revanire_vide(client, tmp_path, monkeypat
     monkeypatch.setattr('app.REVIEW_PATH', str(review_path))
     rv = client.get('/years/review')
     assert rv.status_code == 200 and rv.get_json() == {}
+
+
+# ── EPIC-041 : écriture IMMÉDIATE des tags (palette « g ») ──────────────────
+# Avant : la palette ne posait qu'un choix de session ; le TCON n'arrivait
+# qu'après « e » (copie) + `apply_styles.py --review`, hors navigateur, et
+# l'année n'était jamais écrite. Ces routes écrivent le tag tout de suite et
+# journalisent l'ancienne valeur dans le MÊME journal que les scripts
+# (`apply_styles.py --undo` / `apply_years.py --undo` restent la sortie de secours).
+
+
+def make_tagged_mp3(path, year=None):
+    """MP3 minimal valide (mutagen exige une synchro MPEG)."""
+    from mutagen.id3 import ID3, TDRC
+    tags = ID3()
+    if year:
+        tags.add(TDRC(encoding=0, text=year))
+    tags.save(str(path), v2_version=4)
+    with open(path, 'ab') as f:
+        for _ in range(3):
+            f.write(b'\xff\xfb\x90\x00' + b'\x00' * 413)
+
+
+def _apply_env(client, monkeypatch, tmp_path):
+    """Monde épars + source minimal ; journaux redirigés (jamais data/ réel)."""
+    src = tmp_path / 'style'
+    ep = tmp_path / 'epars'
+    (src / 'techno_1990').mkdir(parents=True)
+    ep.mkdir()
+    style_journal = tmp_path / 'style_journal.jsonl'
+    year_journal = tmp_path / 'year_journal.jsonl'
+    monkeypatch.setattr('app.STYLE_JOURNAL', str(style_journal))
+    monkeypatch.setattr('app.YEAR_JOURNAL', str(year_journal))
+    client.post('/config', json=make_cfg(source_data=str(src), epars_dirs=[str(ep)]))
+    # cache : dossiers source techno_1990 / hardcore_2015 → styles connus
+    (tmp_path / 'cache.json').write_text(json.dumps({
+        'source': {str(src): {'a.mp3': {'path': 'techno_1990/a.mp3', 'year': '1990'},
+                              'b.mp3': {'path': 'hardcore_2015/b.mp3', 'year': '2015'}}},
+        'epars': {str(ep): {}},
+    }))
+    return style_journal, year_journal, ep
+
+
+def test_styles_apply_ecrit_le_tcon_tout_de_suite(client, monkeypatch, tmp_path):
+    """Le style part dans le tag IMMÉDIATEMENT, et l'ancien genre est journalisé."""
+    style_journal, _, ep = _apply_env(client, monkeypatch, tmp_path)
+    track = ep / 'hit.mp3'
+    make_tagged_mp3(track, year='1992')
+
+    rv = client.post('/styles/apply',
+                     json={'targets': [str(track)], 'style': 'techno'})
+    body = rv.get_json()
+    assert rv.status_code == 200 and body['ok'] is True and body['written'] == 1
+    assert body['results'][0]['frame'] == 'TCON' and body['results'][0]['old'] is None
+    from app import get_audio_meta
+    assert get_audio_meta(str(track))[3] == 'techno'   # relu par le scan
+
+    rv = client.post('/styles/apply',
+                     json={'targets': [str(track)], 'style': 'hardcore'})
+    assert rv.get_json()['results'][0]['old'] == 'techno'
+    lines = [json.loads(x) for x in style_journal.read_text().splitlines() if x]
+    assert [(e['old'], e['new'], e['frame'], e['ok']) for e in lines] == [
+        (None, 'techno', 'TCON', True), ('techno', 'hardcore', 'TCON', True)]
+    assert all(e['source'] == 'palette' for e in lines)
+    assert get_audio_meta(str(track))[3] == 'hardcore'
+
+
+def test_styles_apply_valide_style_et_racines(client, monkeypatch, tmp_path):
+    """Style inconnu → 400 ; fichier hors racines → refusé, rien écrit dehors."""
+    _, _, ep = _apply_env(client, monkeypatch, tmp_path)
+    track = ep / 'hit.mp3'
+    make_tagged_mp3(track)
+
+    rv = client.post('/styles/apply',
+                     json={'targets': [str(track)], 'style': 'pas_un_style'})
+    assert rv.status_code == 400 and 'style inconnu' in rv.get_json()['error']
+
+    outsider = tmp_path / 'ailleurs.mp3'
+    make_tagged_mp3(outsider)
+    body = client.post('/styles/apply',
+                       json={'targets': [str(track), str(outsider)],
+                             'style': 'techno'}).get_json()
+    assert body['written'] == 1
+    ko = [r for r in body['results'] if not r['ok']]
+    assert ko and 'hors des racines' in ko[0]['error']
+    from app import get_audio_meta
+    assert get_audio_meta(str(outsider))[3] is None
+
+
+def test_years_apply_ecrit_l_annee_tout_de_suite(client, monkeypatch, tmp_path):
+    _, year_journal, ep = _apply_env(client, monkeypatch, tmp_path)
+    track = ep / 'hit.mp3'
+    make_tagged_mp3(track)                     # aucune année
+
+    body = client.post('/years/apply',
+                       json={'targets': [str(track)], 'year': '1991'}).get_json()
+    assert body['ok'] is True and body['results'][0]['frame'] == 'TDRC'
+    from app import get_audio_meta
+    assert get_audio_meta(str(track))[0] == '1991'
+    line = json.loads(year_journal.read_text().strip())
+    assert (line['old'], line['new'], line['source']) == (None, '1991', 'palette')
+
+    body = client.post('/years/apply',
+                       json={'targets': [str(track)], 'year': '1990'}).get_json()
+    assert body['results'][0]['old'] == '1991'      # base du --undo
+    assert get_audio_meta(str(track))[0] == '1990'
+
+
+def test_apply_tags_validation(client, monkeypatch, tmp_path):
+    """Année non numérique, cibles vides, extension non gérée : refus nets."""
+    _, _, ep = _apply_env(client, monkeypatch, tmp_path)
+    track = ep / 'hit.mp3'
+    make_tagged_mp3(track)
+
+    assert client.post('/years/apply',
+                       json={'targets': [str(track)], 'year': '91'}).status_code == 400
+    assert client.post('/years/apply',
+                       json={'targets': [], 'year': '1991'}).status_code == 400
+    assert client.post('/styles/apply',
+                       json={'targets': [str(track)]}).status_code == 400
+
+    txt = ep / 'notes.txt'
+    txt.write_text('x')
+    body = client.post('/styles/apply',
+                       json={'targets': [str(txt)], 'style': 'techno'}).get_json()
+    assert body['written'] == 0 and 'extension' in body['results'][0]['error']

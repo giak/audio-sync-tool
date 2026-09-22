@@ -144,7 +144,8 @@ describe('render/styleCell', () => {
     const m = await import('./stylePalette.js');
     await new Promise(r => setTimeout(r, 0));
     expect(m.isStylePaletteOpen()).toBe(true);
-    expect(document.querySelector('.style-palette .sp-title')?.textContent).toBe('a.mp3');
+    // EPIC-041 : le titre rappelle aussi le genre et l'année du tag (on voit tout)
+    expect(document.querySelector('.style-palette .sp-title')?.textContent).toBe('a.mp3 — genre « — » · année 1992');
     m.closeStylePalette();
   });
 

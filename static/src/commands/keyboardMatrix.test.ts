@@ -801,7 +801,8 @@ const CELLS: Cell[] = [
   { name: 'dups: F5 = non intercepté (scopé sync)', w: { page: 'dups' }, key: 'F5', expect: null },
   { name: 'dups: ? ouvre la légende (transverse)', w: { page: 'dups' }, key: '?', expect: IDX.openLegend },
 
-  // ── EPIC-035 — palette de style `g` (épars seulement ; le chord vit HORS registry) ──
+  // ── EPIC-035/041 — palette de style `g` (Éparpillé ET Source Data ; le
+  //    chord vit HORS registry) ──
   {
     name: 'sync épars: g ouvre la palette de style',
     key: 'g',
@@ -809,10 +810,12 @@ const CELLS: Cell[] = [
     check: () => expect(openStylePalette).not.toHaveBeenCalled(), // sans ligne focusée : message, pas de palette
   },
   {
-    name: 'sync source: g non intercepté (palette = épars seulement)',
+    // EPIC-041 : plus de garde activePanel — le scope est résolu par le handler
+    // (morceau surligné à droite → palette sur ce morceau).
+    name: 'sync source: g intercepté (scope résolu par le handler)',
     w: { activePanel: 'source' },
     key: 'g',
-    expect: null,
+    expect: IDX.styleG,
   },
   { name: 'sync: g dans un input = texte (non intercepté)', w: { input: true }, key: 'g', expect: null },
   { name: 'sync: g dans le filtre = texte (non intercepté)', w: { fi: true }, key: 'g', expect: null },

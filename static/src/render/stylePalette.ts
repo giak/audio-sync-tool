@@ -1,28 +1,53 @@
-// ─── Palette de style « g » (EPIC-035) — couche DOM focusée ────────────────
-// Popover ancré à la ligne épars focusée. Chord : lettre (hotkey d'un style)
-// → si un des fichiers ciblés n'a pas d'année et que le style est daté :
-// chiffre 1-9 (tranche) ou Enter (style seul) → commit. Échap ferme,
-// Backspace retire le choix. Le popover porte son propre `keydown` avec
-// stopPropagation : le dispatcher du registry (document, phase bubble) ne
-// voit rien — même pattern qu'un input (ratingEdit), sans champ de contexte
-// ni binding modifié (la matrice EPIC-031 reste intacte).
+// ─── Palette de style « g » (EPIC-035, refondue EPIC-041) ──────────────────
+// Popover ancré à la ligne focusée — Éparpillé **ou** Source Data : les deux
+// listes contiennent des morceaux, `g` tagge celui qui est surligné (le
+// scope est résolu par commands/style.ts, la palette reçoit un fullpath).
+//
+// Il fait DEUX choses, toutes deux immédiates (vérifiables au scan suivant,
+// plus besoin d'attendre une passe hors navigateur) :
+//
+//   1. choisir un STYLE  → écrit le genre dans le tag du morceau (TCON/GENRE/
+//      ©gen) via POST /styles/apply, puis pose le choix de session (rangement) ;
+//   2. choisir une ANNÉE → écrit l'année dans le tag (TDRC/TYER/DATE/©day) via
+//      POST /years/apply, ce qui résout aussi la tranche de destination.
+//
+// Avant EPIC-041, la palette ne touchait AUCUN tag : le style n'atteignait le
+// TCON qu'après un aperçu « e » (copie) puis `apply_styles.py --review`, hors
+// navigateur, et l'année n'était jamais écrite (la tranche ne servait qu'à
+// choisir le dossier cible).
+//
+// Affichage : TOUT est visible d'un coup — la liste complète des styles
+// (hotkey + volume, scrollable si la taxonomie est très longue) et la liste
+// complète des années (grille 1970→2026, jamais tronquée), sans étape cachée.
+// Clavier : lettre = style, 4 chiffres + Enter = année, Échap ferme,
+// ⌫ retire le choix de rangement (le tag, lui, se défait par le journal :
+// `apply_styles.py --undo` / `apply_years.py --undo`).
+//
+// Choix de SESSION (`state.styleChoices`, consommé par l'aperçu `e`) : réservé
+// aux cibles épars. Un morceau déjà rangé (Source Data) est tagué, jamais
+// re-planifié — il n'a pas de destination à calculer.
 
+import { api } from '../api.js';
 import { setStatus } from '../core/feedback.js';
 import { byCountThenId } from '../core/format.js';
 import { focusItemByElement, navigateFocus } from '../focus.js';
 import { state } from '../state.js';
 import { parseArtistTitle, type Suggestion, suggestStyle } from '../styleSuggest.js';
-import { deriveHotkeys, findEparsEntry, type StyleChoice, TRANCHES, yearOf } from '../styles.js';
+import { deriveHotkeys, findEparsEntry, type StyleChoice, trancheOf, yearOf } from '../styles.js';
 import { currentTaxonomy, refreshStyleCells, updateStyleRecap } from './styleCell.js';
 
 let _el: HTMLElement | null = null;
 let _targets: string[] = [];
 let _anchor: HTMLElement | null = null;
-/** Style choisi, en attente d'une tranche (fichiers sans année). */
-let _pending: string | null = null;
-/** Suggestion calculée pour la cible unique (P2). Enter sans hotkey = accepter. */
+/** Style retenu pour les cibles (le tag est déjà écrit quand il est posé). */
+let _style: string | null = null;
+/** Suggestions/années : état d'affichage seulement. */
 let _suggestion: Suggestion | null = null;
 let _hotkeyToStyle = new Map<string, string>();
+let _yearBuffer = '';
+/** Années proposées : tout ce qu'on peut raisonnablement taguer. */
+export const YEAR_MIN = 1970;
+export const YEAR_MAX = 2026;
 
 export function isStylePaletteOpen(): boolean {
   return _el !== null;
@@ -32,11 +57,60 @@ function eparsContainer(): HTMLElement | null {
   return document.getElementById('epars-container');
 }
 
-function targetsNeedingYear(styleId: string): string[] {
-  const tax = currentTaxonomy();
-  const def = tax?.styles.get(styleId);
-  if (!def || def.timeless) return [];
-  return _targets.filter(fp => yearOf(findEparsEntry(state.eparsFiles, fp)?.entry) === null);
+interface TagEntry {
+  path: string;
+  year: string | null;
+  genre?: string | null;
+}
+
+/** Entrée de l'index SOURCE DATA portant ce fullpath (le fichier est rangé :
+ *  sa seule raison d'être ici est un tag à corriger).
+ *  Comparaison sur slashes normalisés : la racine est jointe telle quelle
+ *  partout ailleurs (`…/style//techno_1990` quand la config porte un slash
+ *  final) — ici on veut retrouver l'entrée quel que soit le nombre de slashes,
+ *  le chemin venant de la ligne DOM ou d'un dataset. */
+function normPath(p: string): string {
+  return p.replace(/\/+/g, '/');
+}
+
+function findSourceEntry(fullpath: string): TagEntry | null {
+  const wanted = normPath(fullpath);
+  for (const [dir, files] of Object.entries(state.sourceFiles)) {
+    for (const entry of Object.values(files)) {
+      if (normPath(`${dir}/${entry.path}`) === wanted) return entry as TagEntry;
+    }
+  }
+  return null;
+}
+
+/** Vrai si le chemin appartient à la liste Éparpillé (rangement en cours). */
+export function isEparsTarget(fullpath: string): boolean {
+  return findEparsEntry(state.eparsFiles, fullpath) !== null;
+}
+
+/** En-tête (année, genre) d'une cible, épars ou source. */
+function entryOf(fullpath: string): TagEntry | null {
+  return findEparsEntry(state.eparsFiles, fullpath)?.entry ?? findSourceEntry(fullpath);
+}
+
+/** Toutes les lignes DOM portant ce chemin (les deux colonnes). */
+function rowsByPath(fullpath: string): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('.file-row')].filter(r => r.dataset.focuspath === fullpath);
+}
+
+/** Conteneur de la ligne ancre (retour de focus / chaîne de tri). */
+function anchorContainer(): HTMLElement | null {
+  return (_anchor?.closest('#epars-container, #source-container') as HTMLElement | null) ?? eparsContainer();
+}
+
+/** Cibles sans année dans le tag (pour l'indication « année manquante »). */
+function targetsWithoutYear(): string[] {
+  return _targets.filter(fp => yearOf(entryOf(fp) ?? undefined) === null);
+}
+
+/** Cibles épars (rangement) — les seules qui alimentent le choix de session. */
+function eparsTargets(): string[] {
+  return _targets.filter(isEparsTarget);
 }
 
 function setHint(text: string): void {
@@ -44,42 +118,167 @@ function setHint(text: string): void {
   if (hint) hint.textContent = text;
 }
 
-function commit(styleId: string, tranche: number | null, needing: string[]): void {
+/** Reflète une année écrite dans l'UI locale : index (épars ou source) +
+ *  cellule Année de TOUTES les lignes portant ce chemin. */
+function setYearLocally(fullpath: string, year: string): void {
+  const found = findEparsEntry(state.eparsFiles, fullpath)?.entry ?? findSourceEntry(fullpath);
+  if (!found) return;
+  found.year = year;
+  for (const row of rowsByPath(fullpath)) {
+    const td = row.querySelector('td.year');
+    if (td) td.textContent = year;
+  }
+}
+
+function setGenreLocally(fullpath: string, genre: string): void {
+  const found = findEparsEntry(state.eparsFiles, fullpath)?.entry ?? findSourceEntry(fullpath);
+  if (found) found.genre = genre;
+}
+
+/** Écrit le style dans le tag (immédiat) — l'échec n'annule pas le choix de
+ *  session (le rangement reste possible), il est signalé dans la barre d'état. */
+async function writeStyleTag(styleId: string): Promise<boolean> {
+  try {
+    const res = await api<{
+      ok: boolean;
+      written: number;
+      count: number;
+      results: Array<{ path: string; ok: boolean; error?: string }>;
+    }>('/styles/apply', { method: 'POST', body: JSON.stringify({ targets: _targets, style: styleId }) });
+    for (const r of res.results ?? []) if (r.ok) setGenreLocally(r.path, styleId);
+    const failed = (res.results ?? []).filter(r => !r.ok);
+    if (failed.length) {
+      setStatus(`⚠ style écrit sur ${res.written}/${res.count} — ${failed[0].error ?? 'échec'}`);
+      return false;
+    }
+    setStatus(`✓ style « ${styleId} » écrit dans le tag (${res.written} fichier${res.written > 1 ? 's' : ''})`);
+    return true;
+  } catch (err) {
+    setStatus(`⚠ style non écrit : ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+}
+
+/** Écrit l'année dans le tag (immédiat). */
+async function writeYearTag(year: string): Promise<boolean> {
+  try {
+    const res = await api<{
+      ok: boolean;
+      written: number;
+      count: number;
+      results: Array<{ path: string; ok: boolean; error?: string }>;
+    }>('/years/apply', { method: 'POST', body: JSON.stringify({ targets: _targets, year }) });
+    for (const r of res.results ?? []) if (r.ok) setYearLocally(r.path, year);
+    const failed = (res.results ?? []).filter(r => !r.ok);
+    if (failed.length) {
+      setStatus(`⚠ année écrite sur ${res.written}/${res.count} — ${failed[0].error ?? 'échec'}`);
+      return false;
+    }
+    setStatus(`✓ année ${year} écrite dans le tag (${res.written} fichier${res.written > 1 ? 's' : ''})`);
+    return true;
+  } catch (err) {
+    setStatus(`⚠ année non écrite : ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+}
+
+/** Pose le choix de session (rangement) pour les cibles ÉPARS. Une cible
+ *  Source Data est déjà rangée : elle est taguée, pas re-planifiée → no-op.
+ *  `tranche` déduite de l'année du tag (écrite juste avant). */
+function commit(styleId: string, tranche: number | null): void {
+  const targets = eparsTargets();
+  if (targets.length === 0) return;
   const next = new Map<string, StyleChoice>(state.styleChoices);
-  const noYear = new Set(needing);
-  for (const fp of _targets) next.set(fp, { style: styleId, tranche: noYear.has(fp) ? tranche : null });
+  for (const fp of targets) next.set(fp, { style: styleId, tranche });
   state.styleChoices = next;
-  refreshStyleCells(_targets);
+  refreshStyleCells(targets);
   updateStyleRecap();
-  const single = _targets.length === 1;
-  closeStylePalette();
-  const container = eparsContainer();
-  if (single && container) navigateFocus(container, 1); // chaîne de tri : ligne suivante
 }
 
 function removeChoices(): void {
-  const next = new Map(state.styleChoices);
-  for (const fp of _targets) next.delete(fp);
-  state.styleChoices = next;
-  refreshStyleCells(_targets);
-  updateStyleRecap();
+  const targets = eparsTargets();
+  if (targets.length > 0) {
+    const next = new Map(state.styleChoices);
+    for (const fp of targets) next.delete(fp);
+    state.styleChoices = next;
+    refreshStyleCells(targets);
+    updateStyleRecap();
+  }
   closeStylePalette();
 }
 
-/** Cibles sans année du style en attente (calculées une fois dans pick). */
-let _pendingNeeding: string[] = [];
+/** Tranche déduite de l'année des cibles épars (null si aucune n'a d'année,
+ *  ou si tout est déjà rangé) — la destination se résout sans poser de question. */
+function derivedTranche(): number | null {
+  const years = eparsTargets()
+    .map(fp => yearOf(entryOf(fp) ?? undefined))
+    .filter((y): y is number => y !== null);
+  return years.length ? trancheOf(Math.min(...years)) : null;
+}
 
-function pick(styleId: string): void {
-  const needing = targetsNeedingYear(styleId);
-  if (needing.length === 0) {
-    commit(styleId, null, []);
+/** Style choisi (hotkey, clic ou suggestion) → tag écrit tout de suite. */
+async function pick(styleId: string): Promise<void> {
+  _style = styleId;
+  const wrote = await writeStyleTag(styleId);
+  commit(styleId, derivedTranche());
+  const missing = targetsWithoutYear();
+  if (missing.length > 0) {
+    // Il reste une décision : l'année (elle est écrite immédiatement aussi).
+    highlightYears();
+    setHint(
+      `${styleId} ✓ ${wrote ? 'écrit dans le tag' : 'non écrit'} — ${missing.length} fichier${missing.length > 1 ? 's' : ''} sans année : tape 4 chiffres (1991) puis Entrée, ou clique dans la liste`,
+    );
     return;
   }
-  _pending = styleId;
-  _pendingNeeding = needing;
-  _el?.classList.add('tranche-step');
+  const single = _targets.length === 1;
+  closeStylePalette();
+  if (single) {
+    const container = anchorContainer();
+    if (container) navigateFocus(container, 1); // chaîne de tri : ligne suivante
+  }
+}
+
+/** Année choisie (clic ou saisie) → tag écrit tout de suite + rangement résolu. */
+async function pickYear(year: string): Promise<void> {
+  _yearBuffer = '';
+  const wrote = await writeYearTag(year);
+  if (_style) commit(_style, trancheOf(Number(year)));
+  refreshStyleCells(_targets);
   setHint(
-    `${styleId} — ${needing.length} fichier${needing.length > 1 ? 's' : ''} sans année : chiffre 1-9 = tranche, Enter = style seul`,
+    `année ${year} ✓ ${wrote ? 'écrite dans le tag' : 'non écrite'} — ${_style ? `style ${_style}` : 'aucun style'} — Échap ferme`,
+  );
+  // Une seule décision à la fois : on referme après l'année si le style est posé
+  // (sinon la palette reste ouverte : l'année seule devait pouvoir être corrigée).
+  if (_style) {
+    const single = _targets.length === 1;
+    closeStylePalette();
+    if (single) {
+      const container = anchorContainer();
+      if (container) navigateFocus(container, 1);
+    }
+  }
+}
+
+function highlightYears(): void {
+  _el?.querySelector('.sp-years')?.classList.add('needs-year');
+  _el?.querySelectorAll('.sp-year').forEach(b => {
+    const fp = _targets[0];
+    const cur = fp ? entryOf(fp)?.year?.slice(0, 4) : null;
+    b.classList.toggle('current', !!cur && (b as HTMLElement).dataset.year === cur);
+  });
+}
+
+function refreshYearBufferHint(): void {
+  const years = _el?.querySelectorAll('.sp-year');
+  years?.forEach(b => {
+    b.classList.toggle('pending', (b as HTMLElement).dataset.year === _yearBuffer);
+  });
+  setHint(
+    _yearBuffer
+      ? `année saisie : ${_yearBuffer} — Entrée = écrire dans le tag · ⌫ = effacer`
+      : _style
+        ? `${_style} ✓ — tape 4 chiffres (1991) puis Entrée, ou clique une année`
+        : 'Lettre = style (écrit dans le tag) · 4 chiffres + Entrée = année · Échap = fermer',
   );
 }
 
@@ -95,22 +294,30 @@ function onKeydown(e: KeyboardEvent): void {
     return;
   }
   if (e.key === 'Backspace') {
-    removeChoices();
+    if (_yearBuffer) {
+      _yearBuffer = _yearBuffer.slice(0, -1);
+      refreshYearBufferHint();
+    } else {
+      removeChoices();
+    }
     return;
   }
-  if (_pending) {
-    if (e.key === 'Enter') commit(_pending, null, _pendingNeeding);
-    else if (/^[1-9]$/.test(e.key)) commit(_pending, TRANCHES[Number(e.key) - 1], _pendingNeeding);
+  if (e.key === 'Enter') {
+    if (/^\d{4}$/.test(_yearBuffer)) void pickYear(_yearBuffer);
+    else if (_suggestion && _targets.length === 1 && !_style) void pick(_suggestion.style);
+    else if (_style) closeStylePalette();
     return;
   }
-  // P2 : Enter sur une suggestion unique → accepter la suggestion
-  if (e.key === 'Enter' && _suggestion && _targets.length === 1) {
-    pick(_suggestion.style);
+  if (/^\d$/.test(e.key)) {
+    // 4 chiffres = une année (remplace les anciens « 1-9 = palier » : la tranche
+    // se déduit de l'année, elle n'a plus à être demandée).
+    _yearBuffer = (_yearBuffer + e.key).slice(-4);
+    refreshYearBufferHint();
     return;
   }
   if (e.key.length === 1) {
     const styleId = _hotkeyToStyle.get(e.key.toLowerCase());
-    if (styleId) pick(styleId);
+    if (styleId) void pick(styleId);
   }
 }
 
@@ -120,7 +327,7 @@ function onDocMousedown(e: MouseEvent): void {
 
 function position(el: HTMLElement, anchor: HTMLElement): void {
   const r = anchor.getBoundingClientRect();
-  const width = 440;
+  const width = el.offsetWidth || 560;
   const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
   el.style.left = `${left}px`;
   el.style.top = `${r.bottom + 4}px`;
@@ -144,7 +351,8 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
   }
   _targets = [...targets];
   _anchor = anchor;
-  _pending = null;
+  _style = null;
+  _yearBuffer = '';
   _suggestion = null;
   // P2 : suggestion unique
   if (targets.length === 1) {
@@ -170,14 +378,20 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
   el.className = 'style-palette';
   el.tabIndex = -1;
   el.setAttribute('role', 'dialog');
-  el.setAttribute('aria-label', 'Choisir un style');
+  el.setAttribute('aria-label', 'Choisir un style et une année');
 
   const title = document.createElement('div');
   title.className = 'sp-title';
   const single = _targets.length === 1;
+  const cur = single ? entryOf(_targets[0]) : null;
+  const basename = single ? _targets[0].slice(_targets[0].lastIndexOf('/') + 1) : '';
+  // Le scope est annoncé : taguer un morceau DÉJÀ RANGÉ (Source Data) ne
+  // planifie aucune copie, contrairement à un épars.
+  const scope = single && !isEparsTarget(_targets[0]) ? 'Source Data · ' : '';
   title.textContent = single
-    ? (findEparsEntry(state.eparsFiles, _targets[0])?.filename ?? _targets[0])
+    ? `${scope}${basename || _targets[0]}${cur ? ` — genre « ${cur.genre ?? '—'} » · année ${cur.year ?? '—'}` : ''}`
     : `${_targets.length} fichiers`;
+  if (single) title.title = _targets[0];
   el.appendChild(title);
 
   const grid = document.createElement('div');
@@ -191,38 +405,39 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
     const k = hotkeys.get(def.id);
     b.innerHTML = `<kbd>${k ?? '·'}</kbd> `;
     b.appendChild(document.createTextNode(def.id));
-    b.title = `${def.count} fichier${def.count > 1 ? 's' : ''} rangé${def.count > 1 ? 's' : ''}`;
+    b.title = `${def.count} fichier${def.count > 1 ? 's' : ''} rangé${def.count > 1 ? 's' : ''} — clic = style écrit dans le tag`;
     b.onclick = (ev: MouseEvent) => {
       ev.stopPropagation();
-      pick(def.id);
+      void pick(def.id);
     };
     grid.appendChild(b);
   }
   el.appendChild(grid);
 
-  const tr = document.createElement('div');
-  tr.className = 'sp-tranches';
-  TRANCHES.forEach((t, i) => {
+  // Années : TOUTE la plage, pour ne jamais avoir à deviner un palier.
+  const years = document.createElement('div');
+  years.className = 'sp-years';
+  for (let y = YEAR_MIN; y <= YEAR_MAX; y++) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'sp-tranche';
-    b.dataset.tranche = String(t);
-    b.innerHTML = `<kbd>${i + 1}</kbd> ${t}`;
+    b.className = 'sp-year';
+    b.dataset.year = String(y);
+    b.textContent = String(y);
     b.onclick = (ev: MouseEvent) => {
       ev.stopPropagation();
-      if (_pending) commit(_pending, t, _pendingNeeding);
+      void pickYear(String(y));
     };
-    tr.appendChild(b);
-  });
-  el.appendChild(tr);
+    years.appendChild(b);
+  }
+  el.appendChild(years);
 
   const dest = document.createElement('div');
   dest.className = 'sp-dest';
   if (_suggestion && _targets.length === 1) {
     const pct = Math.round(_suggestion.confidence * 100);
-    dest.textContent = `→ ${_suggestion.style} (${pct}%) — Enter = accepter · Lettre = style · Échap = annuler · ⌫ = retirer`;
+    dest.textContent = `→ ${_suggestion.style} (${pct}%) — Entrée = accepter · Lettre = style · Échap = annuler`;
   } else {
-    dest.textContent = 'Lettre = style · Échap = annuler · ⌫ = retirer le style';
+    dest.textContent = 'Lettre = style (écrit dans le tag) · 4 chiffres + Entrée = année · Échap = fermer';
   }
   el.appendChild(dest);
 
@@ -230,6 +445,7 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
   document.body.appendChild(el);
   position(el, anchor);
   _el = el;
+  highlightYears();
   document.addEventListener('mousedown', onDocMousedown, true);
   el.focus();
 }
@@ -240,9 +456,9 @@ export function closeStylePalette(): void {
   document.removeEventListener('mousedown', onDocMousedown, true);
   _el.remove();
   _el = null;
-  _pending = null;
-  _pendingNeeding = [];
-  const container = eparsContainer();
+  _style = null;
+  _yearBuffer = '';
+  const container = anchorContainer();
   if (container && _anchor?.isConnected) focusItemByElement(container, _anchor, { noHistory: true });
   _anchor = null;
   _targets = [];
