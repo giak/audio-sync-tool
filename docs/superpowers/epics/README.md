@@ -56,12 +56,86 @@
 | [EPIC-034](EPIC-034-ux-rangement-sync-player-pastille.md) | UX rangement Sync : player audio des cartes (Années/Doublons, ▶/⏹ player global), pastille « déjà rangé » sur les épars jumeaux sous le filtre source, auto-expansion mémoire du dossier destination après F5 | 🟢 Livrée (2026-09-19, `c6546a0`, `ca21e21`, `6e02f87`) | Haute | EPIC-030/028/033 (socles) |
 | [EPIC-035](EPIC-035-rangement-par-style.md) | Rangement par style : palette clavier `g` (1 style parmi 25, chord tranche), destination `style_tranche` **calculée** depuis l'année, suggestions locales (segments du chemin épars, voisinage artiste, genre ID3 aliasé, borne d'acquisition), aperçu groupé par dossier → F5 batch, écriture `TCON` via export → `apply_styles.py` (journal `old_genre` + `--undo`) | 🟢 **P1+P2+P3 livrés (2026-09-19, `c6fcfdf` → `e6dfa82`)** — P1 socle clavier (live headless) · P2 suggestions locales (moteur 4 signaux, chip « suggéré », `Enter` = accepter) · P3 TCON (`/styles/review` + `apply_styles.py` : journal `old_genre`, `--undo`, tag épars + copie, chip « écrit » ✓) ; P4 backlog | Haute | spec `2026-09-19-rangement-par-style-design.md` · plan `2026-09-19-rangement-par-style.md` |
 | [EPIC-036](EPIC-036-refactoring-architecture.md) | Refactoring architecture : dette Phase 0 (flaky shuffle, gate 3 graines fixes, audit listeners, CSS mort via PurgeCSS), noyau `core/` (format/feedback/subscribe/dom), squelette de liste commun aux 5 pages, CSS en couches bundlées esbuild, perf mesurée — strangler fig, **pas de framework** (verdict mesuré) | ✅ **Phases 0-4 livrées (2026-09-19, `e623dd0`+`a5e2e08`+`30f9400`+`b60d8dc`+`d6c2e08`)** — CSS en couches (preuve cascade + captures 0 px), perf mesurée (content-visibility rejetée sur spec+profil, normalizeName mémoïsé) | Moyenne | étude `refactoring/2026-09-19-refactoring-architecture.md` |
+| [EPIC-037](EPIC-037-filtre-colonnes-sticky-clavier-annees.md) | Chip de filtre des colonnes : filtre « année honnête » (texte **et** chiffres, deux colonnes — `2020` gardait 493 lignes dont 333 d'une autre année via les sous-dossiers datés), chip **collé** (sticky sync, pattern playlist/years), clic dans le champ **sans scroll** (handler de panneau), `↓` dans la liste **de sa colonne** (bindings scope-aware) | 🟢 **Livrée (2026-09-21)** — `2020` → **189** gardées (contre 493) et `1993` → 127 mesurés sur la collection ; chip collé + clic sans scroll + `↓` dans SA colonne prouvés headless **5/5** (`scripts/proof_filter_chip.py`, contrôle sticky inclus), tests validés par mutation ; **P1 bis (arbre Source Data) écarté** par décision — limite assumée et tracée (`1993` → 0 dossier à droite, 59 fichiers taggés 1993) | Haute | spec `2026-09-21-filtre-colonnes-sync-design.md` |
+| [EPIC-038](EPIC-038-player-audio-singleton.md) | Player audio **singleton strict** : `currentAudio` assigné synchroniquement (fini l'assignation tardive au `.then`), génération de lecture anti-promesses périmées, `releaseAudio` (pause + `src=''` + handlers détachés), marques nettoyées en un point — une seule piste audible à la fois, quel que soit le point d'entrée | 🟢 **Livré (2026-09-21)** — `playSeq` + `releaseAudio` + assignation synchrone ; +4 tests de course (A→B avant résolution = un seul élément non pausé, prouvé par mutation) ; gate 1 133 vitest / 317 pytest | Haute | spec `2026-09-21-player-singleton-design.md` |
+| [EPIC-040](EPIC-040-annees-corroboration-2-sources.md) | **Années corroborées** : plus jamais une réédition écrite comme année du morceau. Trois défauts cumulés (ordre artiste/titre deviné depuis le nom, **Deezer sans garde artiste/titre**, `release_date` d'album pris pour la première sortie) → 408 écritures Deezer dont **173 ≥ 2015 (42,4 %)** contre 12 % pour MusicBrainz. Corrigé par orientations multiples (tags → nom → nom inversé, la garde tranche), garde tokens partout, Discogs en 3ᵉ provider, et **règle des 2 providers indépendants concordants** (sinon revue, rien n'est écrit) ; audit des années déjà écrites + `--undo` qui restaure | 🟡 **Moteur + audit livrés (2026-09-21)** — cas signalé corrigé (**Phantasia « Inner Light » 2024 → 1991**, journal `old=2024`) ; 11 nouveaux tests dont la régression, validés par mutation ; providers **Discogs** (3ᵉ, en direct) · **YouTube Topic** (4ᵉ, `--youtube`) · **recherche web Brave** (candidats seulement, ne vote jamais) ; **reste** : re-collecte complète + exposition en revue (vue Années) + audit des 408 (commandes dans l'EPIC) | Haute | spec `2026-09-21-annees-corroboration-design.md` · EPIC-033 · mémoire MnemoLite `a4494da3` |
+| [EPIC-041](EPIC-041-palette-g-ecriture-immediate-scope.md) | **Palette `g` : tags écrits tout de suite + scope** — le choix d'un style **et** d'une année écrit le tag du fichier immédiatement (avant : le TCON attendait un script hors navigateur, l'année n'était **jamais** écrite) ; `g` agit sur le **morceau surligné**, Éparpillé **ou** Source Data (avant : garde `activePanel` ⇒ `g` muet après un simple clic dans la colonne droite) ; la modale montre **tout** (57 années 1970→2026 + tous les styles, grille de styles défilante) | 🟢 **Livré (2026-09-22)** — `POST /styles/apply` + `/years/apply` (confinement aux racines, relecture, journal partagé ⇒ `--undo` des scripts les annule) ; preuve headless **9/9** (10/10 avec 42 styles) sur les tags **relus sur disque**, + **preuve par mutation** des 2 gardes neuves (garde `activePanel` réintroduite → 4/9 en échec = `g` silencieux) ; gate **1 142 vitest / 335 pytest**, lint 0 | Haute | spec `2026-09-22-palette-g-scope-design.md` · EPIC-035 (socle) |
+| [EPIC-039](EPIC-039-focus-lisible-listes.md) | **Focus lisible** : le curseur (morceau **ou** dossier) doit sauter aux yeux dans toutes les listes. Grammaire unique — boîte d'accent 2 px + barre 4 px + fond teinté — au lieu de l'empilement de traits translucides d'origine (`--border-focus` 35 % = **1,17:1** de contraste) ; panneau actif passé de 3,38:1 à 11,45:1 ; cartes Années/Doublons alignées (ambre conservé, sémantique de revue) | 🟢 **Livré (2026-09-21)** — mesure headless **8/8** (`scripts/measure_focus_visibility.py`, contraste calculé comme le navigateur le rend + contrôle de sensibilité par réinjection des règles d'origine) : dossier 1 px/1,17:1 → **2 px/9,79:1**, ligne barre 3 → **4 px** et boîte **2 px/9,79:1**, panneau **11,45:1**, clic réel = la ligne cliquée focusée. Zéro TS touché (seule la peinture change) | Haute | harnais `scripts/measure_focus_visibility.py` (captures avant/après) |
 
 ## État actuel du projet (2026-09-19)
 
-- Tests : **979 vitest** (40 fichiers) / **237 pytest** (test_app 152, test_nml 29,
-  test_analysis 15, test_apply_years 11, test_collect_discogs_reform 12,
-  test_collect_itunes 10, test_report_years 8) — tous verts.
+- **Session 2026-09-22 — EPIC-041 livrée** : retour d'usage « la touche `g` sur un morceau ne
+  fonctionne pas correctement ; choisir un style doit mettre à jour de suite le style ID3, et
+  pareillement l'année ; dans la modale il faut tout voir, styles et années ». Trois couches
+  fautives, mesurées headless avant correction : (1) le **binding** exigeait
+  `activePanel: 'epars'` → un clic dans la colonne droite rendait `g` inerte (aucune palette,
+  aucun message) et un morceau de Source Data n'était pas taggable ; (2) la modale ne
+  proposait que **9 paliers** au lieu des années ; (3) la palette **n'écrivait aucun tag** — le
+  TCON n'arrivait qu'après aperçu `e` + `apply_styles.py --review` hors navigateur, l'année
+  jamais. Corrigé : `POST /styles/apply` + `/years/apply` (validation → confinement aux
+  racines configurées → journal `old` → écriture du frame natif → **relecture**), journal
+  **partagé** avec les scripts (`source: "palette"` ⇒ `--undo` les annule) ; `g` **scope-aware**
+  (fichier > dossier, panneau actif en arbitre, sélection Espace épars-only) avec messages
+  honnêtes ; cibles Source Data taguées **sans** créer de choix de rangement ; 57 années
+  toujours entières + grille de styles défilante. Preuve : `scripts/proof_style_palette.py`
+  **9/9** (monde normal) / **10/10** (`PROOF_EXTRA_STYLES=40`), tags relus **sur disque** par
+  mutagen, + preuve par mutation (garde `activePanel` réintroduite ⇒ 4/9 en échec). Gate :
+  **1 142 vitest / 335 pytest**, typecheck 0, lint 0, build OK. Reste : premier usage réel
+  (frames de production, ressenti du scope).
+
+- **Session 2026-09-21 — EPIC-040 : années corroborées** : signalement « Inner Light /
+  Phantasia, j'ai du 2024 alors que c'est du 1991 ». Fait vérifié (MnemoLite cache miss →
+  web → mémoire `a4494da3` `CONFIRME` : R&S, **avril 1991**) puis cause trouvée **par
+  mesure** : la clé était construite en devinant « Artiste - Titre » (`'inner light
+  \tphantasia'`), Deezer n'avait **aucune garde artiste/titre** (seule la durée filtrait,
+  et pas du tout sans durée connue) et renvoie la `release_date` de l'**album matché** —
+  « Ooo », 2024-01-15, pour un morceau de 1991. 408 écritures Deezer, **173 ≥ 2015 (42,4 %)**
+  vs 12 % pour MusicBrainz. Corrigé : orientations multiples (tags du fichier → nom → nom
+  inversé, la garde tokens tranche), garde artiste+titre sur Deezer, **Discogs** en 3ᵉ
+  provider, **règle des 2 providers indépendants concordants** (un seul parle → revue, rien
+  n'est écrit ; `reform`/`reform2` comptés comme Discogs), cache versionné `v:2` (le v1 est
+  ignoré → re-collecte), `--undo` qui **restaure** les corrections. Nouvel outil
+  `scripts/audit_applied_years.py` (classe `confirme`/`contredit`/`a_revoir`/`non_verifie`,
+  dry-run par défaut, `--apply --yes`). **Cas signalé corrigé sur le disque** (2024 → 1991,
+  les 2 fichiers), 326 pytest dont 11 nouveaux verrouillages validés par mutation. **Reste** :
+  re-collecte complète, exposition des items en revue dans la vue Années, audit des 408.
+- **Session 2026-09-21 — EPIC-039 livrée** : retour d'usage « le focus est un cadre bleu
+  entouré d'un liseret, ça doit se voir d'un coup d'œil ». Diagnostic mesuré (et non
+  supposé) : la grammaire d'origine empilait deux traits translucides — `outline: 1px
+  solid var(--border-focus)` (rgba 35 % d'alpha → **1,17:1**) sur la cellule du nom **plus**
+  un `outline` de dossier de même couleur, le tout sur un fond `--bg-focus` partagé avec
+  le survol et la sélection. Corrigé par une grammaire unique (boîte d'accent 2 px + barre
+  4 px + teinte cyan 14 %) appliquée aux lignes, aux dossiers, aux pistes de playlist et
+  aux cartes Années/Doublons, et panneau actif porté à **11,45:1** (bordure d'accent +
+  anneau `inset`). Preuve : `scripts/measure_focus_visibility.py` **8/8** (contraste rendu
+  mesuré via canvas, avant/après dans le même rendu + contrôle de sensibilité). Zéro
+  fichier TypeScript modifié : les classes étaient déjà posées, seule la peinture change.
+  ⚠ le CSS est bundlé (`static/dist/script.css`) : `npm run build` est obligatoire avant
+  toute mesure navigateur.
+- Tests (2026-09-21) : **1 137 vitest** (50 fichiers) / **326 pytest** (test_collect_years 11,
+  test_app 160,
+  test_collect_youtube_topic 31, test_nml 29, test_analysis 15, test_apply_years 15,
+  test_apply_styles 14, test_collect_discogs_reform 12, test_collect_discogs_reform2 11,
+  test_collect_beatport 10, test_collect_itunes 10, test_report_years 10) — tous verts.
+- **Session 2026-09-21 — EPIC-037/038 ouvertes (⚪ backlog)** : retour d'usage réel de
+  5 frictions du filtre/listes, instruites par lecture de code **et** mesure sur la
+  collection (`data/cache.json`, lecture seule — épars 5 092 fichiers / 3 631 avec année,
+  source 1 604) : `2020` sur l'épars gardait **493 lignes dont 333 d'une autre année**
+  (1993 ×14, 1997 ×9…) parce que le terme matchait le **sous-dossier daté**
+  (`2020_02_25/…`) ; chip non collé (aucune règle sticky sync) ; clic dans le champ →
+  `scrollIntoView` via le handler de panneau ; `↓` codé en dur vers la colonne droite ;
+  et course du player (`currentAudio` assigné au `.then` → deux `<audio>` audibles).
+  Design détaillé, chiffres cibles et tests dans les specs liées. **EPIC-037 P2+P3 livrés**
+  (chip collé `sync.css`, clic dans le champ sans scroll `script.ts` + `commands/filter.ts`,
+  test vitest validé par mutation, preuve headless 4/4 `scripts/proof_filter_chip.py`),
+  **P1 moteur + épars** (`filterEngine.ts` : `2020` → 189 gardées contre 493, `1993` → 127,
+  `_schranz` → 79 == mesure EPIC-035) et **EPIC-038 livrée** (`audio.ts` singleton strict :
+  `playSeq`, `releaseAudio`, assignation synchrone — 4 tests de course, preuve par mutation).
+  **P4** (`↓` entre dans la liste de SA colonne, `Tab` symétrique, `currentFilterScope`
+  déplacé dans filterChip.ts) — **EPIC-037 complète**. **P1 bis (filtre par année de la
+  colonne Source Data) écarté** par décision (2026-09-21) : le filtre de droite reste par
+  nom de dossier — limite mesurée et assumée (`1993` → 0 dossier à droite alors que
+  59 fichiers source y sont taggés 1993).
 - **EPIC-034 livrée** (2026-09-19, `c6546a0` `ca21e21` `6e02f87`) : trois frictions du
   workflow de rangement soldées — player audio des cartes Années/Doublons (▶/⏹ réutilisant
   le player global, `playingPath()` re-marque après chaque re-render), pastille « ⤷ déjà
