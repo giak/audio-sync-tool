@@ -69,7 +69,7 @@ instant.
 
 | Commit | Message |
 |---|---|
-| `…` | `feat: EPIC-043 — F5 range et tague : le style du dossier cible est écrit (épars + copie)` |
+| `88e7904` | `feat: EPIC-043 — F5 range et tague : le style du dossier cible est écrit (épars + copie)` |
 
 ## Décisions
 
