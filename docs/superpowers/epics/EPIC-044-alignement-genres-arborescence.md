@@ -83,6 +83,8 @@ du même mensonge.
 | Commit | Message |
 |---|---|
 | `22be2bc` | `feat: EPIC-044 — le tag genre des rangés rejoint l'arborescence` |
+| `46eb4c5` | `docs: EPIC-044 — traçabilité (22be2bc) + README à l'état réel du projet` |
+| `58f43d2` | `fix: EPIC-044 — libellé de légende court (une ligne à 4 colonnes)` |
 
 ## Décisions
 
