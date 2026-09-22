@@ -1,4 +1,17 @@
 // ─── Audio player + player bar UI ──────────────────────────────────────────
+// SINGLETON STRICT (EPIC-038) : une seule lecture à la fois, quel que soit le
+// point d'entrée (épars, arbre source, playlist, cartes Années/Doublons, menus)
+// et le rythme des clics. Deux garanties :
+//   1. `currentAudio` est la référence maître, assignée SYNCHRONEMENT (avant
+//      `play()`) — l'ancien élément est libéré tout de suite (pause + src vide
+//      + handlers détachés), donc l'audio précédent meurt AVANT le nouveau ;
+//   2. `playSeq` (génération de lecture) : les callbacks d'une promesse périmée
+//      (résolution tardive d'un `.play()`, `onended`/`onerror` d'un élément
+//      remplacé) ne touchent plus ni la barre, ni les marques, ni l'état.
+// Régression d'origine : `currentAudio` n'était assigné qu'à la résolution de
+// `play()` et le callback de succès ne mettait en pause AUCUN élément → deux
+// `<audio>` jouaient vraiment quand deux clics se croisaient pendant le
+// chargement (R présenté : clic dans une colonne puis l'autre).
 
 import { setStatus } from './core/feedback.js';
 import { emit } from './state.js';
@@ -7,6 +20,9 @@ import { formatTime } from './utils.js';
 let currentAudio: HTMLAudioElement | null = null;
 let _playerFilename = '';
 let playerFullpath = '';
+/** Génération de lecture : incrémentée à chaque `togglePlay`/`stopPlayer`.
+ *  Un callback ne s'applique que si sa génération est encore la courante. */
+let playSeq = 0;
 
 const playerBar = document.getElementById('player-bar') as HTMLElement | null;
 const playerFilenameEl = document.getElementById('player-filename') as HTMLElement | null;
@@ -23,17 +39,36 @@ function updatePlayerUI(): void {
   }
 }
 
-export function stopPlayer(): void {
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio = null;
-  }
-  if (playerBar) playerBar.classList.add('hidden');
+/** Retire TOUTES les marques de lecture (boutons ⏹ des tableaux, des cartes
+ *  Années/Doublons et du panneau playlist — tous portent `.play-btn` — et glow
+ *  `.led-playing`). Un seul point de nettoyage pour les 5 points d'entrée. */
+function clearPlayingMarks(): void {
   document.querySelectorAll('.play-btn.playing').forEach(b => {
     b.classList.remove('playing');
     b.textContent = '▶';
   });
   for (const el of document.querySelectorAll('.led-playing')) el.classList.remove('led-playing');
+}
+
+/** Libère un élément audio : handlers détachés, pause, source vidée (le serveur
+ *  streame `/audio` — `pause()` seul laissait une connexion vivante). */
+function releaseAudio(el: HTMLAudioElement | null): void {
+  if (!el) return;
+  el.ontimeupdate = null;
+  el.onloadedmetadata = null;
+  el.onended = null;
+  el.onerror = null;
+  el.pause();
+  el.src = '';
+}
+
+export function stopPlayer(): void {
+  playSeq++;
+  releaseAudio(currentAudio);
+  currentAudio = null;
+  playerFullpath = '';
+  if (playerBar) playerBar.classList.add('hidden');
+  clearPlayingMarks();
   emit('audio:changed');
 }
 
@@ -49,60 +84,59 @@ function showPlayer(filename: string, fullpath: string): void {
 }
 
 export function togglePlay(filename: string, fullpath: string, btn: HTMLElement): void {
-  if (currentAudio && !currentAudio.paused) {
-    if (fullpath === playerFullpath) {
-      stopPlayer();
-      return;
-    }
-    currentAudio.pause();
-    currentAudio = null;
-    document.querySelectorAll('.play-btn.playing').forEach(b => {
-      b.classList.remove('playing');
-      b.textContent = '▶';
-    });
-    for (const el of document.querySelectorAll('.led-playing')) el.classList.remove('led-playing');
+  // Même fichier — en lecture OU en cours de chargement (EPIC-038 : avant, ce
+  // cas relançait un 2ᵉ élément tant que le `.play()` n'avait pas résolu).
+  if (currentAudio && fullpath === playerFullpath) {
+    stopPlayer();
+    return;
   }
+
+  playSeq++;
+  const seq = playSeq;
+  releaseAudio(currentAudio); // l'ancien meurt AVANT le nouveau (jamais deux flux)
+  currentAudio = null;
+  clearPlayingMarks();
+
   const audio = new Audio(`/audio?path=${encodeURIComponent(fullpath)}`);
   audio.volume = 1.0;
-  let started = false;
+  // Référence maître SYNCHRONE : tout clic suivant voit immédiatement ce fichier.
+  currentAudio = audio;
+  playerFullpath = fullpath;
+
+  const isCurrent = (): boolean => seq === playSeq && currentAudio === audio;
 
   audio.ontimeupdate = () => {
-    if (!started && audio.duration) started = true;
-    updatePlayerUI();
+    if (isCurrent()) updatePlayerUI();
   };
   audio.onloadedmetadata = () => {
-    updatePlayerUI();
+    if (isCurrent()) updatePlayerUI();
   };
   audio.onended = () => {
-    if (currentAudio === audio) {
-      document.querySelectorAll('.play-btn.playing').forEach(b => {
-        b.classList.remove('playing');
-        b.textContent = '▶';
-      });
-      currentAudio = null;
-      if (playerBar) playerBar.classList.add('hidden');
-      emit('audio:changed');
-    }
+    if (!isCurrent()) return;
+    releaseAudio(audio);
+    currentAudio = null;
+    playerFullpath = '';
+    if (playerBar) playerBar.classList.add('hidden');
+    clearPlayingMarks();
+    emit('audio:changed');
   };
   audio.onerror = () => {
+    if (!isCurrent()) return;
+    releaseAudio(audio);
+    currentAudio = null;
+    playerFullpath = '';
     btn.classList.remove('playing');
     btn.textContent = '▶';
-    if (currentAudio === audio) {
-      currentAudio = null;
-      if (playerBar) playerBar.classList.add('hidden');
-      emit('audio:changed');
-    }
+    if (playerBar) playerBar.classList.add('hidden');
+    clearPlayingMarks();
+    emit('audio:changed');
   };
 
   audio
     .play()
     .then(() => {
-      currentAudio = audio;
-      document.querySelectorAll('.play-btn.playing').forEach(b => {
-        b.classList.remove('playing');
-        b.textContent = '▶';
-      });
-      for (const el of document.querySelectorAll('.led-playing')) el.classList.remove('led-playing');
+      if (!isCurrent()) return; // promesse périmée : aucun effet (EPIC-038)
+      clearPlayingMarks();
       btn.classList.add('playing');
       btn.textContent = '⏹';
       showPlayer(filename, fullpath);
@@ -114,10 +148,15 @@ export function togglePlay(filename: string, fullpath: string, btn: HTMLElement)
       emit('audio:changed');
     })
     .catch((err: unknown) => {
-      console.error('Audio play failed:', err instanceof Error ? err.message : String(err));
+      if (!isCurrent()) return;
+      releaseAudio(audio);
+      currentAudio = null;
+      playerFullpath = '';
       btn.classList.remove('playing');
       btn.textContent = '▶';
       if (playerBar) playerBar.classList.add('hidden');
+      clearPlayingMarks();
+      console.error('Audio play failed:', err instanceof Error ? err.message : String(err));
       const msg =
         err instanceof DOMException && err.name === 'NotAllowedError'
           ? "🔇 Son bloqué — clique d'abord sur la page pour débloquer l'audio."

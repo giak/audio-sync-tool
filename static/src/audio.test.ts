@@ -18,6 +18,7 @@ vi.hoisted(() => {
   // Mock Audio will be set up per-test via globalThis
   class MockAudio {
     url: string;
+    src: string;
     duration = 120;
     currentTime = 0;
     paused = true;
@@ -25,15 +26,24 @@ vi.hoisted(() => {
     onloadedmetadata: (() => void) | null = null;
     onended: (() => void) | null = null;
     onerror: (() => void) | null = null;
+    /** Résolveurs PROPRES à l'instance (EPIC-038) : les scénarios de course
+     *  doivent pouvoir résoudre une promesse périmée après coup. Les globaux
+     *  `__audioResolve`/`__audioReject` pointent sur la DERNIÈRE instance. */
+    resolve: (() => void) | null = null;
+    reject: ((e: unknown) => void) | null = null;
 
     constructor(url: string) {
       this.url = url;
+      this.src = url;
       (globalThis as any).__lastMockAudio = this;
+      ((globalThis as any).__audios as MockAudio[]).push(this);
     }
 
     play() {
       this.paused = false;
       return new Promise<void>((resolve, reject) => {
+        this.resolve = resolve;
+        this.reject = reject;
         (globalThis as any).__audioResolve = resolve;
         (globalThis as any).__audioReject = reject;
       });
@@ -65,6 +75,7 @@ beforeEach(() => {
   (globalThis as any).Audio = (globalThis as any).__MockAudio;
   (globalThis as any).__audioResolve = null;
   (globalThis as any).__audioReject = null;
+  (globalThis as any).__audios = [];
   // Reset player bar to hidden
   document.getElementById('player-bar')!.classList.add('hidden');
   document.getElementById('player-progress-fill')!.style.width = '0%';
@@ -174,6 +185,94 @@ describe('togglePlay', () => {
     expect(filenameEl.textContent!.length).toBeLessThanOrEqual(30);
     expect(filenameEl.textContent).toContain('...');
     btn.remove();
+  });
+
+  // ── EPIC-038 : singleton strict — une seule lecture, même en clics croisés ──
+  describe('singleton strict (EPIC-038)', () => {
+    interface FakeAudio {
+      paused: boolean;
+      src: string;
+      onended: (() => void) | null;
+      resolve: (() => void) | null;
+    }
+
+    const audios = (): FakeAudio[] => (globalThis as any).__audios;
+    const playing = (): FakeAudio[] => audios().filter(a => !a.paused);
+
+    it('deux ▶ enchaînés pendant le chargement : un seul élément joue, le 1er est libéré', async () => {
+      const btnA = makeBtn();
+      const btnB = makeBtn();
+
+      togglePlay('a.mp3', '/p/a.mp3', btnA);
+      togglePlay('b.mp3', '/p/b.mp3', btnB); // avant la résolution de A
+
+      expect(audios().length).toBe(2);
+      expect(playing().length).toBe(1); // anti-régression : 2 avant l'EPIC-038
+      expect(playing()[0]).toBe(audios()[1]);
+      expect(audios()[0].paused).toBe(true);
+      expect(audios()[0].src).toBe(''); // flux libéré
+      expect(audios()[0].onended).toBeNull(); // handlers détachés
+
+      // La promesse périmée de A résout après coup : aucun effet.
+      audios()[0].resolve?.();
+      await flush();
+
+      expect(playing().length).toBe(1);
+      expect(btnA.classList.contains('playing')).toBe(false);
+      btnA.remove();
+      btnB.remove();
+    });
+
+    it('même fichier en cours de chargement : stop, pas de 2ᵉ élément', () => {
+      const btn = makeBtn();
+      togglePlay('a.mp3', '/p/a.mp3', btn);
+      const first = audios()[0];
+
+      togglePlay('a.mp3', '/p/a.mp3', btn);
+
+      expect(audios().length).toBe(1); // aucun 2ᵉ Audio
+      expect(first.paused).toBe(true);
+      expect(isAudioPlaying()).toBeNull();
+      expect(document.getElementById('player-bar')!.classList.contains('hidden')).toBe(true);
+      btn.remove();
+    });
+
+    it('stopPlayer pendant le chargement : la résolution tardive ne rallume rien', async () => {
+      const btn = makeBtn();
+      togglePlay('a.mp3', '/p/a.mp3', btn);
+      const first = audios()[0];
+
+      stopPlayer();
+      first.resolve?.();
+      await flush();
+
+      expect(isAudioPlaying()).toBeNull();
+      expect(document.getElementById('player-bar')!.classList.contains('hidden')).toBe(true);
+      expect(btn.classList.contains('playing')).toBe(false);
+      expect(btn.textContent).toBe('▶');
+      btn.remove();
+    });
+
+    it('enchaîner B après une lecture A établie : A est coupé, un seul flux', async () => {
+      const btnA = makeBtn();
+      togglePlay('a.mp3', '/p/a.mp3', btnA);
+      audios()[0].resolve?.();
+      await flush();
+      expect(isAudioPlaying()).toBe(true);
+
+      const btnB = makeBtn();
+      togglePlay('b.mp3', '/p/b.mp3', btnB);
+      audios()[1].resolve?.();
+      await flush();
+
+      expect(playing().length).toBe(1);
+      expect(playing()[0]).toBe(audios()[1]);
+      expect(audios()[0].paused).toBe(true);
+      expect(btnA.classList.contains('playing')).toBe(false);
+      expect(btnB.classList.contains('playing')).toBe(true);
+      btnA.remove();
+      btnB.remove();
+    });
   });
 });
 
