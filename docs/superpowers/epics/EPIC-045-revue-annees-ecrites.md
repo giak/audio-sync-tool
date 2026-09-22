@@ -77,7 +77,7 @@ une proposition utilisable, et l'écart est souvent net (`écrit 2003 → 1999`,
 
 | Commit | Message |
 |---|---|
-| à compléter | `feat: EPIC-045 — l'audit des années écrites se tranche dans la vue Années` |
+| `47fd385` | `feat: EPIC-045 — l'audit des années écrites se tranche dans la vue Années` |
 
 ## Décisions
 
