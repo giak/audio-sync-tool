@@ -191,6 +191,16 @@ PROBE = """(() => {
 })()"""
 
 
+def empty_detail(m):
+    """Sections sans AUCUNE ligne (régression live 2026-09-22 : un template
+    d'une autre version vidait « États » et « Cue editor » sans que rien ne le
+    signale — le reste de la feuille allait très bien)."""
+    empty = [s['title'] for s in m['perSection'] if s['rows'] == 0]
+    if empty:
+        return f"section(s) VIDE(S) : {', '.join(empty)}"
+    return f"{m['sections']} sections, toutes remplies"
+
+
 def dead_detail(m):
     """Détail du vide INTERNE aux sections (une cellule de grille étirée laisse
     un blanc sous ses lignes) — distinct du vide de colonne, inévitable avec des
@@ -357,6 +367,8 @@ def main():
              f"(fenêtre {WINDOW_H}px)"),
             ('G contenu complet (sections et lignes de bindings)', m['sections'] == 7 and m['rows'] >= 64,
              f"{m['sections']} sections · {m['rows']} lignes"),
+            ('H aucune section vide (une légende muette = une légende fausse)',
+             not [s for s in m['perSection'] if s['rows'] == 0], empty_detail(m)),
         ]
         for label, passed, detail in ok:
             checks.append((label, passed))

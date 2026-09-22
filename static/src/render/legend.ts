@@ -23,6 +23,14 @@
 // couleurs du DOM, pas des touches) et la section « Cue editor » (ses touches
 // vivent dans un sous-système à listeners propres, hors registry). legend.ts
 // les DÉPLACE dans leur colonne et les préserve telles quelles.
+//
+// CONTRAT NON DESTRUCTIF (régression live 2026-09-22) : une section du HTML qui
+// n'est pas reconnue n'est JAMAIS effacée. Le serveur a servi un template
+// compilé AVANT ce commit (donc sans `data-legend-section`) avec ce bundle ;
+// les statiques n'étant pas reconnues, un `replaceChildren` sec les vidait — la
+// modale affichait « États & pastilles » et « Cue editor » vides. Une statique
+// est donc (1) reconnue par `data-legend-section`, (2) à défaut ADOPTÉE par son
+// titre (versions antérieures), (3) sinon CONSERVÉE en queue de grille.
 
 import { registry } from '../commands/registry.js';
 
@@ -131,23 +139,45 @@ function renderRows(rows: LegendRow[]): string {
     .join('');
 }
 
+/** Titres des sections statiques des versions ANTÉRIEURES du template : une
+ *  section non annotée mais reconnaissable est adoptée — le HTML d'une autre
+ *  version ne doit jamais coûter une section (cf. contrat non destructif). */
+const STATIC_TITLES: ReadonlyArray<[LegendSectionId, RegExp]> = [
+  ['etats', /^états/i],
+  ['cue', /cue editor/i],
+];
+
 /** Écrit (ou réécrit) les colonnes de #legend-grid. Idempotent : chaque appel
  *  reconstruit les colonnes, y REPLACE les sections statiques (États, Cue
- *  editor) récupérées par `data-legend-section`, et régénère les autres. */
+ *  editor) — le HTML reste leur source de vérité — et régénère les sections de
+ *  raccourcis depuis les bindings. Aucune section inconnue n'est effacée. */
 export function renderKeyboardLegend(): void {
   const grid = document.getElementById('legend-grid');
   if (!grid) return;
 
-  // Sections statiques : détachées avant reconstruction (jamais recréées — le
-  // HTML reste leur source de vérité), quelle que soit la structure en place.
+  // Détachées AVANT reconstruction : statiques replacées, inconnues conservées.
   const statics = new Map<LegendSectionId, HTMLElement>();
-  for (const el of Array.from(grid.querySelectorAll<HTMLElement>('[data-legend-section]'))) {
-    statics.set(el.dataset.legendSection as LegendSectionId, el);
+  const leftovers: HTMLElement[] = [];
+  for (const el of Array.from(grid.querySelectorAll<HTMLElement>('.legend-section'))) {
     el.remove();
+    if (el.dataset.origin === 'bindings') continue; // régénérée depuis le registry
+    const declared = el.dataset.legendSection as LegendSectionId | undefined;
+    if (declared) {
+      statics.set(declared, el);
+      continue;
+    }
+    const title = el.querySelector('h4')?.textContent ?? '';
+    const adopted = STATIC_TITLES.find(([, pattern]) => pattern.test(title))?.[0];
+    if (adopted && !statics.has(adopted)) {
+      el.dataset.legendSection = adopted;
+      statics.set(adopted, el);
+      continue;
+    }
+    leftovers.push(el);
   }
 
   const rows = legendRows();
-  const frag = document.createDocumentFragment();
+  const columns: HTMLElement[] = [];
   for (const column of LEGEND_COLUMNS) {
     const col = document.createElement('div');
     col.className = 'legend-col';
@@ -164,7 +194,17 @@ export function renderKeyboardLegend(): void {
       section.innerHTML = `<h4>${def.title}</h4>${renderRows(rows.get(def.id) ?? [])}`;
       col.appendChild(section);
     }
-    frag.appendChild(col);
+    columns.push(col);
   }
-  grid.replaceChildren(frag);
+
+  // Une section non reconnue est CONSERVÉE (visible) plutôt qu'effacée : mieux
+  // vaut une feuille imparfaite qu'une légende muette sur un de ses états.
+  if (leftovers.length) {
+    console.warn(
+      `légende : ${leftovers.length} section(s) non reconnue(s) conservée(s) en fin de grille — template et bundle de versions différentes ?`,
+    );
+    const last = columns[columns.length - 1];
+    for (const el of leftovers) last.appendChild(el);
+  }
+  grid.replaceChildren(...columns);
 }

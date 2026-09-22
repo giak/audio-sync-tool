@@ -203,6 +203,39 @@ describe('légende générée ↔ bindings labellisés (bijection, EPIC-042)', (
     }
   });
 
+  it('un template d’une autre version ne fait pas disparaître les sections statiques', () => {
+    // RÉGRESSION constatée en live (2026-09-22) : le serveur a servi l'ancien
+    // HTML (template compilé par Flask avant le commit, donc sans
+    // `data-legend-section`) avec le nouveau bundle ; les sections statiques
+    // n'étaient donc pas reconnues et `replaceChildren` les EFFAÇAIT — la
+    // modale affichait « États & pastilles » et « Cue editor » VIDES.
+    // Contrat : aucune section du HTML n'est perdue, quelle que soit la version.
+    document.body.innerHTML = `
+      <div id="legend-grid">
+        <div class="legend-section"><h4>États — page Sync</h4>
+          <div class="legend-row"><span class="led-demo led-demo-selectionne"></span> Sélectionné (multi-copie, Espace)</div>
+        </div>
+        <div class="legend-section"><h4>Raccourcis — Cue editor</h4>
+          <div class="legend-row"><kbd>C</kbd> Poser un cue au curseur</div>
+        </div>
+        <div class="legend-section"><h4>Section d’une autre version</h4>
+          <div class="legend-row"><kbd>Z</kbd> Contenu non reconnu</div>
+        </div>
+      </div>`;
+
+    renderKeyboardLegend();
+
+    const text = document.getElementById('legend-grid')!.textContent ?? '';
+    expect(text, 'section « États » perdue').toContain('Sélectionné (multi-copie, Espace)');
+    expect(text, 'section « Cue editor » perdue').toContain('Poser un cue au curseur');
+    expect(text, 'section inconnue effacée').toContain('Contenu non reconnu');
+    // Adoptée par son titre : elle est reconnue comme la section États.
+    const etats = Array.from(document.querySelectorAll<HTMLElement>('.legend-section')).find(s =>
+      (s.querySelector('h4')?.textContent ?? '').includes('États'),
+    )!;
+    expect(etats.dataset.legendSection).toBe('etats');
+  });
+
   it('régénération idempotente : double appel = mêmes sections et lignes', () => {
     const count = (): number => document.querySelectorAll('#legend-grid .legend-row').length;
     const before = count();
