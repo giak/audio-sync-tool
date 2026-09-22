@@ -73,15 +73,26 @@ def env(tmp_path, monkeypatch):
     (music / '05. .mp3').write_bytes(b'')  # non parsable
     cache['source'][str(music)]['05. .mp3'] = {'path': '05. .mp3'}
 
+    # Règle EPIC-040 : une année n'est écrite que si ≥2 providers INDÉPENDANTS
+    # concordent — les fixtures donnent donc 2 votes par clé certaine (v≥2 =
+    # moteur corrigé).
     ycache = tmp_path / 'year_cache.jsonl'
     ycache.write_text('\n'.join(json.dumps(r) for r in [
-        {'key': '\tt1', 'status': 'found', 'year': '1990', 'source': 'musicbrainz'},
-        {'key': '\tt2', 'status': 'found', 'year': '1995', 'source': 'deezer'},
-        {'key': '\tt4', 'status': 'found', 'year': '1985', 'source': 'musicbrainz'},
+        {'key': '\tt1', 'status': 'found', 'year': '1990', 'v': 2,
+         'sources': {'musicbrainz': '1990', 'discogs': '1990'}},
+        {'key': '\tt2', 'status': 'found', 'year': '1995', 'v': 2,
+         'sources': {'deezer': '1995', 'musicbrainz': '1995'}},
+        {'key': '\tt4', 'status': 'found', 'year': '1985', 'v': 2,
+         'sources': {'musicbrainz': '1985', 'itunes': '1985'}},
+        # v1 : moteur d'avant la garde → ignoré (à re-collecter)
+        {'key': '\tv1_seul', 'status': 'found', 'year': '2024', 'source': 'deezer'},
+        # une seule source : JAMAIS écrite (revue humaine)
+        {'key': '\tune_source', 'status': 'single', 'year': '2024', 'v': 2,
+         'sources': {'deezer': '2024'}},
         {'key': '\tamb', 'status': 'ambiguous', 'year': None,
          'years': ['1996', '1999', '2005']},  # spread large → reste ambigu
         {'key': '\tserre', 'status': 'ambiguous', 'year': None,
-         'years': ['2002', '2003']},          # fenêtre ≤ 2 ans → consensus 2002
+         'years': ['2002', '2003']},          # un seul provider ambigu → revue
         {'key': '\tlarge', 'status': 'ambiguous', 'year': None,
          'years': ['1995', '2014']},          # spread large → reste ambigu
     ]) + '\n')
@@ -103,72 +114,62 @@ def env(tmp_path, monkeypatch):
     for p in ('itunes_cache.jsonl', 'discogs_reform_cache.jsonl',
               'beatport_cache.jsonl'):
         (tmp_path / p).write_text('')
+    # iTunes corrobore t3 (discogs_strict 2001) : 2 providers indépendants.
+    (tmp_path / 'itunes_cache.jsonl').write_text(
+        json.dumps({'key': '\tt3', 'status': 'found', 'year': '2001',
+                    'source': 'itunes'}) + '\n')
     (tmp_path / 'cache.json').write_text(json.dumps(cache))
     return tmp_path, music
 
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
-def test_load_found_fusionne_et_exclut(env):
+def test_load_found_exige_deux_providers(env):
+    """Règle EPIC-040 : corroboration par 2 providers indépendants."""
     found = apply_years.load_found()
-    assert found['\tt1'] == ('1990', 'musicbrainz')
-    assert found['\tt2'] == ('1995', 'deezer')
-    assert found['\tt3'] == ('2001', 'discogs_strict')
+    assert found['\tt1'] == ('1990', 'discogs+musicbrainz')   # 2 providers concordants
+    assert found['\tt2'] == ('1995', 'deezer+musicbrainz')
+    assert found['\tt3'] == ('2001', 'discogs+itunes')  # discogs + pool iTunes
     assert '\tamb' not in found      # ambigu exclu
     assert '\tlax' not in found      # discogs lax exclu
-    # Règle de consensus (candidates ≤ 2 ans → 1ʳᵉ sortie = min)
-    assert found['\tserre'] == ('2002', 'consensus')
+    # une seule source ne conclut JAMAIS (le 2024 de Deezer seul, c'est l'erreur)
+    assert '\tune_source' not in found
+    assert '\tv1_seul' not in found  # moteur v1 (sans garde) → ignoré
+    # ambigu d'un seul provider : plus de « consensus » silencieux → revue
+    assert '\tserre' not in found
     assert '\tlarge' not in found    # spread large = vraies sorties distinctes
-    assert found.get('\tamb') is None  # spread large : vraies sorties distinctes
+    assert found.get('\tamb') is None
 
 
-def test_load_found_itunes_et_reform_dernier_rideau(env):
-    """Found itunes/reform complètent la vague certaine — JAMAIS en écrasant
-    un amont (même priorité que report_years.py)."""
+def test_pools_comptent_une_voix_par_provider(env):
+    """Les pools d'appoint comptent UNE voix par provider indépendant :
+    iTunes seul ne conclut pas ; iTunes + Discogs concordants concluent ;
+    reform/reform2 ne doublent pas Discogs (c'est le même site) ; une année
+    discordante du pool n'écrase pas la vague corroborée."""
     tmp_path, _ = env
-    (tmp_path / 'itunes_cache.jsonl').write_text(
-        json.dumps({'key': '\tnouveau_it', 'status': 'found', 'year': '1985',
-                    'source': 'itunes'}) + '\n')
-    (tmp_path / 'discogs_reform_cache.jsonl').write_text('\n'.join(json.dumps(r) for r in [
-        {'key': '\tt3', 'status': 'found', 'year': '2099', 'source': 'reform_discogs'},
-        {'key': '\tnouveau', 'status': 'found', 'year': '1977', 'source': 'reform_discogs'},
-    ]) + '\n')
+    (tmp_path / 'itunes_cache.jsonl').write_text(json.dumps(
+        {'key': '\tnouveau_it', 'status': 'found', 'year': '1985',
+         'source': 'itunes'}) + '\n')
+    assert '\tnouveau_it' not in apply_years.load_found()   # une voix : insuffisant
+
+    with open(tmp_path / 'discogs_cache.jsonl', 'a') as f:
+        f.write(json.dumps({'key': '\tnouveau_it', 'status': 'found',
+                            'year': '1985', 'source': 'discogs_strict'}) + '\n')
     found = apply_years.load_found()
-    assert found['\tnouveau_it'] == ('1985', 'itunes')     # ajouté par itunes
-    # t4 déjà found MB dans le fixture → l'iTunes NE l'écrase pas
-    assert found['\tt4'] == ('1985', 'musicbrainz')
-    # t3 : discogs_strict déjà présent → le reform 2099 NE l'écrase pas
-    assert found['\tt3'] == ('2001', 'discogs_strict')
-    # clé nouvelle pour tous les pools → le reform l'ajoute
-    assert found['\tnouveau'] == ('1977', 'reform_strict')
+    assert found['\tnouveau_it'] == ('1985', 'discogs+itunes')
 
+    # reform et reform2 sont deux requêtes Discogs : pas de corroboration interne
+    for name in ('discogs_reform_cache.jsonl', 'discogs_reform2_cache.jsonl'):
+        (tmp_path / name).write_text(json.dumps(
+            {'key': '\tseul_reform', 'status': 'found', 'year': '1977',
+             'source': 'reform_discogs'}) + '\n')
+    assert '\tseul_reform' not in apply_years.load_found()
 
-def test_load_found_reform2_dernier_rideau(env):
-    """Found reform2 (junk-artiste numérique) complète la vague certaine,
-    entre reform et Beatport — jamais en écrasant un amont."""
-    tmp_path, _ = env
-    (tmp_path / 'discogs_reform2_cache.jsonl').write_text('\n'.join(json.dumps(r) for r in [
-        {'key': '\tr2_nouveau', 'status': 'found', 'year': '2002',
-         'source': 'reform2_discogs_strict'},
-        {'key': '\tt3', 'status': 'found', 'year': '2099',
-         'source': 'reform2_discogs_strict'},
-    ]) + '\n')
-    found = apply_years.load_found()
-    assert found['\tr2_nouveau'] == ('2002', 'reform2_strict')  # ajouté
-    assert found['\tt3'] == ('2001', 'discogs_strict')  # amont pas écrasé
-
-
-def test_load_found_beatport_dernier_rideau(env):
-    tmp_path, _ = env
-    (tmp_path / 'beatport_cache.jsonl').write_text('\n'.join(json.dumps(r) for r in [
-        {'key': '\tbp_nouveau', 'status': 'found', 'year': '2008',
-         'source': 'beatport_strict'},
-        {'key': '\tt1', 'status': 'found', 'year': '1900',
-         'source': 'beatport_strict'},
-    ]) + '\n')
-    found = apply_years.load_found()
-    assert found['\tbp_nouveau'] == ('2008', 'beatport_strict')  # ajouté
-    assert found['\tt1'] == ('1990', 'musicbrainz')   # MB déjà là → pas écrasé
+    # désaccord entre providers : jamais écrit (revue)
+    with open(tmp_path / 'beatport_cache.jsonl', 'w') as f:
+        f.write(json.dumps({'key': '\tnouveau_it', 'status': 'found',
+                            'year': '2001', 'source': 'beatport_strict'}) + '\n')
+    assert '\tnouveau_it' not in apply_years.load_found()
 
 
 def test_review_override_et_rejets_ignores(env):
@@ -301,6 +302,25 @@ def test_undo_restablit_lenregistre(env, capsys):
     apply_years.do_undo()              # idempotent
     out = capsys.readouterr().out
     assert 'RIEN A RETIRER' in out
+
+
+def test_undo_restaure_une_correction(env, capsys):
+    """Les corrections d'audit (EPIC-040) ne sont pas additives : `old` est
+    renseigné. `--undo` doit alors RESTAURER l'ancienne année, pas retirer le
+    frame — sinon une correction d'année serait irréversible."""
+    _, music = env
+    p = str(music / 't1.mp3')
+    make_mp3(p)
+    apply_years.write_year(p, '2024')            # année fausse en place
+    apply_years.journal_append({'path': p, 'old': '2024', 'new': '1991',
+                                'source': 'audit:discogs', 'frame': 'TDRC',
+                                'ok': True})
+    apply_years.write_year(p, '1991')
+    assert apply_years.current_year(p) == '1991'
+    apply_years.do_undo()
+    assert apply_years.current_year(p) == '2024'  # restaurée, pas effacée
+    out = capsys.readouterr().out
+    assert '1 anciennes années restaurées' in out
 
 
 def test_dryrun_necrit_rien(env, capsys):

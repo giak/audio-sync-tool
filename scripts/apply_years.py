@@ -8,9 +8,13 @@ Sources : data/year_cache.jsonl (MB/Deezer) + data/discogs_cache.jsonl
 consolidation que report_years.py : priorité MB/Deezer > Discogs > iTunes > reform).
 Les choix humains de la vue Années (data/year_review.json, option --review)
 OVERRIDE la consolidation : une année choisie à la main bat toute source automatique.
-Règle de consensus : une clé « ambiguous » dont toutes les candidates tiennent
-dans une fenêtre ≤ 2 ans (variantes de datation MB de la même sortie) devient
-certaine — 1ʳᵉ sortie = min des candidates.
+RÈGLE DE CERTITUDE (EPIC-040, décision 2026-09-21) : une année n'est écrite que
+si **≥2 providers INDÉPENDANTS annoncent la même** (reform/reform2 = Discogs).
+Une source unique ou un désaccord entre sources ne s'écrivent JAMAIS : ces clés
+partent en revue humaine (`data/year_review.json`, vue Années), avec la
+proposition pré-remplie. Les enregistrements v1 de `year_cache.jsonl` (première
+passe : Deezer sans garde artiste/titre, une seule source pour conclure) sont
+ignorés — re-collecte nécessaire.
 Chaque fichier est re-vérifié avant écriture : si une année est apparue depuis
 le scan, il est sauté (jamais écraser une année existante).
 
@@ -31,7 +35,7 @@ import json
 import os
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from collect_years import artist_title
@@ -102,60 +106,94 @@ def current_year(path):
     return None
 
 
-def load_found():
-    """Clés avec année certaine : {key: (annee, source)}.
-    Consensus : ambiguous avec toutes les candidates dans une fenêtre ≤ 2 ans
-    (variantes de datation de la même sortie) → 1ʳᵉ sortie = min des candidates.
-    Spread large = vraies sorties distinctes (remix vs original) → reste ambigu."""
-    found = {}
-    ambiguous = {}
-    with open(YEAR_CACHE) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            r = json.loads(line)
-            if r.get('status') == 'found' and r.get('year'):
-                found[r['key']] = (str(r['year']), r.get('source') or 'musicbrainz')
-            elif r.get('status') == 'ambiguous':
-                cands = [int(y) for y in r.get('years', []) if str(y).isdigit()]
-                if len(cands) >= 2:
-                    ambiguous[r['key']] = cands
-    for key, cands in ambiguous.items():
-        if max(cands) - min(cands) <= 2:
-            found[key] = (str(min(cands)), 'consensus')
-    with open(DG_CACHE) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            r = json.loads(line)
-            if r.get('status') == 'found' and r.get('year'):
-                found[r['key']] = (str(r['year']), 'discogs_strict')
+# Providers INDÉPENDANTS : reform/reform2 sont des requêtes DISCOSG reformulées,
+# pas une source de plus — les compter à part fabriquerait une « corroboration »
+# entre deux appels du même site (EPIC-040).
+PROVIDER_OF = {
+    'musicbrainz': 'musicbrainz', 'deezer': 'deezer', 'discogs': 'discogs',
+    'discogs_strict': 'discogs', 'reform_strict': 'discogs',
+    'reform2_strict': 'discogs', 'beatport_strict': 'beatport',
+    'youtube_topic_strict': 'youtube', 'itunes': 'itunes',
+}
 
-    def add_pool(path, src):
-        """Found d'un pool d'appoint — jamais en écrasant un amont (report_years)."""
-        try:
-            f = open(path)
-        except FileNotFoundError:
-            return
+
+def load_votes():
+    """{key: {provider: annee}} — TOUS les votes connus, par provider.
+
+    Sources : `year_cache.jsonl` v≥2 (votes nommés par le moteur corrigé) puis
+    les pools d'appoint (discogs_cache, iTunes, reform/reform2 → discogs,
+    Beatport, YouTube). Les enregistrements **v1** de year_cache — première
+    passe, sans garde artiste/titre sur Deezer et une seule source pour
+    conclure — sont ignorés : ils doivent être re-collectés (EPIC-040).
+    """
+    votes = defaultdict(dict)
+
+    def vote(key, provider, year):
+        provider = PROVIDER_OF.get(provider, provider)
+        if key and provider and year:
+            votes[key][provider] = str(year)[:4]
+
+    try:
+        f = open(YEAR_CACHE)
+    except FileNotFoundError:
+        f = None
+    if f:
         with f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
                 r = json.loads(line)
-                if (r.get('status') == 'found' and r.get('year')
-                        and r['key'] not in found):
-                    found[r['key']] = (str(r['year']), src)
+                if r.get('v', 1) < 2:
+                    continue
+                for provider, year in (r.get('sources') or {}).items():
+                    vote(r['key'], provider, year)
+    for path, provider in ((DG_CACHE, 'discogs'), (IT_CACHE, 'itunes'),
+                           (RF_CACHE, 'reform_strict'),
+                           (RF2_CACHE, 'reform2_strict'),
+                           (BP_CACHE, 'beatport_strict'),
+                           (YT_CACHE, 'youtube_topic_strict')):
+        try:
+            f = open(path)
+        except FileNotFoundError:
+            continue
+        with f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                r = json.loads(line)
+                if r.get('status') == 'found' and r.get('year'):
+                    vote(r.get('key'), provider, r.get('year'))
+    return votes
 
-    # iTunes, reform/reform2 et Beatport en dernier rideau (priorité
-    # report_years.py).
-    add_pool(IT_CACHE, 'itunes')
-    add_pool(RF_CACHE, 'reform_strict')
-    add_pool(RF2_CACHE, 'reform2_strict')
-    add_pool(BP_CACHE, 'beatport_strict')
-    add_pool(YT_CACHE, 'youtube_topic_strict')
+
+def corroborate(provider_votes):
+    """Règle EPIC-040 : une année n'est CERTAINE que si ≥2 providers
+    INDÉPENDANTS annoncent la MÊME année. Sinon `None`. Une source unique (même
+    la meilleure) et un désaccord entre sources ne s'écrivent pas : ils vont en
+    revue humaine. C'est ce qui manquait le 2026-09-17 : une année Deezer
+    — seule, sans garde artiste/titre, prise sur l'album d'une RÉÉDITION —
+    partait directement dans les tags (Phantasia « Inner Light », 1991, écrit
+    2024 via l'album « Ooo »)."""
+    if not provider_votes:
+        return None
+    years = set(provider_votes.values())
+    if len(years) != 1 or len(provider_votes) < 2:
+        return None
+    return next(iter(years)), '+'.join(sorted(provider_votes))
+
+
+def load_found():
+    """{key: (annee, source)} — clés CORROBORÉES uniquement (≥2 providers
+    indépendants concordants). Les choix humains de la vue Années sont injectés
+    par `build_worklist(review=…)`, donc seulement avec `--review` : sans lui, un
+    fichier de revue qui traîne ne doit pas influencer l'écriture."""
+    found = {}
+    for key, provider_votes in load_votes().items():
+        verdict = corroborate(provider_votes)
+        if verdict:
+            found[key] = verdict
     return found
 
 
@@ -358,6 +396,12 @@ def do_apply(items):
 
 
 def do_undo(limit=None):
+    """Annule les écritures du journal.
+
+    Deux cas : écriture ADDITIVE (`old` null — le fichier n'avait pas d'année) →
+    on retire le frame ; écriture de CORRECTION (`old` renseigné — audit EPIC-040)
+    → on RESTAURE l'ancienne valeur. Sans ça, `--undo` ne couvrirait pas les
+    corrections d'audit et laisserait la nouvelle année en place."""
     entries = []
     if os.path.exists(JOURNAL):
         with open(JOURNAL) as f:
@@ -365,20 +409,24 @@ def do_undo(limit=None):
                 line = line.strip()
                 if line:
                     e = json.loads(line)
-                    if e.get('ok') and e.get('old') is None:
+                    if e.get('ok'):
                         entries.append(e)
     if limit:
         entries = entries[:limit]
-    done = 0
+    done = restore = 0
     for e in entries:
         try:
-            if remove_year_frame(e['path'], e.get('frame')):
+            if e.get('old'):
+                write_year(e['path'], e['old'])
+                restore += 1
+            elif remove_year_frame(e['path'], e.get('frame')):
                 done += 1
             else:
                 print('RIEN A RETIRER', e['path'], flush=True)
         except Exception as ex:
             print('ERREUR UNDO', e['path'], ':', ex, flush=True)
-    print('== UNDO : %d/%d frames retires' % (done, len(entries)))
+    print('== UNDO : %d frames retires, %d anciennes années restaurées (/%d)'
+          % (done, restore, len(entries)))
 
 
 def journal_report():

@@ -4,22 +4,48 @@ sur le corpus : n'écrit que dans le cache de résultats.
 
 - Source : data/cache.json (côtés source/epars) → fichiers sans année.
 - Clés (artiste, titre) parsées des noms, dédupliquées.
-- MusicBrainz d'abord (1 req/s, UA conforme), Deezer en relais (sans clé).
-- Garde : durée du candidat ±15 s d'UNE des durées connues de la clé ;
-  compatibilité artiste/titre par tokens NORMALISÉS (casse/accents) ;
-  homonymes → ambigu (années candidates).
-- Résultats incrémentaux : data/year_cache.jsonl (reprise : clés déjà présentes sautées).
+- MusicBrainz ET Deezer sont TOUJOURS interrogés tous les deux (EPIC-040) : la
+  règle de décision est « 2 sources indépendantes concordantes », sinon rien
+  n'est écrit (le cas part en revue). Avant, la première source qui concluait
+  gagnait : une année Deezer n'était recoupée par personne.
+- Orientations : le nom est parsé en (artiste, titre) — hypothèse « Artiste -
+  Titre » — mais l'ordre est AMBIGU dans une collection (« Inner Light -
+  Phantasia » = titre puis artiste). Les deux orientations sont donc essayées et
+  c'est la GARDE qui tranche, pas une supposition.
+- Garde : durée du candidat ±15 s d'UNE des durées connues de la clé (ignorée si
+  aucune durée connue) ; compatibilité artiste/titre par tokens NORMALISÉS
+  (casse/accents) — SUR LES DEUX SOURCES (Deezer n'en avait aucune avant EPIC-040,
+  seul filtre la durée, inactif quand le fichier n'avait pas de durée :
+  n'importe quelle requête renvoyait « found ») ; homonymes → ambigu.
+- Sémantique : MusicBrainz `first-release-date` = première sortie ; Deezer
+  `release_date` = date de l'ALBUM MATCHÉ, donc souvent une RÉÉDITION
+  (cas fondateur : Phantasia « Inner Light » 1991, album « Ooo » 2024-01-15).
+  Les deux valeurs sont conservées comme VOTES nommés, jamais confondues.
+Providers interrogés (EPIC-040) : MusicBrainz + Deezer + Discogs **toujours**
+  (Discogs si data/discogs_token existe) ; YouTube Topic avec `--youtube` (yt-dlp,
+  coût réel par clé → à réserver aux clés non résolues : `--only=unresolved`).
+- Recherche web (dernier recours) : Brave Search via BRAVE_API_KEY ou
+  data/search_token — **ne vote jamais**, elle ne produit que des CANDIDATS
+  (`web_candidates`, `web_proposed`) soumis à la revue : un extrait web n'a pas
+  le niveau de preuve d'une API de disques.
+- Résultats incrémentaux : data/year_cache.jsonl (reprise : clés v≥2 déjà présentes sautées).
 - Rapport : ./venv/bin/python scripts/collect_years.py --report
+- Diagnostic d'une clé : ./venv/bin/python scripts/collect_years.py \
+      --probe='artiste|titre' [--durs=337] [--youtube]
 
 À lancer depuis la racine du projet : ./venv/bin/python scripts/collect_years.py [--max-seconds=N]
 """
-import json, re, sys, time, unicodedata, urllib.parse, urllib.request, urllib.error
+import json, os, re, sys, time, unicodedata, urllib.parse, urllib.request, urllib.error
 from collections import Counter, defaultdict
 
 CACHE = 'data/cache.json'
 PROG = 'data/year_cache.jsonl'
 MB_UA = 'audio-sync-tool/0.1 ( https://github.com/giak/audio-sync-tool )'
 DZ_UA = 'audio-sync-tool/0.1'
+# Version du moteur de collecte. 1 = première passe (Deezer sans garde, une
+# seule source concluait) ; 2 = EPIC-040 (garde artiste/titre partout, deux
+# orientations de clé, règle des 2 providers indépendants concordants).
+ENGINE_VERSION = 2
 
 NOISE = re.compile(
     r"\b(remix|remaster(ed)?|edit|version|mix|hq|hd|official|video|audio|lyrics?|"
@@ -80,6 +106,94 @@ def tok_compat(a, b):
     return bool(ta & tb)
 
 
+# Classe sémantique de chaque source — c'est LE point qui a produit l'erreur de
+# 2024 : MusicBrainz (first-release-date) et Discogs disent la première sortie du
+# morceau ; Deezer/iTunes/Beatport/YouTube disent la date de l'ÉDITION matchée,
+# donc d'une réédition. À vote égal, la classe « first » gagne pour la PROPOSITION
+# (jamais pour l'écriture automatique : il faut 2 sources concordantes).
+SOURCE_CLASS = {
+    'musicbrainz': 'first', 'discogs': 'first',
+    'deezer': 'edition', 'itunes': 'edition', 'beatport': 'edition',
+    'youtube': 'edition',
+}
+
+# Providers INDÉPENDANTS (EPIC-040) : les passes reform/reform2 sont des
+# reformulations de DISCOGS, pas une source de plus — les compter séparément
+# fabriquerait une « corroboration » entre deux requêtes du même site.
+PROVIDER = {
+    'musicbrainz': 'musicbrainz',
+    'deezer': 'deezer',
+    'discogs_strict': 'discogs',
+    'discogs': 'discogs',
+    'reform_strict': 'discogs',
+    'reform2_strict': 'discogs',
+    'beatport_strict': 'beatport',
+    'youtube_topic_strict': 'youtube',
+    'itunes': 'itunes',
+    'human': 'human',
+}
+
+
+def key_variants(a, t, alt=None):
+    """Orientations (artiste, titre) à essayer, dans l'ordre de confiance :
+    les TAGS du fichier (`alt`), puis la lecture du nom, puis l'inverse du nom.
+    L'ordre « Artiste - Titre » est une hypothèse, pas une certitude
+    (« Inner Light - Phantasia » est en réalité titre - artiste), et quand le nom
+    est un collage (« inner lightphantasia ») aucune heuristique ne s'en sort :
+    seuls les tags le disent. Essayer les trois et laisser la garde tokens
+    trancher est ce qui rend la collecte insensible à cette convention
+    (EPIC-040)."""
+    out = []
+
+    def add(pair, need_artist=False):
+        if not pair or not (pair[1] or '').strip():
+            return
+        if need_artist and not (pair[0] or '').strip():
+            return
+        p = ((pair[0] or '').strip() or None, pair[1].strip())
+        if p not in out:
+            out.append(p)
+
+    add(alt)
+    add((a, t))                  # une requête « titre seul » reste valable
+    add((t, a), need_artist=True)   # échanger n'a de sens que si on a un artiste
+    return out
+
+
+def tags_artist_title(path):
+    """(artiste, titre) lus dans les TAGS du format, ou (None, None).
+    Le nom ne peut pas trancher l'ordre ; les tags, si. Exemple réel qui a
+    produit l'erreur : `inner lightphantasia.mp3` porte artist=Phantasia,
+    title=Inner Light — avec le nom seul la clé était « collée »."""
+    try:
+        from mutagen import File as MutagenFile
+    except ImportError:
+        return None, None
+    try:
+        audio = MutagenFile(path, easy=True)
+        tags = getattr(audio, 'tags', None)
+        if not tags:
+            return None, None
+
+        def one(*names):
+            for n in names:
+                try:
+                    v = tags.get(n)
+                except Exception:
+                    v = None
+                if v:
+                    if isinstance(v, (list, tuple)):
+                        v = v[0]
+                    v = str(v).strip()
+                    if v:
+                        return v
+            return None
+
+        return one('artist', 'TPE1', 'ARTIST'), one('title', 'TIT2', 'TITLE')
+    except Exception:
+        return None, None
+
+
 def get(url, ua, timeout=15, retries=3):
     delays = [5, 15, 30]
     for attempt in range(retries + 1):
@@ -123,6 +237,10 @@ def load_keys():
 
 
 def done_keys():
+    """Clés déjà traitées par le moteur COURANT (v ≥ ENGINE_VERSION).
+    Les enregistrements v1 (première passe : aucune garde artiste/titre sur
+    Deezer, une seule source pour conclure) sont ignorés — les clés sont
+    ré-interrogées et la nouvelle ligne prime (dernier gagnant par clé)."""
     done = {}
     try:
         with open(PROG) as f:
@@ -131,7 +249,8 @@ def done_keys():
                 if not line:
                     continue
                 rec = json.loads(line)
-                done[rec['key']] = rec
+                if rec.get('v', 1) >= ENGINE_VERSION:
+                    done[rec['key']] = rec
     except FileNotFoundError:
         pass
     return done
@@ -205,70 +324,189 @@ def dz_candidates(a, t):
 
 
 def dz_lookup(a, t, durs):
-    """Deezer → ('found'|'ambiguous'|'none', year, years)."""
+    """Deezer → dict(status, year, years, evidence).
+    GARDE artiste ET titre obligatoire (EPIC-040) : avant, seule la durée
+    filtrait — donc zéro filtre dès que le fichier n'avait pas de durée connue.
+    `evidence` garde l'album et sa date : c'est là que se voit la réédition
+    (album « Ooo » 2024-01-15 pour un morceau de 1991)."""
     items = dz_candidates(a, t)
     passing = []
     for it in items:
+        rartist = (it.get('artist') or {}).get('name') or ''
+        rtitle = it.get('title') or ''
+        if a and not tok_compat(a, rartist):
+            continue
+        if not tok_compat(t, rtitle):
+            continue
         if durs and abs(it['duration'] - min(durs, key=lambda d: abs(d - it['duration']))) > 15:
             continue
         passing.append(it)
     if not passing:
-        return 'none', None, []
-    years = []
+        return {'status': 'none', 'year': None, 'years': [], 'evidence': []}
+    years, evidence = [], []
     for it in passing[:3]:
-        alb = get(f"https://api.deezer.com/album/{it['album']['id']}", DZ_UA, timeout=10)
+        try:
+            alb = get(f"https://api.deezer.com/album/{it['album']['id']}", DZ_UA, timeout=10)
+        except Exception:
+            continue
         rd = alb.get('release_date')
         if rd:
             years.append(rd[:4])
+            evidence.append({'album': alb.get('title'), 'release_date': rd,
+                             'artist': (it.get('artist') or {}).get('name'),
+                             'title': it.get('title')})
         time.sleep(0.3)
     if not years:
-        return 'none', None, []
+        return {'status': 'none', 'year': None, 'years': [], 'evidence': []}
     distinct = sorted(set(years))
     if len(distinct) == 1:
-        return 'found', distinct[0], []
-    return 'ambiguous', None, distinct
+        return {'status': 'found', 'year': distinct[0], 'years': distinct,
+                'evidence': evidence}
+    return {'status': 'ambiguous', 'year': None, 'years': distinct,
+            'evidence': evidence}
 
 
-def lookup(a, t, durs, pacer):
-    """MB d'abord ; Deezer en relais si MB ne conclut pas."""
-    try:
-        st, year, years = mb_lookup(a, t, durs, pacer)
-        if st == 'found':
-            return {'status': 'found', 'source': 'musicbrainz', 'year': year,
-                    'years': years}
-        if st == 'ambiguous':
-            return {'status': 'ambiguous', 'source': 'musicbrainz', 'year': None,
-                    'years': years}
-    except Exception as e:
-        err = f'{type(e).__name__}: {e}'[:80]
-    else:
-        err = None
-    try:
-        dz = dz_lookup(a, t, durs)
-    except Exception as e2:
-        out = {'status': 'error', 'source': None, 'year': None, 'years': []}
-        if err:
-            out['mb_error'] = err
-        out['dz_error'] = f'{type(e2).__name__}: {e2}'[:80]
-        return out
-    if dz[0] == 'found':
-        out = {'status': 'found', 'source': 'deezer', 'year': dz[1], 'years': dz[2]}
-    elif dz[0] == 'ambiguous':
-        out = {'status': 'ambiguous', 'source': 'deezer', 'year': None, 'years': dz[2]}
-    else:
-        out = {'status': 'none', 'source': None, 'year': None, 'years': []}
-    if err:
-        out['mb_error'] = err
-    return out
+def lookup(a, t, durs, pacer, alt=None, youtube=False, web=True):
+    """Interroge MusicBrainz, Deezer et Discogs sur chaque orientation de clé
+    (EPIC-040) ; `alt` = (artiste, titre) des tags du fichier, essayé en premier.
+    Décision = 2 providers INDÉPENDANTS concordants :
+
+      found     → ≥2 providers, même année → seule valeur écrite ensuite
+      conflict  → ≥2 providers, années différentes → candidates, revue
+      single    → un seul provider parle → ANNÉE CANDIDATE, rien n'est écrit
+      ambiguous → un provider remonte plusieurs années, pas de consensus
+      none      → personne ne conclut
+
+    `sources` conserve le vote de chaque provider (sémantiques différentes :
+    MusicBrainz/Discogs = première sortie, Deezer = album matché, donc souvent une
+    réédition), `evidence` les albums Deezer vus, `variant` l'orientation qui a
+    parlé ('tags', 'nom' ou 'inverse').
+    """
+    alts = {((alt or ('', ''))[0] or None, (alt or ('', ''))[1] or '')}
+    for a2, t2 in key_variants(a, t, alt):
+        variant = ('tags' if (a2, t2) in alts
+                   else 'nom' if (a2, t2) == (a, t)
+                   else 'inverse')
+        votes, amb, errs, candidates = {}, [], [], set()
+        web_candidates, web_proposed, web_evidence = set(), None, []
+        try:
+            mb_status, mb_year, mb_years = mb_lookup(a2, t2, durs, pacer)
+        except Exception as e:
+            mb_status, mb_year, mb_years = None, None, []
+            errs.append(f'mb_error: {type(e).__name__}: {e}'[:90])
+        # mb_lookup peut lever avant d'avoir posé une conclusion : statut None.
+        if mb_status == 'found' and mb_year:
+            votes['musicbrainz'] = str(mb_year)[:4]
+        elif mb_status == 'ambiguous':
+            amb += [str(y)[:4] for y in (mb_years or [])]
+        try:
+            dz = dz_lookup(a2, t2, durs)
+        except Exception as e:
+            dz = {'status': 'error', 'year': None, 'years': [], 'evidence': []}
+            errs.append(f'dz_error: {type(e).__name__}: {e}'[:90])
+        if dz.get('status') == 'found' and dz.get('year'):
+            votes['deezer'] = str(dz['year'])[:4]
+        elif dz.get('status') == 'ambiguous':
+            amb += [str(y)[:4] for y in (dz.get('years') or [])]
+        # Discogs : le troisième provider, et le seul « première sortie »
+        # interrogeable à la demande (clé absente → erreur, pas de blocage).
+        dg = discogs_vote(a2, t2, durs)
+        if dg.get('status') == 'found' and dg.get('year'):
+            votes['discogs'] = str(dg['year'])[:4]
+        elif dg.get('status') in ('lax',):
+            candidates.add(str(dg.get('year'))[:4])   # durée non vérifiable
+        elif dg.get('status') == 'ambiguous':
+            amb += [str(y)[:4] for y in (dg.get('years') or [])]
+        if dg.get('error'):
+            errs.append(f'discogs_error: {dg["error"]}'[:90])
+        # YouTube Topic (opt-in : yt-dlp, coût réel par clé) — vote d'édition.
+        if youtube:
+            ytv = youtube_vote(a2, t2, durs)
+            if ytv.get('status') == 'found' and ytv.get('year'):
+                votes['youtube'] = str(ytv['year'])[:4]
+            elif ytv.get('status') == 'ambiguous':
+                amb += [str(y)[:4] for y in (ytv.get('years') or [])]
+            if ytv.get('error'):
+                errs.append(f'youtube_error: {ytv["error"]}'[:90])
+        # Recherche web : CANDIDATS seulement (jamais un vote, cf. web_vote).
+        if web:
+            wb = web_vote(a2, t2)
+            web_candidates |= set(wb.get('web_candidates') or [])
+            if wb.get('web_proposed') and not web_proposed:
+                web_proposed = str(wb['web_proposed'])
+            web_evidence += wb.get('evidence') or []
+            if wb.get('error'):
+                errs.append(f'web_error: {wb["error"]}'[:90])
+
+        if not votes and not amb:
+            continue                    # orientation muette → essayer l'autre
+
+        providers = {PROVIDER.get(k, k): v for k, v in votes.items()}
+        distinct = sorted(set(providers.values()))
+        candidates |= set(distinct) | {y for y in amb if y.isdigit()} | web_candidates
+        if len(providers) >= 2 and len(distinct) == 1:
+            status, year = 'found', distinct[0]
+        elif len(providers) >= 2:
+            status, year = 'conflict', None
+        elif len(providers) == 1:
+            status, year = 'single', distinct[0]
+        else:
+            status, year = 'ambiguous', None
+        # Proposition par défaut, pour pré-remplir la revue : la plus ancienne
+        # année annoncée par une source « première sortie », puis la plus
+        # ancienne candidate connue. Jamais écrite automatiquement.
+        first_votes = [y for p, y in providers.items()
+                       if SOURCE_CLASS.get(p) == 'first' and y.isdigit()]
+        numeric = sorted(int(y) for y in candidates if y.isdigit())
+        proposed = None
+        if first_votes:
+            proposed = min(first_votes, key=int)
+        elif year:
+            proposed = year
+        elif numeric:
+            proposed = str(numeric[0])
+        rec = {
+            'status': status, 'year': year,
+            'years': distinct or sorted(set(amb)),
+            'candidates': [str(y) for y in numeric],
+            'proposed': proposed,
+            'web_candidates': sorted(web_candidates),
+            'web_proposed': web_proposed,   # jamais écrite : piste de revue
+            'classes': {p: SOURCE_CLASS.get(p) for p in providers},
+            'sources': providers,
+            'source': '+'.join(sorted(providers)) if status == 'found' else None,
+            'n_sources': len(providers), 'variant': variant, 'v': ENGINE_VERSION,
+        }
+        if dz.get('evidence'):
+            rec['evidence'] = dz['evidence'][:2]
+        if web_evidence:
+            rec['web_evidence'] = web_evidence[:3]
+        if errs:
+            rec['errors'] = errs
+        return rec
+
+    return {'status': 'none', 'year': None, 'years': [], 'candidates': [],
+            'proposed': None, 'web_candidates': [], 'web_proposed': None,
+            'sources': {}, 'source': None, 'n_sources': 0,
+            'variant': None, 'v': ENGINE_VERSION}
 
 
-def run(max_seconds=None):
+def run(max_seconds=None, youtube=False, web=True, only=None):
+    """Collecte reprenable. `only='unresolved'` ne retraite que les clés dont
+    l'enregistrement v2 n'est ni `found` ni `none` (single/conflict) — c'est là
+    que YouTube (coûteux) et la recherche web servent à quelque chose : apporter
+    la 2ᵉ voix manquante (ou confirmer le désaccord)."""
     t0 = time.monotonic()
     total, noyear, keys = load_keys()
     done = done_keys()
-    todo = [k for k in keys if k not in done]
+    if only == 'unresolved':
+        todo = [k for k, r in done.items()
+                if k in keys and r.get('status') in ('single', 'conflict')]
+    else:
+        todo = [k for k in keys if k not in done]
     print(f'fichiers={total} sans_annee={noyear} cles={len(keys)} '
-          f'deja_faites={len(done)} a_traiter={len(todo)}', flush=True)
+          f'deja_faites={len(done)} a_traiter={len(todo)} '
+          f'youtube={youtube} web={web}', flush=True)
     pacer = Pacer(1.05)
     with open(PROG, 'a') as out:
         for i, k in enumerate(todo):
@@ -277,7 +515,7 @@ def run(max_seconds=None):
                 return
             a, t = (k.split('\t')[0] or None), k.split('\t')[1]
             meta = keys[k]
-            res = lookup(a, t, meta['durs'], pacer)
+            res = lookup(a, t, meta['durs'], pacer, youtube=youtube, web=web)
             rec = {'key': k, 'artist': a, 'title': t, 'n_files': meta['n'], **res}
             out.write(json.dumps(rec, ensure_ascii=False) + '\n')
             out.flush()
@@ -292,7 +530,7 @@ def report():
     todo = [k for k in keys if k not in done]
     st_keys, st_files = Counter(), Counter()
     src_counter, year_hist = Counter(), Counter()
-    amb, none_l, err_l = [], [], []
+    amb, none_l, err_l, single_l, conflict_l = [], [], [], [], []
     for k, rec in done.items():
         n = rec.get('n_files', 1)
         st_keys[rec['status']] += 1
@@ -303,21 +541,32 @@ def report():
             year_hist[rec['year']] += n
         elif rec['status'] == 'ambiguous':
             amb.append(rec)
+        elif rec['status'] == 'single':
+            single_l.append(rec)
+        elif rec['status'] == 'conflict':
+            conflict_l.append(rec)
         elif rec['status'] == 'none':
             none_l.append(rec)
         else:
             err_l.append(rec)
     amb.sort(key=lambda r: -r.get('n_files', 0))
     none_l.sort(key=lambda r: -r.get('n_files', 0))
+    single_l.sort(key=lambda r: -r.get('n_files', 0))
+    conflict_l.sort(key=lambda r: -r.get('n_files', 0))
     files_done = sum(st_files.values())
     print('=== RAPPORT COLLECTE ANNÉES (partiel si reste > 0) ===')
     print(f'fichiers sans année : {noyear} ; clés uniques : {len(keys)} ; '
           f'interrogées : {len(done)} ; restantes : {len(todo)}')
-    print(f'\nPar clés    : found={st_keys["found"]} ambiguous={st_keys["ambiguous"]} '
+    print(f'\nPar clés    : found={st_keys["found"]} single={st_keys["single"]} '
+          f'conflict={st_keys["conflict"]} ambiguous={st_keys["ambiguous"]} '
           f'none={st_keys["none"]} error={st_keys["error"]}')
-    print(f'Par fichiers: found={st_files["found"]} ambiguous={st_files["ambiguous"]} '
+    print(f'Par fichiers: found={st_files["found"]} single={st_files["single"]} '
+          f'conflict={st_files["conflict"]} ambiguous={st_files["ambiguous"]} '
           f'none={st_files["none"]} error={st_files["error"]} '
           f'(traités={files_done}/{noyear})')
+    print(f'Règle EPIC-040 : seuls les « found » (≥2 providers concordants) sont '
+          f'écrits — single={st_keys["single"]} et conflict={st_keys["conflict"]} '
+          f'vont en revue.')
     if files_done:
         print(f'Taux de couverture certaine : {100 * st_files["found"] / files_done:.0f}% '
               f'des traités, {100 * st_files["found"] / noyear:.0f}% du corpus sans année')
@@ -335,6 +584,16 @@ def report():
     print(f'\n— Ambiguïtés : {st_keys["ambiguous"]} clés / {st_files["ambiguous"]} fichiers —')
     for r in amb[:12]:
         print(f'  [{r["n_files"]}f] {r["artist"] or "?"} — {r["title"]} → {r.get("years", [])}')
+    print(f'\n— Année d\'UNE seule source (candidate, NON écrite) : '
+          f'{st_keys["single"]} clés / {st_files["single"]} fichiers —')
+    for r in single_l[:10]:
+        print(f'  [{r["n_files"]}f] {r["artist"] or "?"} — {r["title"]} → '
+              f'{r.get("year")} ({r.get("sources")})')
+    print(f'\n— Sources en DÉSACCORD (revue) : {st_keys["conflict"]} clés / '
+          f'{st_files["conflict"]} fichiers —')
+    for r in conflict_l[:10]:
+        print(f'  [{r["n_files"]}f] {r["artist"] or "?"} — {r["title"]} → '
+              f'{r.get("sources")}')
     print(f'\n— Non trouvés : {st_keys["none"]} clés / {st_files["none"]} fichiers —')
     for r in none_l[:12]:
         print(f'  [{r["n_files"]}f] {r["artist"] or "?"} — {r["title"]}')
@@ -344,12 +603,126 @@ def report():
             print(f'  {r["artist"] or "?"} — {r["title"]} : {r.get("mb_error") or r.get("dz_error")}')
 
 
+# Recherche web (EPIC-040) : source de DERNIER RECOURS, et elle ne vote JAMAIS.
+# Elle ne produit que des CANDIDATS affichés en revue — un extrait de page web
+# n'a pas le niveau de preuve d'une API de disques, et la règle des 2 sources ne
+# doit pas être contournée par un moteur de recherche. Token : BRAVE_API_KEY ou
+# data/search_token ; absent → source ignorée (comme Discogs sans token).
+BRAVE_URL = 'https://api.search.brave.com/res/v1/web/search'
+YEAR_RE = re.compile(r'\b(19[3-9]\d|20[0-4]\d)\b')
+
+
+def search_token():
+    tok = os.environ.get('BRAVE_API_KEY')
+    if tok:
+        return tok.strip()
+    try:
+        with open(os.path.join('data', 'search_token')) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def web_vote(a, t, timeout=10, limit=5):
+    """Recherche web → {status, web_candidates, web_proposed, evidence}.
+    Candidats = années vues dans les titres/descriptions/URLs des résultats.
+    `web_proposed` n'est posé que si ≥ 2 résultats concordent (signal faible
+    assumé comme tel). Aucune année web n'entre dans `sources`."""
+    tok = search_token()
+    if not tok:
+        return {'status': 'skip', 'web_candidates': [], 'web_proposed': None,
+                'evidence': []}
+    q = f'{a + " " if a else ""}{t} release year discogs'
+    url = BRAVE_URL + '?' + urllib.parse.urlencode({'q': q, 'count': limit})
+    try:
+        req = urllib.request.Request(url, headers={
+            'Accept': 'application/json',
+            'X-Subscription-Token': tok,
+            'User-Agent': DZ_UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.load(r)
+    except Exception as e:
+        return {'status': 'error', 'web_candidates': [], 'web_proposed': None,
+                'evidence': [], 'error': f'{type(e).__name__}: {e}'[:90]}
+    hits = (data.get('web') or {}).get('results') or []
+    counts, evidence = Counter(), []
+    for h in hits[:limit]:
+        blob = ' '.join(str(h.get(k) or '') for k in ('title', 'url', 'description'))
+        yrs = [y for y in YEAR_RE.findall(blob)]
+        if yrs:
+            counts[Counter(yrs).most_common(1)[0][0]] += 1
+        evidence.append({'title': (h.get('title') or '')[:120],
+                         'url': h.get('url'), 'years': sorted(set(yrs))})
+    candidates = sorted(counts, key=lambda y: (-counts[y], y))
+    web_proposed = candidates[0] if candidates and counts[candidates[0]] >= 2 else None
+    return {'status': 'candidates' if candidates else 'none',
+            'web_candidates': candidates, 'web_proposed': web_proposed,
+            'evidence': evidence[:3]}
+
+
+def youtube_vote(a, t, durs):
+    """Vote YouTube Topic (yt-dlp) — indice d'ÉDITION (`release_date` YouTube),
+    donc jamais une première sortie : il ne peut que corroborer un `first`.
+    Coût réel : une recherche + extractions par clé (sous-processus), d'où le
+    flag `--youtube` (défaut off) — à réserver aux clés non résolues."""
+    try:
+        import collect_youtube_topic as yt
+    except Exception as e:
+        return {'status': 'skip', 'year': None, 'years': [],
+                'error': f'{type(e).__name__}: {e}'[:90]}
+    try:
+        rec = yt.lookup((a or '') + '\t' + (t or ''), 1, durs, None)
+    except Exception as e:
+        return {'status': 'error', 'year': None, 'years': [],
+                'error': f'{type(e).__name__}: {e}'[:90]}
+    return {'status': rec.get('status') or 'none', 'year': rec.get('year'),
+            'years': rec.get('years') or [], 'videos': rec.get('videos') or []}
+
+
+def discogs_vote(a, t, durs):
+    """Vote Discogs (token) — source à sémantique « première sortie » pour ce
+    corpus (guard strict de collect_discogs : tokens artiste/titre + durée).
+    Import paresseux : le module n'est requis que si le token est présent."""
+    if not os.path.exists(os.path.join('data', 'discogs_token')):
+        return {'status': 'skip', 'year': None, 'years': []}
+    try:
+        import collect_discogs as cd
+    except Exception as e:                      # pas de token / import cassé
+        return {'status': 'error', 'year': None, 'years': [],
+                'error': f'{type(e).__name__}: {e}'[:90]}
+    try:
+        return cd.lookup(a, t, durs)
+    except Exception as e:
+        return {'status': 'error', 'year': None, 'years': [],
+                'error': f'{type(e).__name__}: {e}'[:90]}
+
+
+def probe(a, t, durs=None, youtube=False, web=True):
+    """Outil de diagnostic : un lookup complet sur une clé, record affiché.
+    `--probe='artiste|titre'` (+ `--durs=N` pour la garde durée, `--youtube`)."""
+    rec = lookup(a or None, t, durs or set(), Pacer(1.05),
+                 youtube=youtube, web=web)
+    print(json.dumps(rec, ensure_ascii=False, indent=2))
+    return rec
+
+
 if __name__ == '__main__':
-    if '--report' in sys.argv:
+    args = sys.argv[1:]
+    if '--report' in args:
         report()
+    elif any(x.startswith('--probe=') for x in args):
+        spec = next(x.split('=', 1)[1] for x in args if x.startswith('--probe='))
+        artist, _, title = spec.partition('|')
+        durs = {int(x.split('=', 1)[1]) for x in args if x.startswith('--durs=')}
+        probe(artist.strip(), title.strip(), durs,
+              youtube='--youtube' in args, web='--no-web' not in args)
     else:
         mx = None
-        for arg in sys.argv[1:]:
+        only = None
+        for arg in args:
             if arg.startswith('--max-seconds='):
                 mx = int(arg.split('=')[1])
-        run(mx)
+            elif arg.startswith('--only='):
+                only = arg.split('=', 1)[1]
+        run(mx, youtube='--youtube' in args,
+            web='--no-web' not in args, only=only)
