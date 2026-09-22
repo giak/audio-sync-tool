@@ -121,7 +121,7 @@ navigateur (un harnais lancé sans rebuild mesure la version précédente).
 
 | Commit | Message |
 |---|---|
-| _(working tree 2026-09-22)_ | Légende lisible : 4 colonnes jamais étirées, une abscisse par section (`subgrid`), familles de touches (8× `Échap` → 1 ligne), libellés raccourcis, harnais de mesure 10/10 (3/10 avant) |
+| `411433d` | Légende lisible : 4 colonnes jamais étirées, une abscisse par section (`subgrid`), familles de touches (8× `Échap` → 1 ligne), libellés raccourcis, harnais de mesure 10/10 (3/10 avant) |
 
 ## Décisions
 
