@@ -139,7 +139,10 @@ registry.bind({
   isInput: false,
   activeModal: null,
   isContextMenuOpen: false,
-  label: 'Aligner le genre des rangés sur leur dossier',
+  // Libellé COURT : à 4 colonnes (écran ≥ 1 850 px) la section Sync ne fait que
+  // 416 px de large et un libellé long le renvoie à la ligne — la légende est
+  // mesurée (scripts/measure_legend.py, vérification B), pas estimée.
+  label: 'Aligner les genres des rangés',
   group: 'sync',
   handler: () => void openGenreAudit(),
 });

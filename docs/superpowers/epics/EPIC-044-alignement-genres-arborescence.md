@@ -76,6 +76,7 @@ du même mensonge.
 - [x] Lint (`npm run lint`) — 0
 - [x] Build (`npm run build`)
 - [x] **Dry-run sur la collection réelle** : `GET /styles/audit` → 323 alignés / **1 023 à corriger** / **258 sans genre** / 0 hors grammaire ; `POST /styles/align {dry_run}` → **1 281** écritures prévues (mode `tous`), **258** (mode `vides`), 0 absent / 0 format non géré, **en 0,46 s**, aucun tag touché
+- [x] **Légende mesurée** (`scripts/measure_legend.py`) : le binding `a` ajoute une ligne à la feuille — **13/13** à 1600, 1920, 2560 et 3440 px de large (fenêtre 1 400 px de haut). Un premier libellé (« Aligner le genre des rangés sur leur dossier », 43 caractères) **passait à la ligne** à 4 colonnes (section de 416 px) et faisait échouer la vérification B : raccourci à « Aligner les genres des rangés » — la contrainte est mesurée, pas estimée
 
 ## Traçabilité (commits)
 
@@ -126,3 +127,9 @@ du même mensonge.
 - **Non couvert** : les épars (décision 1), les dossiers hors grammaire, et le
   cas d'un **renommage de dossier** postérieur (le tag garde l'ancien style
   jusqu'à la prochaine copie, palette ou alignement).
+- **État de la légende, mesuré avant/après** : la vérification **F** (« la modale
+  tient sans défilement ») échoue **à l'identique avant et après** cette EPIC
+  quand la fenêtre fait **1 000 px de haut** (scrollHeight 1 061 vs 786, dans le
+  worktree détaché `f1c5610`) — ce n'est pas une régression de cette EPIC : la
+  feuille tient à 1 400 px de haut, comme validé en EPIC-042. Constat conservé
+  ici pour qu'il ne soit pas attribué à tort à ce changement.
