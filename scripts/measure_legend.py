@@ -6,8 +6,8 @@ ouverture de la modale par une touche RÉELLE (`?`), puis mesure de ce qui déci
 la lisibilité d'une feuille de raccourcis :
 
   A. alignement  : les libellés commencent-ils tous à la même abscisse dans une
-                   section ? (avant : `grid-template-columns: max-content` PAR
-                   ligne → une abscisse différente par ligne) ;
+                   COLONNE, et la même partout ? (avant : `max-content` par
+                   ligne puis par section → une abscisse par section) ;
   B. retour ligne: libellés qui passent à la ligne (colonnes trop étroites) ;
   C. contraste   : texte de ligne et texte des touches, calculés comme le
                    navigateur les rend (canvas 1×1, composition alpha réelle) ;
@@ -130,10 +130,17 @@ PROBE = """(() => {
     const marks = [...s.querySelectorAll('.legend-mark')].map(m => ({ w: Math.round(m.getBoundingClientRect().width),
       n: m.querySelectorAll('kbd, .led-demo, .badge-demo, .twin-demo').length,
       html: m.innerHTML.slice(0, 120) })).sort((a, b) => b.w - a.w);
+    // `grid-template-columns` de la ligne : 1re valeur = piste des touches.
+    // Elle doit être la MÊME partout (token `--legend-key`), sinon chaque
+    // section a sa propre abscisse de libellé (« rien n'est calé »).
+    const markTrack = srows.length
+      ? px((cs(srows[0]).gridTemplateColumns || '').split(' ')[0])
+      : 0;
     return { title: (s.querySelector('h4')?.textContent || '').trim(), rows: srows.length,
              height: Math.round(rect.height), content, dead: Math.max(0, Math.round(rect.height) - content),
              top: Math.round(rect.top), left: Math.round(rect.left), width: Math.round(rect.width),
              labelXs: [...xs].sort((a, b) => a - b), wrapped, noMark, tallestRow: tallest,
+             markTrack,
              widestMark: marks[0] || null,
              wrappedRows: srows.filter(r => { const lr = labelRect(r); const lh = px(cs(r).lineHeight) || px(cs(r).fontSize) * 1.2;
                               return lr && lr.height > lh * 1.5; })
@@ -223,6 +230,14 @@ def orphans_detail(m):
         return (f"largeurs {widths} — la plus large fait {max(widths)}px contre {median}px de "
                 f"médiane : une colonne prend la largeur entière (orpheline)")
     return f"{len(widths)} colonnes homogènes (largeurs {widths[0]}–{widths[-1]}px, médiane {median}px)"
+
+
+def keys_detail(m):
+    """Piste des touches : largeur fixe attendue, et le plus large marqueur
+    (un marqueur plus large que la piste chevaucherait le libellé voisin)."""
+    tracks = sorted({s['markTrack'] for s in m['perSection'] if s['rows']})
+    worst = max(((s['widestMark'] or {}).get('w', 0), s['title']) for s in m['perSection'])
+    return f"piste {tracks}px · pire marqueur {worst[0]}px ({worst[1]})"
 
 
 def empty_detail(m):
@@ -370,16 +385,24 @@ def main():
                 print(f"      2 lignes : {w['need']}px nécessaires / {w['avail']}px disponibles — « {w['t']} »")
 
         print()
-        misaligned = [s for s in m['perSection'] if len(s['labelXs']) > 1]
+        # Alignement : l'abscisse doit être unique PAR COLONNE (et non plus par
+        # section : 7 sections = 7 abscisses, ce que l'usage a rejeté).
+        by_col = {}
+        for s in m['perSection']:
+            by_col.setdefault(s['left'], []).append(s)
+        col_xs = {left: sorted({x for s in group for x in s['labelXs']}) for left, group in by_col.items()}
+        misaligned = [left for left, xs in col_xs.items() if len(xs) > 1]
         cols = m['grid']['colHeights']
         balance = (max(cols) / min(cols)) if cols else 1
         unwrapped = [s for s in m['perSection'] if s['wrapped'] == 0]
 
         ok = [
-            ('A alignement : 1 seule abscisse de libellé par section',
+            ('A alignement : 1 seule abscisse de libellé par COLONNE',
              not misaligned,
-             f"{len(misaligned)} section(s) désalignée(s) — "
-             + ', '.join(f"{s['title']} ({len(s['labelXs'])} abscisses)" for s in misaligned[:4])),
+             (f"{len(col_xs)} colonne(s) → abscisses {sorted(set(x for xs in col_xs.values() for x in xs))}"
+              if not misaligned else
+              f"{len(misaligned)} colonne(s) désalignée(s) — "
+              + ', '.join(f"x={left}: {len(col_xs[left])} abscisses" for left in misaligned[:4]))),
             ('B aucun libellé renvoyé à la ligne', all(s['wrapped'] == 0 for s in m['perSection']),
              f"{sum(s['wrapped'] for s in m['perSection'])} libellé(s) sur 2 lignes "
              f"({len(unwrapped)}/{len(m['perSection'])} sections nettes)"),
@@ -408,6 +431,9 @@ def main():
              not [s for s in m['perSection'] if s['rows'] == 0], empty_detail(m)),
             ('I colonnes de largeur homogène (aucune colonne orpheline)',
              not orphan_rows(m), orphans_detail(m)),
+            ('J aucun marqueur plus large que la piste des touches',
+             all((s['widestMark'] or {}).get('w', 0) <= s['markTrack'] + 1 for s in m['perSection']),
+             keys_detail(m)),
         ]
         for label, passed, detail in ok:
             checks.append((label, passed))

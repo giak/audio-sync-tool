@@ -38,4 +38,10 @@
   --accent:        #00d4ff;
   --amber:         #ffaa00;
   --accent-green:  #00ff88;
+
+  /* Légende (EPIC-042) : largeur de la piste des TOUCHES, identique dans toute
+     la feuille — c'est elle qui fait qu'une seule abscisse de libellé existe
+     partout (mesuré : le plus large marqueur fait 106 px). Un marqueur plus
+     large échouerait la vérification J du harnais `scripts/measure_legend.py`. */
+  --legend-key:    110px;
 }

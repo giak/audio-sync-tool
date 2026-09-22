@@ -190,31 +190,24 @@
    vit dans la 1re piste (`max-content`) et le texte dans la 2e — chaque ligne
    s'y aligne en `subgrid` → une seule abscisse par section. */
 #modal-legend .modal-content {
-  width: min(1460px, 94vw);
+  width: min(1800px, 95vw);
   max-width: none;               /* la règle .modal-xl plafonnait à 1 200 px */
   max-height: 92vh;              /* laisser la feuille tenir sans défilement */
   padding: 18px 22px 14px;
 }
 /* Flux MULTI-COLONNES : le navigateur choisit le nombre de colonnes selon la
-   largeur (320 px minimum par colonne — sous ce seuil les libellés se coupent,
-   mesuré) et les équilibre. Aucune table de colonnes écrite à la main : elle
-   donnait 3 colonnes + 1 orpheline à 1 366 px (mesuré), et ses colonnes de
-   285 px coupaient les libellés. `break-inside: avoid` garde chaque section
-   entière (jamais coupée en deux colonnes). */
+   largeur (410 px minimum par colonne) et les équilibre. Aucune table de
+   colonnes écrite à la main : elle donnait 3 colonnes + 1 orpheline à 1 366 px
+   (mesuré). `break-inside: avoid` garde chaque section entière. */
 #legend-grid {
-  columns: 320px;
+  columns: 410px;
   column-gap: 30px;
 }
 .legend-section {
   break-inside: avoid;
   margin: 0 0 18px;
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  column-gap: 10px;
-  row-gap: 1px;
 }
 .legend-section h4 {
-  grid-column: 1 / -1;
   font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent);
@@ -224,15 +217,14 @@
 .legend-row {
   padding: 2px 0;
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  /* Piste des touches de LARGEUR FIXE (le token) : toutes les lignes de toutes
+     les sections d'une colonne — et, les colonnes étant de largeur égale, de
+     toute la feuille — ont donc UNE SEULE abscisse de libellé. C'était le
+     défaut de fond constaté à l'usage : une piste `max-content` par section
+     donnait 7 abscisses différentes (« tout flotte, rien n'est calé »). */
+  grid-template-columns: var(--legend-key) minmax(0, 1fr);
   gap: 10px;
   align-items: baseline;
-}
-/* Ligne d'une section : alignée sur les pistes de la section (une seule
-   abscisse de libellé par section, quelle que soit la largeur des touches). */
-.legend-section .legend-row {
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
 }
 .legend-mark {
   display: inline-flex;
@@ -292,17 +284,16 @@
   border-top: 1px solid var(--border-panel);
 }
 #legend-footer .legend-text { font-size: 12px; color: var(--text-muted); }
-/* 4 colonnes ne tiennent — sans couper un libellé — qu'à partir de ~1 500 px.
-   Entre 760 et 1 500 px, un 3ᵉ essai de colonne laissait une colonne courte et
-   donc une feuille bancale (mesuré à 1 366 px : hauteurs 425/816/672, ratio
-   1,92) : on préfère DEUX colonnes équilibrées (ratio 1,07), quitte à faire
-   défiler la feuille — défiler est moins laid qu'une colonne trouée. Sous
-   760 px, une seule colonne (mieux vaut défiler que couper un libellé). */
-@media (max-width: 1500px) { #legend-grid { column-count: 2; } }
-@media (max-width: 760px) {
-  .modal-content.modal-xl { width: 94vw; }
-  #legend-grid { column-count: 1; }
-}
+/* Le nombre de colonnes ne suit PAS aveuglément la largeur : 410 px donne un 3ᵉ
+   palier entre ~1 550 et ~1 850 px, et il est **inéquilibrable** avec ces sept
+   sections (mesuré à 1 600 px : 410 px contre 770 px, ratio 1,88 — une colonne
+   s'arrête 374 px trop haut, exactement le « ça flotte » de l'usage réel). Le
+   palier 3 est donc supprimé : 4 colonnes quand elles tiennent (≥ ~1 850 px),
+   sinon 2 colonnes équilibrées (ratio 1,05), sinon 1. Chaque palier reste calé
+   sur `--legend-key` : une seule abscisse de libellé par colonne, partout. */
+@media (max-width: 1850px) { #legend-grid { column-count: 2; } }
+@media (max-width: 800px) { #legend-grid { column-count: 1; } }
+@media (max-width: 1180px) { .modal-content.modal-xl { width: 94vw; } }
 
 /* ===== Journal (inside modal) ======================================== */
 #journal-content { font-size: 13px; max-height: 50vh; overflow-y: auto; }

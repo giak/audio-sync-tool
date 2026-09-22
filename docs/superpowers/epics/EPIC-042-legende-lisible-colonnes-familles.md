@@ -126,10 +126,46 @@ libellé mais laissait une colonne courte et donc une feuille bancale (hauteurs 
 ratio **1,92** à 1 366 px, ce qui échoue le critère D). Entre défiler de 237 px et une colonne
 trouée, le choix est explicite : **défiler**.
 
+### Défaut 3 : la feuille n'était pas **calée** (constat sur un écran 2 560 px)
+
+Troisième retour d'usage : « tout flotte, rien n'est calé, c'est à refaire totalement cette mise
+en page ! j'ai un écran très grand, ta preview ne reflète pas la réalité ». Les deux reproches
+sont justes :
+
+- **Mes mesures étaient faites dans une fenêtre étroite** (le panneau de prévisualisation) : à
+  2 560 px, l'état d'alors donnait une modale plafonnée à 1 460 px, dont une colonne occupée par
+  la seule section « Cue editor » de l'ancien markup — **1 332 px de haut** — et un contenu de
+  1 465 px dans 1 287 px de boîte.
+- **« Rien n'est calé » était architectural** : la piste des touches était en `max-content`
+  **par section**. Même avec `subgrid` (alignement interne à une section), la feuille avait donc
+  **7 abscisses de libellé différentes** (mesuré en direct : 630, 653, 990, 1043…). Une feuille de
+  référence ne se lit pas comme ça.
+
+Corrigé :
+
+1. **Une seule abscisse pour toute la feuille** : la piste des touches est une **largeur fixe**
+   (`--legend-key: 110px`, token dans `tokens.css`), la même dans chaque ligne de chaque section
+   — et comme les colonnes du flux ont la même largeur, la même dans toute la feuille. `subgrid`
+   disparaît (il n'a plus rien à aligner) : c'est **moins** de CSS pour **plus** d'alignement.
+2. **La modale prend la place disponible** : `min(1800px, 95vw)` au lieu de 1 460 px — un écran
+   large n'a aucune raison d'afficher une feuille de 71 lignes dans un tiers de sa largeur.
+3. **Aucun marqueur plus large que la piste** : la vérification **J** du harnais échoue si un
+   badge ou une touche dépasse `--legend-key` (pire marqueur mesuré : **110 px**, soit exactement
+   la piste) — c'est ce qui rend la largeur fixe sûre dans le temps.
+
+Mesuré après correction, **13/13 à 7 largeurs** :
+
+| Largeur | Colonnes | Abscisses de libellé | Équilibre | Défilement |
+|---|---|---|---|---|
+| 3440 / 2560 / 1920 px | 4 (416 px) | `[523, 969, 1415, 1861]` — **une par colonne, la même partout** | 1,32 | aucun (647/647) |
+| 1600 → 1000 px | 2 (722 → 437 px) | `[183, 935]` | 1,07 | aucun à 1 400 px de haut |
+| 700 px | 1 | `[63]` | — | oui |
+
 ## Tâches
 
-- [x] **Flux multi-colonnes** (`LEGEND_SECTIONS` + `columns: 320px`) : le nombre de colonnes est **choisi par le navigateur selon la largeur** et les colonnes sont équilibrées. La table de colonnes écrite à la main (8 sections placées en dur) est **supprimée** : elle avait produit la colonne orpheline de 1 366 px (cf. Régression 2).
-- [x] **Une abscisse par section** : la section est une grille 2 pistes `max-content minmax(0,1fr)`, chaque ligne s'y aligne en `grid-template-columns: subgrid` → l'abscisse du libellé ne dépend plus de la largeur des touches de la ligne.
+- [x] **Flux multi-colonnes** (`LEGEND_SECTIONS` + `columns: 410px`) : le nombre de colonnes suit la largeur et les colonnes sont équilibrées. La table écrite à la main est **supprimée** (colonne orpheline de 1 366 px, cf. Régression 2) ; le palier 3 colonnes est **écarté** après mesure (inéquilibrable : ratio 1,88).
+- [x] **Une seule abscisse de libellé pour toute la feuille** : piste des touches à **largeur fixe** (`--legend-key: 110px`), identique dans chaque ligne et chaque colonne — `subgrid` supprimé (cf. Défaut 3).
+- [x] **Fin des abscisses par ligne** : chaque ligne ne calcule plus sa propre piste (`max-content` par ligne) — première étape vers l'abscisse unique (le `subgrid` qui a suivi a lui-même été remplacé, cf. Défaut 3).
 - [x] **Familles de touches** (`legendFamily` / `legendFamilyTitle` sur `CommandBinding`) : les bindings d'une même section partageant une famille sont rendus sur **une seule ligne**, leurs touches **côte à côte et dédoublonnées** (8× `Échap` → `Échap`), le texte étant celui du binding marqué titre. **12 familles** (`fermer` 8, `colonne` 3, + 10 familles de 2) → **31 bindings → 12 lignes** (−19 lignes).
 - [x] **Libellés raccourcis** dans `commands/*.ts` (`'Naviguer vers le bas (liste focusée)'` → `'Naviguer dans la liste'`, `'Seek audio −20 s (avec Shift)'` → `'Seek ±20 s (⇧ maintenu)'`, …) : le libellé tient sur la largeur d'une colonne, et le *pourquoi* vit dans l'EPIC, pas dans la légende.
 - [x] **Un marqueur par ligne** : `.legend-mark` (touches, pastille, badge) + `.legend-text` (le sens) — plus de libellé nu sans repère visuel ; un seul gabarit `<kbd>` pour toute la feuille (12 px, `--font-mono`, min-width 18 px).
@@ -146,10 +182,11 @@ trouée, le choix est explicite : **défiler**.
 | `static/src/render/legend.ts` | `LEGEND_SECTIONS` (ordre de lecture, plus de table de colonnes), `legendRows()` (familles), `renderRows()`, **contrat non destructif** (adoption par titre, conservation des sections inconnues) |
 | `static/src/commands/registry.ts` | `legendFamily` / `legendFamilyTitle` (affichage seul — le binding reste actif au clavier) |
 | `static/src/commands/*.ts` (11 modules) | Libellés raccourcis + familles déclarées (`audio`, `dups`, `menu`, `modals`, `navigation`, `playlist`, `rating`, `years`, `copy`, `filter`, `replace`, `style`) |
-| `static/styles/components.css` | `#modal-legend .modal-content` (1 460 px / 92 vh), `#legend-grid` en **flux multi-colonnes** (`columns: 320px`, 2 col. < 1 500 px, 1 < 760 px), sections 2 pistes + `subgrid`, gabarit unique de `<kbd>`, pied de modale |
+| `static/styles/components.css` | `#modal-legend .modal-content` (`min(1800px, 95vw)` / 92 vh), `#legend-grid` en **flux multi-colonnes** (`columns: 410px`, 4 col. ≥ 1 850 px sinon 2 sinon 1), lignes à piste de touches **fixe** (`--legend-key`), gabarit unique de `<kbd>`, pied de modale |
+| `static/styles/tokens.css` | `--legend-key: 110px` — largeur de la piste des touches, garde de l'alignement (vérifiée par J) |
 | `templates/index.html` | Sections statiques annotées `data-legend-section`, lignes normalisées en `.legend-mark` + `.legend-text`, pied ramené à 1 note |
 | `static/src/render/legend.test.ts` | Bijection + familles + comptage de lignes + **survie d'un HTML d'une autre version** |
-| `scripts/measure_legend.py` | Harnais de mesure (12 vérifications, captures) — dont **H « aucune section vide »** et **I « colonnes homogènes »** ; mesurable à toute largeur |
+| `scripts/measure_legend.py` | Harnais de mesure (13 vérifications, captures) — dont **H « aucune section vide »**, **I « colonnes homogènes »** et **J « marqueur ≤ piste des touches »** ; mesurable à toute largeur |
 | `scripts/proof_filter_chip.py` | `bootstrap(window)` — fenêtre paramétrable pour les harnais qui mesurent une mise en page |
 
 ## Validation
@@ -157,11 +194,11 @@ trouée, le choix est explicite : **défiler**.
 ### Harnais headless — `python3 scripts/measure_legend.py /tmp/epic042_final`
 
 Fenêtre **1600×1000** (viewport 857 px), monde synthétique isolé, modale ouverte par la touche
-**réelle** `?`, **12/12** :
+**réelle** `?`, **13/13** :
 
 | Vérification | Mesure APRÈS |
 |---|---|
-| A · 1 seule abscisse de libellé par section | 7 sections, 0 désalignée (avant : 7 désalignées, jusqu'à 7 abscisses) |
+| A · 1 seule abscisse de libellé par **colonne** (et la même partout) | 4 colonnes → abscisses `[523, 969, 1415, 1861]` (avant : **7 abscisses** différentes, une par section) |
 | B · aucun libellé renvoyé à la ligne | **0 / 71** (avant : **56 / 89**) |
 | C · contraste libellé ≥ 4,5:1 | **12,02:1** (`--text-secondary`) — inchangé |
 | C · contraste touche ≥ 4,5:1 | **16,22:1** — inchangé |
@@ -172,7 +209,8 @@ Fenêtre **1600×1000** (viewport 857 px), monde synthétique isolé, modale ouv
 | F · la modale tient sans défilement (**exigé à partir de 1600 px de large**) | **scrollHeight 668 = clientHeight 668** (avant : 1 866 vs 684) |
 | G · contenu complet | **7 sections · 71 lignes** (avant : 89 lignes) |
 | H · aucune section vide | **7 sections, toutes remplies** (le monde à l'ancien bundle donnait *« section(s) VIDE(S) : États & pastilles, Cue editor »*) |
-| I · colonnes de largeur homogène | 4 colonnes de **331 px** (avant : `[391, 391, 391, 1233]` — la 4ᵉ prenait la largeur entière) |
+| I · colonnes de largeur homogène | 4 colonnes de **416 px** (avant : `[391, 391, 391, 1233]` — la 4ᵉ prenait la largeur entière) |
+| J · marqueur ≤ piste des touches | piste **110 px**, pire marqueur **110 px** (badge « ≈ homonymes ») |
 
 **Correction honnête du harnais** : la vérification C lisait la couleur de la **ligne**, pas du
 libellé. Après la refonte, la couleur vit sur `.legend-text`, donc la première version du harnais
@@ -202,7 +240,7 @@ Chaque mutation a été **exécutée** (build inclus), mesurée, puis le fichier
 - [x] Tests backend (`./venv/bin/python -m pytest -q`) — **335** (aucun fichier backend touché)
 - [x] Lint (`npm run lint`) — 0 erreur (108 fichiers)
 - [x] Build (`npm run build`) — ✅ validation passée
-- [x] Harnais headless — **12/12** à 1920, 1600, 1440, 1366, 1100, 900 et 700 px (avant : 3/10 à 1600, et jusqu'à 3 colonnes en échec à 1366)
+- [x] Harnais headless — **13/13** à 3440, 2560, 1920, 1600, 1366, 1000 et 700 px (avant : 3/10 à 1600, et jusqu'à 3 colonnes en échec à 1366)
 
 ⚠ Le CSS **et** le JS sont bundlés : `npm run build` est **obligatoire** avant toute mesure
 navigateur (un harnais lancé sans rebuild mesure la version précédente).
@@ -214,6 +252,7 @@ navigateur (un harnais lancé sans rebuild mesure la version précédente).
 | `411433d` | Légende lisible : 4 colonnes jamais étirées, une abscisse par section (`subgrid`), familles de touches (8× `Échap` → 1 ligne), libellés raccourcis, harnais de mesure 10/10 (3/10 avant) |
 | `c96b90e` | Traçabilité de l'EPIC (commit ci-dessus) |
 | `8211f8b` | **Régression corrigée** : la légende des états ne peut plus être effacée par un template d'une autre version (adoption par titre + conservation `console.warn`), vérification H du harnais, test de contrat (1 145 vitest) |
+| _(ce commit)_ | **Défaut 3 corrigé** : une seule abscisse de libellé pour toute la feuille (`--legend-key`, fin de `subgrid`), modale `min(1800px, 95vw)`, palier 3 colonnes écarté après mesure, vérification J — 13/13 à 3440, 2560, 1920, 1600, 1366, 1000 et 700 px |
 | `92a6423` | **Régression 2 corrigée** : plus de table de colonnes (flux multi-colonnes adaptatif), vérification I du harnais, contrat F scoped aux largeurs où il est tenable — 12/12 sur 7 largeurs |
 
 ## Décisions
@@ -229,6 +268,19 @@ navigateur (un harnais lancé sans rebuild mesure la version précédente).
   les sections entières (`break-inside: avoid`) et les équilibre ; il reproduit exactement la
   table d'origine à 1 600 px (`[États+Doublons] [Sync] [Playlist+Années] [Transverse+Cue editor]`,
   mêmes hauteurs 425/500/425/563) — la table n'apportait donc rien qu'il ne fasse mieux.
+- **Une largeur fixe pour les touches, pas `max-content`.** C'est le seul moyen d'avoir **une**
+  abscisse de libellé pour toute la feuille : `max-content` (même par section, même avec
+  `subgrid`) donne autant d'abscisses que de sections. La contrepartie — un marqueur trop large
+  chevaucherait le libellé — est **tenue par la mesure** : la vérification J échoue dès qu'un
+  marqueur dépasse `--legend-key`. Une largeur magique sans garde serait un piège ; une largeur
+  magique **vérifiée** est une règle.
+- **La modale prend la largeur de l'écran** (`min(1800px, 95vw)`) : à 1 460 px, la feuille était
+  à l'étroit sur un écran large — et une colonne de 416 px ne coupe aucun libellé, là où 331 px
+  en coupaient.
+- **Le palier 3 colonnes n'existe pas, par décision mesurée.** Avec ces sept sections, trois
+  colonnes contiguës ne s'équilibrent pas (1 600 px : 410 px contre 770 px, ratio 1,88 ; c'est la
+  borne basse du contigu, pas un défaut d'algorithme). 4 colonnes quand elles tiennent, 2 sinon, 1
+  en dessous de 800 px : chaque palier mesuré à 13/13, aucun palier bancal proposé.
 - **Deux colonnes plutôt que trois sous 1 500 px.** Le 3ᵉ niveau ne coupait aucun libellé mais
   laissait une colonne courte (ratio 1,92) : une colonne trouée se lit comme une mise en page
   cassée — c'est la plainte d'origine. On préfère 2 colonnes équilibrées (1,07) qui défilent de
