@@ -75,7 +75,14 @@ header h1 {
   margin-bottom: 10px; padding-bottom: 6px;
   border-bottom: 1px solid var(--border-panel);
 }
-.panel-active { border: 1px solid var(--border-active) !important; }
+/* Panneau actif (EPIC-039) : cadre cyan net + anneau inset 1 px (= 2 px
+   visuels sans reflow du flex — l'ancien `--border-active` à 50 % d'alpha
+   disparaissait sur fond sombre). On sait d'un coup d'œil quelle colonne a
+   le clavier. */
+.panel-active {
+  border: 1px solid var(--accent) !important;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 .panel-header-count {
   font-size: 12px; color: var(--text-muted);
   font-weight: normal; margin-left: 8px;
@@ -127,9 +134,17 @@ header h1 {
   padding: 3px 0 3px 14px;
   font-size: 14px;
 }
-.directory.focused { background: var(--bg-focus); outline: 1px solid var(--border-focus); }
+/* Focus dossier (EPIC-039) : même grammaire que les lignes fichiers — boîte
+   cyan 2 px (outline inset, zéro décalage) + barre d'accent 4 px + fond teinté.
+   Déclaré APRÈS :hover/:active pour que le curseur gagne sur l'état survolé. */
 .directory:hover    { background: var(--bg-hover); }
 .directory:active   { background: var(--bg-focus); opacity: 0.8; }
+.directory.focused {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  box-shadow: inset 4px 0 0 var(--accent);
+}
 .directory::before  { content: '📁  '; }
 #source-container .directory.expanded::before { content: '📂  '; }
 .children { padding-left: 12px; }
@@ -258,13 +273,23 @@ header h1 {
   vertical-align: middle;
   white-space: nowrap;
 }
-/* Focus ligne fichier : barre d'accent à gauche + contour net — bien visible
-   sur écran de DJ booth en périphérie. La barre verticale traverse les td via
-   box-shadow inset (pas de décalage de layout). */
-.file-row.focused > td { background: var(--bg-focus); }
-.file-row.focused > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
-.file-row.focused > td:last-child { box-shadow: inset -1px 0 0 var(--border-focus); }
-.file-row.focused td.file { outline: 1px solid var(--border-focus); }
+/* Focus ligne fichier (EPIC-039) — LE CURSEUR, lisible d'un coup d'œil :
+   boîte cyan 2 px (bords haut/bas sur chaque cellule, gauche/droite sur les
+   cellules extrêmes), barre d'accent 4 px à gauche, fond teinté 14 %.
+   Une ligne de tableau ne porte pas d'outline fiable avec border-collapse :
+   la boîte est peinte en box-shadow inset sur les cellules (aucun décalage
+   de layout, aucune fente). Avant : contour `--border-focus` à 35 % d'alpha
+   (~1,5:1 de contraste) + barre 3 px — seul le nom se distinguait à peine. */
+.file-row.focused > td {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
+}
+.file-row.focused > td:first-child {
+  box-shadow: inset 4px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
+}
+.file-row.focused > td:last-child {
+  box-shadow: inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
+}
 .file-row:active { opacity: 0.8; }
 
 /* Play button */

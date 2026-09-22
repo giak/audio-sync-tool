@@ -49,10 +49,15 @@
    descendant de même racine (ordre du DOM). */
 .years-card.years-review { position: relative; z-index: 0; }
 .years-card.years-review { cursor: pointer; }
+/* Focus carte (EPIC-039) : même grammaire que les listes Sync (boîte 2 px +
+   barre d'accent à gauche + fond teinté) — ambre ici, la couleur de la revue.
+   Avant : boîte 2 px + fond 8 %, sans barre → la carte se distinguait moins
+   qu'une ligne de fichier focusée. */
 .years-card.years-review.focused {
   outline: 2px solid var(--amber);
   outline-offset: -2px;
-  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  box-shadow: inset 4px 0 0 var(--amber);
 }
 .years-card-title { font-weight: 600; }
 /* Boutons ▶ des cartes Années/Doublons — réutilisent togglePlay (player bar

@@ -81,10 +81,13 @@ tr.file-row.twin-hint > td {
   margin-bottom: 10px;
   cursor: pointer;
 }
+/* Focus carte doublon (EPIC-039) : même grammaire que les listes Sync —
+   boîte 2 px + barre d'accent gauche + fond teinté 12 % (ambre = revue). */
 .dup-card.focused {
   outline: 2px solid var(--amber);
   outline-offset: -2px;
-  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  box-shadow: inset 4px 0 0 var(--amber);
 }
 .dup-card-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
 .dup-member {
