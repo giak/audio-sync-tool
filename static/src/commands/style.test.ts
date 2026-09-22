@@ -9,7 +9,8 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { bind, openGenreAudit, openStylePalette, openStylePreview } = vi.hoisted(() => ({
+const { alignStyleToFolder, bind, openGenreAudit, openStylePalette, openStylePreview } = vi.hoisted(() => ({
+  alignStyleToFolder: vi.fn(),
   bind: vi.fn(),
   openGenreAudit: vi.fn(),
   openStylePalette: vi.fn(),
@@ -17,7 +18,7 @@ const { bind, openGenreAudit, openStylePalette, openStylePreview } = vi.hoisted(
 }));
 
 vi.mock('./registry.js', () => ({ registry: { bind } }));
-vi.mock('../render/stylePalette.js', () => ({ openStylePalette }));
+vi.mock('../render/stylePalette.js', () => ({ alignStyleToFolder, openStylePalette }));
 vi.mock('../render/stylePreview.js', () => ({ openStylePreview }));
 vi.mock('../render/styleAudit.js', () => ({ openGenreAudit }));
 
@@ -42,6 +43,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.selectedEparsFiles = new Map();
   state.activePanel = 'epars';
+  // EPIC-050 : `g` lit la racine Source Data pour résoudre le dossier déclaré.
+  state.sourceFiles = {};
   document.body.innerHTML = `
     <div id="status-text"></div>
     <div id="epars-container"><table><tbody>
@@ -162,6 +165,48 @@ describe('style command (g)', () => {
     binding.handler(); // .directory.focused à droite, .file-row.focused à gauche
     const rowB = document.querySelector('[data-focuspath="/e/b.mp3"]');
     expect(openStylePalette).toHaveBeenCalledWith(['/e/b.mp3'], rowB);
+  });
+
+  // ── EPIC-050 : sur un RANGÉ, `g` écrit le style du dossier (rien à choisir) ──
+
+  it('rangé + g → écrit le style du dossier, la palette ne s’ouvre pas', () => {
+    state.sourceFiles = {
+      '/s': {
+        'x.mp3': { path: 'techno_1990/x.mp3', year: '1990', duration: null, codec: null, genre: 'house' } as never,
+      },
+    };
+    document.querySelector('#source-container .directory')?.classList.remove('focused');
+    document.querySelector('[data-focuspath="/s/techno_1990/x.mp3"]')!.classList.add('focused');
+    state.activePanel = 'source';
+    binding.handler();
+    expect(alignStyleToFolder).toHaveBeenCalledWith('/s/techno_1990/x.mp3', 'techno');
+    expect(openStylePalette).not.toHaveBeenCalled();
+    // Le geste est ANNONCÉ avant l'écriture (jamais un silence).
+    expect(document.getElementById('status-text')?.textContent).toContain('techno');
+  });
+
+  it('rangé dans un dossier hors grammaire (🗑, 2008_08) → palette, aucun style deviné', () => {
+    state.sourceFiles = {
+      '/s': {
+        'z.mp3': { path: '_trash/z.mp3', year: null, duration: null, codec: null, genre: null } as never,
+      },
+    };
+    document.querySelector('#source-container .directory')?.classList.remove('focused');
+    document.querySelector('[data-focuspath="/s/techno_1990/x.mp3"]')!.classList.add('focused');
+    binding.handler();
+    expect(alignStyleToFolder).not.toHaveBeenCalled();
+    expect(openStylePalette).toHaveBeenCalledTimes(1);
+  });
+
+  it('épars focusé alors qu’une racine source existe → palette (le rangement se choisit)', () => {
+    state.sourceFiles = {
+      '/s': {
+        'x.mp3': { path: 'techno_1990/x.mp3', year: '1990', duration: null, codec: null, genre: null } as never,
+      },
+    };
+    binding.handler(); // ligne épars /e/b.mp3 focusée
+    expect(alignStyleToFolder).not.toHaveBeenCalled();
+    expect(openStylePalette).toHaveBeenCalledWith(['/e/b.mp3'], document.querySelector('[data-focuspath="/e/b.mp3"]'));
   });
 
   it('sélection épars + morceau Source Data surligné → la cible est le morceau source', () => {

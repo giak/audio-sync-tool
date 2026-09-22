@@ -9,7 +9,7 @@ import report_years
 
 
 def write_caches(tmp_path, monkeypatch, ycache, dcache, icache, rcache=None,
-                 r2cache=None, bpcache=None, cache=None):
+                 r2cache=None, ytcache=None, cache=None):
     (tmp_path / 'year_cache.jsonl').write_text(
         '\n'.join(json.dumps(r) for r in ycache) + '\n')
     (tmp_path / 'discogs_cache.jsonl').write_text(
@@ -22,9 +22,9 @@ def write_caches(tmp_path, monkeypatch, ycache, dcache, icache, rcache=None,
         '\n'.join(json.dumps(r) for r in (rcache or [])) + '\n')
     (tmp_path / 'discogs_reform2_cache.jsonl').write_text(
         '\n'.join(json.dumps(r) for r in (r2cache or [])) + '\n')
-    (tmp_path / 'beatport_cache.jsonl').write_text(
-        '\n'.join(json.dumps(r) for r in (bpcache or [])) + '\n')
-    monkeypatch.setattr(report_years, 'BP_CACHE', str(tmp_path / 'beatport_cache.jsonl'))
+    (tmp_path / 'youtube_topic_cache.jsonl').write_text(
+        '\n'.join(json.dumps(r) for r in (ytcache or [])) + '\n')
+    monkeypatch.setattr(report_years, 'YT_CACHE', str(tmp_path / 'youtube_topic_cache.jsonl'))
     if cache is not None:
         (tmp_path / 'cache.json').write_text(json.dumps(cache))
     monkeypatch.setattr(report_years, 'YEAR_CACHE', str(tmp_path / 'year_cache.jsonl'))
@@ -169,17 +169,19 @@ def test_reform2_dernier_rideau_sans_chevauchement(monkeypatch, tmp_path):
     assert report_years.wave_of(*pool['\tN']) == 'a_revue'  # lax v2 → à revue
 
 
-def test_beatport_dernier_rideau_sans_chevauchement(monkeypatch, tmp_path):
+def test_youtube_dernier_rideau_sans_chevauchement(monkeypatch, tmp_path):
+    """YouTube clôt la liste (Beatport retiré, EPIC-049) : un pool d'appoint ne
+    masque jamais l'amont, et il ne revendique que les clés laissées libres."""
     write_caches(tmp_path, monkeypatch,
                  ycache=[rec('\tA', 'found', year='1990'), rec('\tN', 'none')],
                  dcache=[], icache=[],
                  rcache=[rec('\tB', 'lax', year='2005')],
-                 bpcache=[rec('\tA', 'found', year='2077'),
+                 ytcache=[rec('\tA', 'found', year='2077'),
                           rec('\tB', 'found', year='2077'),
                           rec('\tN', 'found', year='2007',
-                              source='beatport_strict')])
+                              source='youtube_topic_strict')])
     pool = report_years.load_all()
-    assert pool['\tA'][0] == 'year_cache'    # Beatport ne masque pas l'amont
+    assert pool['\tA'][0] == 'year_cache'    # YouTube ne masque pas l'amont
     assert pool['\tB'][0] == 'reform'
-    assert pool['\tN'][0] == 'beatport'
+    assert pool['\tN'][0] == 'youtube'
     assert report_years.wave_of(*pool['\tN']) == 'certaines'

@@ -19,6 +19,16 @@ import { goPage } from '../router.js';
 import { ensureFilterChip, isFilterActive, subjectMatches, updateFilterCount } from './filterChip.js';
 import { refreshYearAudit, renderYearAudit, resetYearAudit } from './yearAudit.js';
 
+/** État du fournisseur de recherche web (EPIC-049) — dernier recours, candidats
+ *  seulement. `null` = jamais sondé. */
+interface WebStatus {
+  provider: 'mcp' | 'html';
+  url: string;
+  reachable: boolean;
+  error: string | null;
+}
+let webStatus: WebStatus | null = null;
+
 export interface YearFile {
   path: string;
   filename: string;
@@ -181,6 +191,20 @@ export function renderYears(): void {
   // comme année du morceau) : il passe avant les propositions, pas après 46
   // cartes que personne ne fait défiler. Rien à afficher sans audit : la
   // section s'efface et la page reste ce qu'elle était.
+  // ── Recherche web (EPIC-049) : un fournisseur muet se déclare ──────────
+  // Brave (payant, jamais configuré) est retiré ; le moteur est DuckDuckGo en
+  // local. La ligne dit LEQUEL répond, et le rappelle : elle ne vote jamais.
+  if (webStatus) {
+    const webLine = document.createElement('div');
+    webLine.className = webStatus.provider === 'mcp' ? 'years-section ok' : 'years-section';
+    webLine.textContent =
+      webStatus.provider === 'mcp'
+        ? '🌐 Recherche web : DuckDuckGo local (MCP) — candidats seulement, jamais un vote'
+        : `🌐 Recherche web : DuckDuckGo repli HTML${webStatus.error ? ` — ${webStatus.error}` : ''}`;
+    webLine.title = webStatus.url;
+    list.appendChild(webLine);
+  }
+
   renderYearAudit(list, () => renderYears());
 
   const count = document.getElementById('years-count');
@@ -377,9 +401,20 @@ export async function openYearsMode(): Promise<void> {
       'En haut : l’audit des années DÉJÀ écrites (⟲) — corriger écrit tout de suite, garder sort le cas de la file.',
   );
   resetYearAudit(); // une lecture fraîche par ouverture (l'audit change sur disque)
-  await Promise.all([refreshYears(), refreshYearAudit()]);
+  await Promise.all([refreshYears(), refreshYearAudit(), refreshWebStatus()]);
   await loadChoices();
   renderYears();
+}
+
+/** EPIC-049 : sonde le fournisseur de recherche web (DuckDuckGo local, MCP ou
+ *  repli HTML). Une sonde qui échoue ne casse pas la vue : `webStatus` reste
+ *  `null` et la ligne ne s'affiche pas. */
+async function refreshWebStatus(): Promise<void> {
+  try {
+    webStatus = await api<WebStatus>('/years/web-status');
+  } catch {
+    webStatus = null;
+  }
 }
 
 export function closeYearsMode(): void {

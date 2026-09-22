@@ -1,7 +1,15 @@
 // ─── Unit tests: render/styleCell.ts — cellule Style des lignes épars ──────
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { state } from '../state.js';
-import { currentTaxonomy, destinationLabel, insertStyleCell, refreshStyleCell } from './styleCell.js';
+import {
+  currentTaxonomy,
+  destinationLabel,
+  insertSourceStyleCell,
+  insertStyleCell,
+  refreshSourceStyleCells,
+  refreshStyleCell,
+  sourceStyleOf,
+} from './styleCell.js';
 
 // jsdom n'a pas scrollIntoView → stub sur Element.prototype (pattern connu, cf. dupsUI.test).
 (Element.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = vi.fn();
@@ -159,5 +167,94 @@ describe('render/styleCell', () => {
     state.sourceFiles = { ...state.sourceFiles };
     expect(currentTaxonomy()).not.toBe(t1);
     expect(currentTaxonomy()!.styles.size).toBe(4);
+  });
+});
+
+// ── EPIC-046 : cellule Style des lignes SOURCE DATA ──────────────────────
+// Signalement vérifié : la copie écrivait bien le tag des DEUX côtés (journal
+// + relecture mutagen), mais la colonne Source Data n'avait aucune case où le
+// lire — et `g` sur un rangé n'avait donc rien à montrer.
+describe('render/styleCell — colonne Style de Source Data (EPIC-046)', () => {
+  beforeEach(() => {
+    document.body.innerHTML =
+      '<div id="source-container"><table class="file-table has-style"><tbody id="tbs"></tbody></table></div>';
+    state.sourceFiles = {
+      [ROOT]: {
+        'a.mp3': { path: 'techno_acid_1990/a.mp3', year: '1990', duration: null, codec: null, genre: 'techno_acid' },
+        'b.mp3': { path: 'techno_acid_1990/b.mp3', year: '1990', duration: null, codec: null, genre: 'Techno' },
+        'c.mp3': { path: 'hors_grammaire/c.mp3', year: null, duration: null, codec: null, genre: null },
+      },
+    };
+  });
+
+  it('déclare le style par le DOSSIER (1ᵉʳ segment relatif à la racine)', () => {
+    expect(sourceStyleOf(`${ROOT}techno_acid_1990/a.mp3`)).toBe('techno_acid');
+    expect(sourceStyleOf(`${ROOT}_trash/a.mp3`)).toBeNull();
+    expect(sourceStyleOf(`${ROOT}2008_08/a.mp3`)).toBeNull();
+    expect(sourceStyleOf('/ailleurs/a.mp3')).toBeNull();
+  });
+
+  it('trois états, un mot : accord ✓, divergence ≠, tag vide ?', () => {
+    const mk = (name: string) => {
+      const tr = makeRow(`${ROOT}techno_acid_1990/${name}`);
+      for (const cls of ['play-btn', 'file', 'file-rating', 'year', 'codec', 'duration']) {
+        if (!tr.querySelector(`.${cls}`)) {
+          const td = document.createElement('td');
+          td.className = cls;
+          tr.appendChild(td);
+        }
+      }
+      document.getElementById('tbs')!.appendChild(tr);
+      return tr;
+    };
+    const entry = (name: string) => ({ year: '1990', genre: state.sourceFiles[ROOT][name].genre });
+
+    const ok = mk('a.mp3');
+    insertSourceStyleCell(ok, `${ROOT}techno_acid_1990/a.mp3`, entry('a.mp3'));
+    expect(ok.querySelector('.style-chip')?.textContent).toBe('✓ techno_acid');
+    expect(ok.querySelector('.style-chip')?.classList.contains('written')).toBe(true);
+
+    const diff = mk('b.mp3');
+    insertSourceStyleCell(diff, `${ROOT}techno_acid_1990/b.mp3`, entry('b.mp3'));
+    const chipDiff = diff.querySelector('.style-chip');
+    expect(chipDiff?.textContent).toBe('techno_acid ≠');
+    expect(chipDiff?.classList.contains('divergent')).toBe(true);
+    expect((chipDiff?.parentElement as HTMLElement).title).toContain('tag : Techno');
+
+    const empty = mk('a.mp3');
+    insertSourceStyleCell(empty, `${ROOT}techno_acid_1990/a.mp3`, { year: '1990', genre: null });
+    expect(empty.querySelector('.style-chip')?.textContent).toBe('techno_acid ?');
+    expect(empty.querySelector('.style-chip')?.classList.contains('missing')).toBe(true);
+  });
+
+  it('dossier hors grammaire → colonne vide (aucune cible inventée)', () => {
+    const tr = makeRow(`${ROOT}2008_08/c.mp3`);
+    insertSourceStyleCell(tr, `${ROOT}2008_08/c.mp3`, { year: null, genre: null });
+    expect(tr.querySelector('.style-chip')).toBeNull();
+  });
+
+  it('refreshSourceStyleCells patche la ligne après une écriture (g sur un rangé)', () => {
+    const tr = makeRow(`${ROOT}techno_acid_1990/b.mp3`);
+    document.getElementById('tbs')!.appendChild(tr);
+    insertSourceStyleCell(tr, `${ROOT}techno_acid_1990/b.mp3`, { year: '1990', genre: 'Techno' });
+    expect(tr.querySelector('.style-chip')?.textContent).toBe('techno_acid ≠');
+    // le tag vient d'être écrit dans l'index (setGenreLocally) → la cellule doit suivre
+    state.sourceFiles[ROOT]['b.mp3'].genre = 'techno_acid';
+    refreshSourceStyleCells([`${ROOT}techno_acid_1990/b.mp3`]);
+    expect(tr.querySelector('.style-chip')?.textContent).toBe('✓ techno_acid');
+  });
+
+  // ── EPIC-050 : la FORME RÉELLE du chemin (racine avec slash final) ────────
+  // La config réelle porte `source_data = …/select/style/` : le chemin joint est
+  // `…/style//techno_acid_1990/a.mp3`. Avant le pliage des slashes, la fonction
+  // rendait null sur cette forme — donc AUCUNE cellule Style et aucun alignement
+  // `g` chez l'utilisateur, alors que le bac à sable (racine sans slash) marchait.
+
+  it('racine avec slash final : le double slash ne casse ni la cellule ni le style', () => {
+    expect(sourceStyleOf('/src/style//techno_acid_1990/a.mp3')).toBe('techno_acid');
+    expect(sourceStyleOf('/src/style//2008_08/a.mp3')).toBeNull();
+    const tr = makeRow('/src/style//techno_acid_1990/a.mp3');
+    insertSourceStyleCell(tr, '/src/style//techno_acid_1990/a.mp3', { year: '1990', genre: 'techno_acid' });
+    expect(tr.querySelector('.style-chip')?.textContent).toBe('✓ techno_acid');
   });
 });

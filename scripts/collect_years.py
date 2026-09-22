@@ -24,10 +24,11 @@ sur le corpus : n'écrit que dans le cache de résultats.
 Providers interrogés (EPIC-040) : MusicBrainz + Deezer + Discogs **toujours**
   (Discogs si data/discogs_token existe) ; YouTube Topic avec `--youtube` (yt-dlp,
   coût réel par clé → à réserver aux clés non résolues : `--only=unresolved`).
-- Recherche web (dernier recours) : Brave Search via BRAVE_API_KEY ou
-  data/search_token — **ne vote jamais**, elle ne produit que des CANDIDATS
-  (`web_candidates`, `web_proposed`) soumis à la revue : un extrait web n'a pas
-  le niveau de preuve d'une API de disques.
+- Recherche web (dernier recours, EPIC-049) : DuckDuckGo LOCAL (MCP `search`
+  si lancé, sinon endpoint HTML) — **ne vote jamais**, elle ne produit que des
+  CANDIDATS (`web_candidates`, `web_proposed`) soumis à la revue : un extrait
+  web n'a pas le niveau de preuve d'une API de disques. Brave Search, payant et
+  jamais configuré ici, a été retiré.
 - Résultats incrémentaux : data/year_cache.jsonl (reprise : clés v≥2 déjà présentes sautées).
 - Rapport : ./venv/bin/python scripts/collect_years.py --report
 - Diagnostic d'une clé : ./venv/bin/python scripts/collect_years.py \
@@ -36,6 +37,9 @@ Providers interrogés (EPIC-040) : MusicBrainz + Deezer + Discogs **toujours**
 À lancer depuis la racine du projet : ./venv/bin/python scripts/collect_years.py [--max-seconds=N]
 """
 import json, os, re, sys, time, unicodedata, urllib.parse, urllib.request, urllib.error
+
+import web_search
+import remix_credit as remix_mod
 from collections import Counter, defaultdict
 
 CACHE = 'data/cache.json'
@@ -45,7 +49,7 @@ DZ_UA = 'audio-sync-tool/0.1'
 # Version du moteur de collecte. 1 = première passe (Deezer sans garde, une
 # seule source concluait) ; 2 = EPIC-040 (garde artiste/titre partout, deux
 # orientations de clé, règle des 2 providers indépendants concordants).
-ENGINE_VERSION = 2
+ENGINE_VERSION = 3   # v3 = EPIC-048 : un remix doit PROUVER son remixeur
 
 NOISE = re.compile(
     r"\b(remix|remaster(ed)?|edit|version|mix|hq|hd|official|video|audio|lyrics?|"
@@ -108,12 +112,13 @@ def tok_compat(a, b):
 
 # Classe sémantique de chaque source — c'est LE point qui a produit l'erreur de
 # 2024 : MusicBrainz (first-release-date) et Discogs disent la première sortie du
-# morceau ; Deezer/iTunes/Beatport/YouTube disent la date de l'ÉDITION matchée,
-# donc d'une réédition. À vote égal, la classe « first » gagne pour la PROPOSITION
+# morceau ; Deezer/iTunes/YouTube disent la date de l'ÉDITION matchée, donc
+# d'une réédition. À vote égal, la classe « first » gagne pour la PROPOSITION
 # (jamais pour l'écriture automatique : il faut 2 sources concordantes).
+# Beatport est retiré (EPIC-049) : la passe n'a jamais tourné.
 SOURCE_CLASS = {
     'musicbrainz': 'first', 'discogs': 'first',
-    'deezer': 'edition', 'itunes': 'edition', 'beatport': 'edition',
+    'deezer': 'edition', 'itunes': 'edition',
     'youtube': 'edition',
 }
 
@@ -127,7 +132,6 @@ PROVIDER = {
     'discogs': 'discogs',
     'reform_strict': 'discogs',
     'reform2_strict': 'discogs',
-    'beatport_strict': 'beatport',
     'youtube_topic_strict': 'youtube',
     'itunes': 'itunes',
     'human': 'human',
@@ -233,11 +237,19 @@ def load_keys():
                 keys[k]['n'] += 1
                 if meta.get('duration'):
                     keys[k]['durs'].add(meta['duration'])
+                # EPIC-048 : le crédit de remix vient du NOM (les parenthèses sont
+                # retirées par artist_title, donc la clé ne le porte plus).
+                credit = remix_mod.remix_credit(fn)
+                if credit['kind'] == 'remix':
+                    keys[k].setdefault('remix', credit['tokens'])
+                    keys[k].setdefault('remix_label', credit['label'])
     return total_files, noyear, keys
 
 
-def done_keys():
+def done_keys(min_version=ENGINE_VERSION):
     """Clés déjà traitées par le moteur COURANT (v ≥ ENGINE_VERSION).
+    `min_version=0` rend TOUT l'historique (sert à `--only=remix` : reinterroger
+    les seules clés de remix sans refaire les 1 400 autres).
     Les enregistrements v1 (première passe : aucune garde artiste/titre sur
     Deezer, une seule source pour conclure) sont ignorés — les clés sont
     ré-interrogées et la nouvelle ligne prime (dernier gagnant par clé)."""
@@ -249,7 +261,7 @@ def done_keys():
                 if not line:
                     continue
                 rec = json.loads(line)
-                if rec.get('v', 1) >= ENGINE_VERSION:
+                if rec.get('v', 1) >= min_version:
                     done[rec['key']] = rec
     except FileNotFoundError:
         pass
@@ -271,10 +283,13 @@ class Pacer:
         self.last = time.monotonic()
 
 
-def mb_lookup(a, t, durs, pacer):
+def mb_lookup(a, t, durs, pacer, require=()):
     """MusicBrainz recording search → ('found'|'ambiguous'|'none', year, years).
     Les gardes artiste/titre/durée ne portent que sur les records AVEC année
-    (un record sans first-release-date n'est pas une réponse)."""
+    (un record sans first-release-date n'est pas une réponse).
+    EPIC-048 : `require` = tokens du remixeur — quand ils sont fournis, un
+    enregistrement qui ne le nomme PAS ne compte pas (sa date est celle de
+    l'original : le cas `(cosmic gate mix)` concluait 1990)."""
     qq = f'recording:"{t}"' + (f' AND artist:"{a}"' if a else '')
     url = ('https://musicbrainz.org/ws/2/recording/?query=' +
            urllib.parse.quote(qq) + '&fmt=json&limit=8')
@@ -288,6 +303,8 @@ def mb_lookup(a, t, durs, pacer):
             continue
         rtitle = rec.get('title', '')
         if not tok_compat(t, rtitle):
+            continue
+        if require and not remix_mod.names_remixer(require, rtitle):
             continue
         frd = rec.get('first-release-date') or ''
         if not frd:
@@ -323,20 +340,26 @@ def dz_candidates(a, t):
     return []
 
 
-def dz_lookup(a, t, durs):
+def dz_lookup(a, t, durs, require=()):
     """Deezer → dict(status, year, years, evidence).
     GARDE artiste ET titre obligatoire (EPIC-040) : avant, seule la durée
     filtrait — donc zéro filtre dès que le fichier n'avait pas de durée connue.
     `evidence` garde l'album et sa date : c'est là que se voit la réédition
-    (album « Ooo » 2024-01-15 pour un morceau de 1991)."""
+    (album « Ooo » 2024-01-15 pour un morceau de 1991).
+    EPIC-048 : `require` = tokens du remixeur — le morceau matché doit le nommer
+    (titre OU album), sinon sa date d'édition est celle de l'original."""
     items = dz_candidates(a, t)
     passing = []
     for it in items:
         rartist = (it.get('artist') or {}).get('name') or ''
         rtitle = it.get('title') or ''
+        ralbum = (it.get('album') or {}).get('title') or ''
         if a and not tok_compat(a, rartist):
             continue
         if not tok_compat(t, rtitle):
+            continue
+        if require and not (remix_mod.names_remixer(require, rtitle)
+                           or remix_mod.names_remixer(require, ralbum)):
             continue
         if durs and abs(it['duration'] - min(durs, key=lambda d: abs(d - it['duration']))) > 15:
             continue
@@ -366,7 +389,8 @@ def dz_lookup(a, t, durs):
             'evidence': evidence}
 
 
-def lookup(a, t, durs, pacer, alt=None, youtube=False, web=True):
+def lookup(a, t, durs, pacer, alt=None, youtube=False, web=True, require=(),
+           remix_label=None):
     """Interroge MusicBrainz, Deezer et Discogs sur chaque orientation de clé
     (EPIC-040) ; `alt` = (artiste, titre) des tags du fichier, essayé en premier.
     Décision = 2 providers INDÉPENDANTS concordants :
@@ -390,7 +414,7 @@ def lookup(a, t, durs, pacer, alt=None, youtube=False, web=True):
         votes, amb, errs, candidates = {}, [], [], set()
         web_candidates, web_proposed, web_evidence = set(), None, []
         try:
-            mb_status, mb_year, mb_years = mb_lookup(a2, t2, durs, pacer)
+            mb_status, mb_year, mb_years = mb_lookup(a2, t2, durs, pacer, require)
         except Exception as e:
             mb_status, mb_year, mb_years = None, None, []
             errs.append(f'mb_error: {type(e).__name__}: {e}'[:90])
@@ -400,7 +424,7 @@ def lookup(a, t, durs, pacer, alt=None, youtube=False, web=True):
         elif mb_status == 'ambiguous':
             amb += [str(y)[:4] for y in (mb_years or [])]
         try:
-            dz = dz_lookup(a2, t2, durs)
+            dz = dz_lookup(a2, t2, durs, require)
         except Exception as e:
             dz = {'status': 'error', 'year': None, 'years': [], 'evidence': []}
             errs.append(f'dz_error: {type(e).__name__}: {e}'[:90])
@@ -430,7 +454,7 @@ def lookup(a, t, durs, pacer, alt=None, youtube=False, web=True):
                 errs.append(f'youtube_error: {ytv["error"]}'[:90])
         # Recherche web : CANDIDATS seulement (jamais un vote, cf. web_vote).
         if web:
-            wb = web_vote(a2, t2)
+            wb = web_vote(a2, t2, extra=remix_label or '')
             web_candidates |= set(wb.get('web_candidates') or [])
             if wb.get('web_proposed') and not web_proposed:
                 web_proposed = str(wb['web_proposed'])
@@ -463,6 +487,13 @@ def lookup(a, t, durs, pacer, alt=None, youtube=False, web=True):
             proposed = min(first_votes, key=int)
         elif year:
             proposed = year
+        elif require:
+            # EPIC-048 : REMIX dont aucune source ne nomme le remixeur. Les
+            # années restantes parlent de l'ORIGINAL (1990 pour un remix de
+            # 2004) — les proposer reviendrait à réécrire l'erreur signalée.
+            # Reste la piste web, cherchée AVEC le remixeur ; et si elle n'a pas
+            # de consensus, on ne propose RIEN (None) au lieu de proposer faux.
+            proposed = web_proposed
         elif numeric:
             proposed = str(numeric[0])
         rec = {
@@ -481,6 +512,9 @@ def lookup(a, t, durs, pacer, alt=None, youtube=False, web=True):
             rec['evidence'] = dz['evidence'][:2]
         if web_evidence:
             rec['web_evidence'] = web_evidence[:3]
+        if require:
+            # Tracé : on sait que cette conclusion a été gardée par le remixeur.
+            rec['required_remix'] = list(require)
         if errs:
             rec['errors'] = errs
         return rec
@@ -502,11 +536,16 @@ def run(max_seconds=None, youtube=False, web=True, only=None):
     if only == 'unresolved':
         todo = [k for k, r in done.items()
                 if k in keys and r.get('status') in ('single', 'conflict')]
+    elif only == 'remix':
+        # EPIC-048 : la garde remix change le résultat → on refait les seules
+        # clés dont le NOM porte un remixeur, tous millésimes du journal confondus.
+        seen = done_keys(0)
+        todo = [k for k in keys if keys[k].get('remix') and k in seen]
     else:
         todo = [k for k in keys if k not in done]
     print(f'fichiers={total} sans_annee={noyear} cles={len(keys)} '
           f'deja_faites={len(done)} a_traiter={len(todo)} '
-          f'youtube={youtube} web={web}', flush=True)
+          f'youtube={youtube} web={web} only={only}', flush=True)
     pacer = Pacer(1.05)
     with open(PROG, 'a') as out:
         for i, k in enumerate(todo):
@@ -515,7 +554,9 @@ def run(max_seconds=None, youtube=False, web=True, only=None):
                 return
             a, t = (k.split('\t')[0] or None), k.split('\t')[1]
             meta = keys[k]
-            res = lookup(a, t, meta['durs'], pacer, youtube=youtube, web=web)
+            res = lookup(a, t, meta['durs'], pacer, youtube=youtube, web=web,
+                         require=tuple(meta.get('remix') or ()),
+                         remix_label=meta.get('remix_label'))
             rec = {'key': k, 'artist': a, 'title': t, 'n_files': meta['n'], **res}
             out.write(json.dumps(rec, ensure_ascii=False) + '\n')
             out.flush()
@@ -603,51 +644,37 @@ def report():
             print(f'  {r["artist"] or "?"} — {r["title"]} : {r.get("mb_error") or r.get("dz_error")}')
 
 
-# Recherche web (EPIC-040) : source de DERNIER RECOURS, et elle ne vote JAMAIS.
-# Elle ne produit que des CANDIDATS affichés en revue — un extrait de page web
-# n'a pas le niveau de preuve d'une API de disques, et la règle des 2 sources ne
-# doit pas être contournée par un moteur de recherche. Token : BRAVE_API_KEY ou
-# data/search_token ; absent → source ignorée (comme Discogs sans token).
-BRAVE_URL = 'https://api.search.brave.com/res/v1/web/search'
+# Recherche web (EPIC-040, fournisseur remplacé en EPIC-049) : source de DERNIER
+# RECOURS, et elle ne vote JAMAIS. Elle ne produit que des CANDIDATS affichés en
+# revue — un extrait de page web n'a pas le niveau de preuve d'une API de
+# disques, et la règle des 2 sources ne doit pas être contournée par un moteur de
+# recherche. Le moteur est LOCAL (DuckDuckGo) : MCP `search` s'il tourne, sinon
+# l'endpoint HTML — aucune clé, aucun service payant (Brave est retiré).
 YEAR_RE = re.compile(r'\b(19[3-9]\d|20[0-4]\d)\b')
 
 
-def search_token():
-    tok = os.environ.get('BRAVE_API_KEY')
-    if tok:
-        return tok.strip()
-    try:
-        with open(os.path.join('data', 'search_token')) as f:
-            return f.read().strip()
-    except OSError:
-        return None
-
-
-def web_vote(a, t, timeout=10, limit=5):
-    """Recherche web → {status, web_candidates, web_proposed, evidence}.
-    Candidats = années vues dans les titres/descriptions/URLs des résultats.
+def web_vote(a, t, timeout=10, limit=5, extra=''):
+    """Recherche web → {status, web_candidates, web_proposed, evidence, provider}.
+    Candidats = années vues dans les titres/snippets/URLs des résultats.
     `web_proposed` n'est posé que si ≥ 2 résultats concordent (signal faible
-    assumé comme tel). Aucune année web n'entre dans `sources`."""
-    tok = search_token()
-    if not tok:
-        return {'status': 'skip', 'web_candidates': [], 'web_proposed': None,
-                'evidence': []}
-    q = f'{a + " " if a else ""}{t} release year discogs'
-    url = BRAVE_URL + '?' + urllib.parse.urlencode({'q': q, 'count': limit})
-    try:
-        req = urllib.request.Request(url, headers={
-            'Accept': 'application/json',
-            'X-Subscription-Token': tok,
-            'User-Agent': DZ_UA})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.load(r)
-    except Exception as e:
-        return {'status': 'error', 'web_candidates': [], 'web_proposed': None,
-                'evidence': [], 'error': f'{type(e).__name__}: {e}'[:90]}
-    hits = (data.get('web') or {}).get('results') or []
+    assumé comme tel). Aucune année web n'entre dans `sources` — c'est une
+    PISTE, jamais une preuve. Aucun fournisseur joignable → `error` renseigné
+    ("pas de réponse" n'est pas "pas de moteur").
+    `extra` (EPIC-048) = le crédit de remix : sans lui la requête porte sur
+    l'ORIGINAL, donc les résultats parlent de 1990 quand le fichier est un remix
+    de 2004 — la piste web confirmait l'année fausse au lieu de la contredire."""
+    q = f'{a + " " if a else ""}{t}{(" " + extra) if extra else ""} release year discogs'
+    res = web_search.search(q, limit=limit, timeout=timeout)
+    if not res['results']:
+        out = {'status': 'skip' if res['provider'] is None else 'none',
+               'web_candidates': [], 'web_proposed': None, 'evidence': [],
+               'provider': res['provider']}
+        if res.get('error'):
+            out['error'] = res['error']
+        return out
     counts, evidence = Counter(), []
-    for h in hits[:limit]:
-        blob = ' '.join(str(h.get(k) or '') for k in ('title', 'url', 'description'))
+    for h in res['results'][:limit]:
+        blob = ' '.join(str(h.get(k) or '') for k in ('title', 'url', 'snippet'))
         yrs = [y for y in YEAR_RE.findall(blob)]
         if yrs:
             counts[Counter(yrs).most_common(1)[0][0]] += 1
@@ -657,7 +684,7 @@ def web_vote(a, t, timeout=10, limit=5):
     web_proposed = candidates[0] if candidates and counts[candidates[0]] >= 2 else None
     return {'status': 'candidates' if candidates else 'none',
             'web_candidates': candidates, 'web_proposed': web_proposed,
-            'evidence': evidence[:3]}
+            'evidence': evidence[:3], 'provider': res['provider']}
 
 
 def youtube_vote(a, t, durs):
@@ -697,11 +724,14 @@ def discogs_vote(a, t, durs):
                 'error': f'{type(e).__name__}: {e}'[:90]}
 
 
-def probe(a, t, durs=None, youtube=False, web=True):
+def probe(a, t, durs=None, youtube=False, web=True, name=None):
     """Outil de diagnostic : un lookup complet sur une clé, record affiché.
-    `--probe='artiste|titre'` (+ `--durs=N` pour la garde durée, `--youtube`)."""
+    `--probe='artiste|titre'` (+ `--durs=N` pour la garde durée, `--youtube`).
+    `name` (nom de fichier) active la garde remix d'EPIC-048 comme en collecte."""
+    credit = remix_mod.remix_credit(name or f'{a} - {t}')
     rec = lookup(a or None, t, durs or set(), Pacer(1.05),
-                 youtube=youtube, web=web)
+                 youtube=youtube, web=web, require=tuple(credit['tokens']),
+                 remix_label=credit['label'] or None)
     print(json.dumps(rec, ensure_ascii=False, indent=2))
     return rec
 
@@ -714,8 +744,10 @@ if __name__ == '__main__':
         spec = next(x.split('=', 1)[1] for x in args if x.startswith('--probe='))
         artist, _, title = spec.partition('|')
         durs = {int(x.split('=', 1)[1]) for x in args if x.startswith('--durs=')}
+        fname = next((x.split('=', 1)[1] for x in args
+                      if x.startswith('--name=')), None)
         probe(artist.strip(), title.strip(), durs,
-              youtube='--youtube' in args, web='--no-web' not in args)
+              youtube='--youtube' in args, web='--no-web' not in args, name=fname)
     else:
         mx = None
         only = None

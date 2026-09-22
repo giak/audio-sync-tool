@@ -16,6 +16,7 @@ import { renderEpars } from './eparsUI.js';
 import { makeFileEl, makeFileTable } from './fileRow.js';
 import { ensureFilterChip, getFilterTerm, isFileFilter, updateFilterCount } from './filterChip.js';
 import { startSourceRatingEdit } from './ratingEdit.js';
+import { insertSourceStyleCell } from './styleCell.js';
 
 // ── Internal types ────────────────────────────────────────────────────────
 
@@ -26,6 +27,8 @@ interface FileEntry {
   duration: number | null;
   codec: string | null;
   baseDir: string;
+  /** Genre lu au scan (EPIC-046) — lu par la cellule Style de la ligne. */
+  genre?: string | null;
 }
 
 interface TreeAndDir {
@@ -189,7 +192,10 @@ function buildSourceChildren(
 
   if (!isFiltered) {
     const status: FileStatus = inPlaylistPaths ? 'nouveau' : 'doublon';
-    const fileTable = makeFileTable(true);
+    // EPIC-046 : 8ᵉ colonne « Style » — le fichier rangé DANS sa déclaration de
+    // style (dossier). Sans elle, l'écriture du tag à la copie (EPIC-043) et
+    // `g` sur un rangé étaient invisibles dans cette colonne.
+    const fileTable = makeFileTable(true, true);
     const tbody = fileTable.querySelector('tbody');
     const lowerTerm = fileTerm.toLowerCase();
     const entries = (node.__files__ || []) as FileEntry[];
@@ -213,6 +219,7 @@ function buildSourceChildren(
         const label = row.querySelector('.file');
         if (label) label.classList.add('in-playlist');
       }
+      insertSourceStyleCell(row, fullFilePath, { year: f.year, genre: f.genre });
       tbody?.appendChild(row);
     }
     if (tbody?.childElementCount) {
@@ -571,6 +578,10 @@ export function buildSourceTrees(files: typeof state.sourceFiles): { allTrees: T
         year: data.year,
         duration: data.duration,
         codec: data.codec,
+        // EPIC-046 : le genre lu au scan suit l'entrée — sans lui la cellule
+        // Style de la ligne ne pourrait afficher que « tag vide ». C'est le
+        // seul chemin où l'information pouvait se perdre entre l'index et le DOM.
+        genre: data.genre ?? null,
         baseDir: dirPath,
       } as FileEntry);
     }

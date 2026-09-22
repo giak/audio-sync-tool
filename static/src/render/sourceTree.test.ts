@@ -77,6 +77,7 @@ vi.mock('./cueEditor.js', () => ({ openCueEditor: vi.fn() }));
 
 import { ensureFilterChip, setFileFilter, setFilterTerm } from './filterChip.js';
 import {
+  buildSourceTrees,
   renderDirTree,
   renderSource,
   revealSourceDir,
@@ -783,5 +784,29 @@ describe('render/sourceTree', () => {
       expect(setActivePanel).not.toHaveBeenCalled();
       c.remove();
     });
+  });
+});
+
+// ── EPIC-046 : le genre suit l'entrée jusqu'au DOM ────────────────────────
+// Régression attrapée en live : la cellule Style de Source Data affichait
+// « techno_acid ? » (tag vide) pour un fichier dont le cache disait
+// `genre: "techno_acid"` — `buildSourceTrees` construisait ses entrées SANS le
+// genre, qui se perdait entre l'index et la ligne.
+describe('buildSourceTrees — le genre ne se perd pas (EPIC-046)', () => {
+  it('chaque entrée de dossier porte le genre lu au scan', () => {
+    const { allTrees } = buildSourceTrees({
+      '/src/style': {
+        'a.mp3': {
+          path: 'techno_acid_1990/a.mp3',
+          year: '1990',
+          duration: 200,
+          codec: 'MP3',
+          genre: 'techno_acid',
+        },
+        'b.mp3': { path: 'techno_acid_1990/b.mp3', year: null, duration: null, codec: null, genre: null },
+      },
+    });
+    const node = allTrees[0].tree.techno_acid_1990 as { __files__: Array<{ genre?: string | null }> };
+    expect(node.__files__.map(f => f.genre)).toEqual(['techno_acid', null]);
   });
 });

@@ -29,6 +29,8 @@ def clean_state(monkeypatch, tmp_path):
     monkeypatch.setattr('app.PLAYLISTS_PATH', str(tmp_path / 'playlists.json'))
     monkeypatch.setattr('app.RATINGS_PATH', str(tmp_path / 'ratings.json'))
     monkeypatch.setattr('app.BEATGRID_PATH', str(tmp_path / 'beatgrids.json'))
+    # EPIC-047 : dossiers retirés de l'index (🗑) — jamais écrit dans data/ réel.
+    monkeypatch.setattr('app.HIDDEN_DIRS_PATH', str(tmp_path / 'hidden_dirs.json'))
 
 
 @pytest.fixture
@@ -572,8 +574,9 @@ def test_scan_nonexistent_source_dir(client):
 
 @pytest.fixture
 def clean_extra_dirs(monkeypatch, tmp_path):
-    """Isolate data/extra_dirs.json in tmp_path for /mkdir tests."""
+    """Isolate data/extra_dirs.json (+ hidden_dirs.json, EPIC-047) for /mkdir tests."""
     monkeypatch.setattr('app.EXTRA_DIRS_PATH', str(tmp_path / 'extra_dirs.json'))
+    monkeypatch.setattr('app.HIDDEN_DIRS_PATH', str(tmp_path / 'hidden_dirs.json'))
 
 
 def test_mkdir_creates_root_dir_and_persists(client, clean_extra_dirs):
@@ -3693,3 +3696,131 @@ def test_year_audit_review_journal_restaure_par_le_script_undo(client, monkeypat
     monkeypatch.setattr(apply_years, 'JOURNAL', str(year_journal))
     apply_years.do_undo()
     assert apply_years.current_year(track) == '2024'
+
+
+# ── EPIC-047 : les dossiers de la racine, même vides ──────────────────────
+
+def test_indexed_source_dirs_sees_empty_folders(client, clean_extra_dirs):
+    """Un dossier SANS fichier audio est un style connu (mesure : 6 dossiers de
+    la collection manquaient à la palette, dont `breakbeat_2000`)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        os.makedirs(os.path.join(tmp, 'breakbeat_2000'))   # vide
+        os.makedirs(os.path.join(tmp, 'techno_acid_1990'))
+        open(os.path.join(tmp, 'techno_acid_1990', 'a.mp3'), 'w').close()
+        assert client.get('/load').json['extra_dirs'] == [
+            os.path.join(tmp, 'breakbeat_2000'), os.path.join(tmp, 'techno_acid_1990')]
+        assert {'breakbeat', 'techno_acid'} <= app_module._known_styles()
+
+
+def test_styles_apply_accepts_style_from_empty_folder(client):
+    """`POST /styles/apply` accepte un style qui n'existe que par un dossier
+    vide — palette et route lisent la même source (EPIC-047)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src, ep = os.path.join(tmp, 'source'), os.path.join(tmp, 'epars')
+        os.makedirs(os.path.join(src, 'breakbeat_2000'))
+        os.makedirs(ep)
+        song = os.path.join(ep, 'a.mp3')
+        make_tagged_mp3(song, year='2001')
+        client.post('/config', json=make_cfg(source_data=src, epars_dirs=[ep]))
+        rv = client.post('/styles/apply', json={'targets': [song], 'style': 'breakbeat'})
+        assert rv.status_code == 200 and rv.json['written'] == 1
+        assert get_audio_meta(song)[3] == 'breakbeat'
+
+
+def test_mkdir_delete_hides_a_disk_folder_and_resurrects_it(client, clean_extra_dirs):
+    """🗑 sur un dossier PRÉSENT sur le disque (pas créé via ➕) : il disparaît
+    de l'index, y compris au chargement suivant — sinon les dossiers vides
+    nouvellement affichés reviendraient sans fin."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client.post('/config', json=make_cfg(source_data=tmp))
+        target = os.path.join(tmp, 'house_1990')
+        os.makedirs(target)
+        assert client.get('/load').json['extra_dirs'] == [target]
+
+        rv = client.delete('/mkdir', json={'root': tmp, 'name': 'house_1990'})
+        assert rv.status_code == 200 and os.path.isdir(target)   # disque intact
+        assert client.get('/load').json['extra_dirs'] == []
+        assert client.get('/scan').json['extra_dirs'] == []
+
+        # ➕ sur le même nom → il redevient visible (le 🗑 n'est pas un mur).
+        assert client.post('/mkdir', json={'root': tmp, 'name': 'house_1990'}).status_code == 200
+        assert client.get('/load').json['extra_dirs'] == [target]
+
+
+# ── EPIC-050 : l'écriture met à jour l'index (le disque ET ce qu'on affiche) ──
+# Mesuré avant ce correctif : après `/styles/apply`, le DISQUE disait `house`
+# quand le CACHE disait `techno_hard` → après un rechargement, la cellule Style
+# reprenait l'ancienne valeur et `/styles/audit` continuait de compter le
+# fichier « à corriger ». Le disque est autoritaire ; l'index doit suivre.
+
+def _cache_entry(tmp_path, root, name):
+    cache = json.loads((tmp_path / 'cache.json').read_text())
+    return cache['source'][str(root)][name]
+
+
+def _cache_patch(tmp_path, side, root, name, **fields):
+    """Écrit un champ dans l'index du dernier scan (l'audit lit le FICHIER, donc
+    une copie en mémoire ne suffit pas)."""
+    path = tmp_path / 'cache.json'
+    cache = json.loads(path.read_text())
+    cache[side][str(root)][name].update(fields)
+    path.write_text(json.dumps(cache))
+
+
+def test_apply_style_met_a_jour_cache_et_audit(client, monkeypatch, tmp_path):
+    """`/styles/apply` (le chemin de `g`) répare l'index : le cache prend le
+    genre relu et l'aperçu d'alignement cesse de dire « à corriger »."""
+    _, _, ep = _apply_env(client, monkeypatch, tmp_path)
+    src = tmp_path / 'style'
+    track = src / 'techno_1990' / 'a.mp3'
+    make_tagged_mp3(track, genre='house')          # disque : genre divergent
+    # l'index du dernier scan dit la même chose que le disque (genre « house »
+    # dans un dossier qui déclare « techno ») : c'est l'état réel avant `g`.
+    _cache_patch(tmp_path, 'source', src, 'a.mp3', genre='house')
+
+    avant = client.get('/styles/audit').get_json()
+    assert avant['a_corriger'] == 1 and avant['alignes'] == 0
+
+    rv = client.post('/styles/apply',
+                     json={'targets': [str(track)], 'style': 'techno'})
+    assert rv.status_code == 200 and rv.get_json()['written'] == 1
+    assert rv.get_json()['cache_updated'] is True
+    assert _cache_entry(tmp_path, src, 'a.mp3')['genre'] == 'techno'
+
+    apres = client.get('/styles/audit').get_json()
+    assert apres['alignes'] == 1 and apres['a_corriger'] == 0
+    assert get_audio_meta(str(track))[3] == 'techno'      # le disque, pas le cache
+
+
+def test_apply_annee_met_a_jour_le_cache_mais_pas_le_genre(client, monkeypatch, tmp_path):
+    """Symétrique pour l'année : l'année suit dans le cache, le genre est intact."""
+    _, _, ep = _apply_env(client, monkeypatch, tmp_path)
+    src = tmp_path / 'style'
+    track = ep / 'hit.mp3'
+    make_tagged_mp3(track, year='1990', genre='techno')
+    monkeypatch.setattr('app.CACHE_PATH', str(tmp_path / 'cache.json'))
+    cache = json.loads((tmp_path / 'cache.json').read_text())
+    cache['epars'][str(ep)] = {'hit.mp3': {'path': 'hit.mp3', 'year': '1990',
+                                           'genre': 'techno'}}
+    (tmp_path / 'cache.json').write_text(json.dumps(cache))
+
+    rv = client.post('/years/apply', json={'targets': [str(track)], 'year': '1994'})
+    assert rv.status_code == 200 and rv.get_json()['cache_updated'] is True
+    entry = json.loads((tmp_path / 'cache.json').read_text())['epars'][str(ep)]['hit.mp3']
+    assert entry['year'] == '1994' and entry['genre'] == 'techno'
+    assert src  # garde le fixture vivant (racine source du monde de test)
+
+
+def test_apply_tag_rate_ne_touche_pas_le_cache(client, monkeypatch, tmp_path):
+    """Aucune écriture (fichier absent, style refusé) → aucun cache_updated :
+    l'index ne doit jamais raconter une écriture qui n'a pas eu lieu."""
+    _, _, _ = _apply_env(client, monkeypatch, tmp_path)
+    absent = tmp_path / 'epars' / 'fantome.mp3'
+
+    body = client.post('/styles/apply',
+                       json={'targets': [str(absent)], 'style': 'techno'}).get_json()
+    assert body['written'] == 0 and body['cache_updated'] is False
+    refus = client.post('/styles/apply',
+                        json={'targets': [str(absent)], 'style': 'pas_un_style'})
+    assert refus.status_code == 400

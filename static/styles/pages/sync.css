@@ -177,6 +177,9 @@ header h1 {
 .file-table.has-style col:nth-child(5) { width: 96px; }
 .file-table.has-style col:nth-child(6) { width: 110px; }
 .file-table.has-style col:nth-child(7) { width: 60px; }
+/* EPIC-046 — table SOURCE avec colonne « Style » (8 colonnes : play, nom, note,
+   année, STYLE, codec, durée, cues) : la 8ᵉ est le bouton Cues. */
+.file-table.has-style col:nth-child(8) { width: 54px; }
 .style-cell { text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .style-chip {
   display: inline-block;
@@ -195,6 +198,18 @@ header h1 {
 .style-chip.pending-year { border-style: dashed; opacity: 0.8; }
 .style-chip.suggested { border-style: dotted; opacity: 0.55; color: var(--text-secondary, #999); border-color: var(--text-secondary, #999); background: none; }
 .style-chip.written { color: var(--accent-green); border-color: var(--accent-green); background: color-mix(in srgb, var(--accent-green) 14%, transparent); }
+/* EPIC-046 — colonne Style de Source Data : le dossier est la référence.
+   `≠` (tag != dossier) reste en AMBRE — la couleur d'un chip de style dans
+   l'app — et `?` (tag vide) en tirets atténués : aucune couleur nouvelle. */
+.style-chip.divergent {
+  color: var(--amber);
+  border-style: solid;
+}
+.style-chip.missing {
+  border-style: dashed;
+  opacity: 0.7;
+  background: none;
+}
 
 /* EPIC-035/041 — palette « g » : popover clavier ancré à la ligne (couche DOM).
    Deux listes visibles d'un coup : tous les styles et toutes les années
@@ -207,7 +222,11 @@ header h1 {
   z-index: 1200;
   display: flex;
   flex-direction: column;
-  width: 560px;
+  /* EPIC-047 : la largeur est une FONCTION de la fenêtre (mesuré : 560 px fixes
+     = 22 % de l'écran à 2 560 px, 4 colonnes figées). Bornes : 560 px minimum
+     lisible, 1 180 px au-delà desquels une ligne de styles trop longue se lit
+     mal. */
+  width: clamp(560px, 44vw, 1180px);
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 24px);
   padding: 10px 12px;
@@ -217,7 +236,7 @@ header h1 {
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
   outline: none;
-  font-size: 12px;
+  font-size: 13px;
   overflow: hidden;
 }
 .style-palette .sp-title {
@@ -228,13 +247,14 @@ header h1 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Grille des styles : plafonnée à 45 % de la fenêtre, défilante au-delà (une
+/* Grille des styles (EPIC-047) : colonnes AUTO-FILL selon la largeur — plus de
+   4 colonnes figées. Plafonnée à 50 % de la fenêtre, défilante au-delà (une
    taxonomie très longue ne pousse jamais les années hors de l'écran). */
 .style-palette .sp-styles {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px 8px;
-  max-height: 45vh;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 4px 10px;
+  max-height: 50vh;
   overflow-y: auto;
   flex: 0 1 auto;
 }
@@ -255,23 +275,27 @@ header h1 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Le bouton de style seul : nom à gauche, volume à droite (EPIC-047). */
+.style-palette .sp-style {
+  justify-content: space-between;
+  padding: 3px 8px;
+}
 .style-palette .sp-style:hover,
 .style-palette .sp-year:hover { border-color: var(--amber); }
 .style-palette .sp-style.applied { color: var(--accent-green); border-color: var(--accent-green); }
-.style-palette kbd {
-  min-width: 16px;
-  padding: 0 4px;
-  border-radius: 3px;
-  background: var(--amber);
-  color: #000;
-  font-weight: 700;
-  text-align: center;
+/* Le nom porte le bouton, le volume le qualifie (le raccourci vit dans le
+   `title`) — plus de pavé de touche dans un bouton cliquable (EPIC-047). */
+.style-palette .sp-style-name { overflow: hidden; text-overflow: ellipsis; }
+.style-palette .sp-style-count {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 /* Les années : toute la plage, groupée par décennie (10 colonnes), TOUJOURS
    entièrement visible (jamais dans la zone défilante des styles). */
 .style-palette .sp-years {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
   gap: 2px 4px;
   margin-top: 8px;
   padding-top: 8px;

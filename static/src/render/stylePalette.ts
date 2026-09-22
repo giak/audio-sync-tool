@@ -29,12 +29,12 @@
 
 import { api } from '../api.js';
 import { setStatus } from '../core/feedback.js';
-import { byCountThenId } from '../core/format.js';
+import { byCountThenId, fmtCount } from '../core/format.js';
 import { focusItemByElement, navigateFocus } from '../focus.js';
 import { state } from '../state.js';
 import { parseArtistTitle, type Suggestion, suggestStyle } from '../styleSuggest.js';
 import { deriveHotkeys, findEparsEntry, type StyleChoice, trancheOf, yearOf } from '../styles.js';
-import { currentTaxonomy, refreshStyleCells, updateStyleRecap } from './styleCell.js';
+import { currentTaxonomy, refreshSourceStyleCells, refreshStyleCells, updateStyleRecap } from './styleCell.js';
 
 let _el: HTMLElement | null = null;
 let _targets: string[] = [];
@@ -133,30 +133,51 @@ function setYearLocally(fullpath: string, year: string): void {
 function setGenreLocally(fullpath: string, genre: string): void {
   const found = findEparsEntry(state.eparsFiles, fullpath)?.entry ?? findSourceEntry(fullpath);
   if (found) found.genre = genre;
+  // EPIC-046 : un `g` sur un fichier RANGÉ n'a pas de cellule côté épars — sans
+  // ce rafraîchissement, l'écriture du tag restait invisible (signalement
+  // « g ne met toujours pas à jour »).
+  refreshSourceStyleCells([fullpath]);
 }
 
-/** Écrit le style dans le tag (immédiat) — l'échec n'annule pas le choix de
- *  session (le rangement reste possible), il est signalé dans la barre d'état. */
-async function writeStyleTag(styleId: string): Promise<boolean> {
+/** Écrit le style dans le tag (immédiat) pour une liste de cibles — l'échec
+ *  n'annule pas le choix de session (le rangement reste possible), il est
+ *  signalé dans la barre d'état. Une seule requête : le serveur journalise et
+ *  remet l'index à jour (EPIC-050). */
+async function writeStyleTagFor(styleId: string, targets: string[]): Promise<boolean> {
+  if (targets.length === 0) return false;
   try {
     const res = await api<{
       ok: boolean;
       written: number;
       count: number;
-      results: Array<{ path: string; ok: boolean; error?: string }>;
-    }>('/styles/apply', { method: 'POST', body: JSON.stringify({ targets: _targets, style: styleId }) });
+      results: Array<{ path: string; ok: boolean; error?: string; old?: string | null }>;
+    }>('/styles/apply', { method: 'POST', body: JSON.stringify({ targets, style: styleId }) });
     for (const r of res.results ?? []) if (r.ok) setGenreLocally(r.path, styleId);
     const failed = (res.results ?? []).filter(r => !r.ok);
     if (failed.length) {
       setStatus(`⚠ style écrit sur ${res.written}/${res.count} — ${failed[0].error ?? 'échec'}`);
       return false;
     }
-    setStatus(`✓ style « ${styleId} » écrit dans le tag (${res.written} fichier${res.written > 1 ? 's' : ''})`);
+    setStatus(
+      `✓ style « ${styleId} » écrit dans le tag (${res.written} fichier${res.written > 1 ? 's' : ''}) — annuler : apply_styles.py --undo`,
+    );
     return true;
   } catch (err) {
     setStatus(`⚠ style non écrit : ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
+}
+
+function writeStyleTag(styleId: string): Promise<boolean> {
+  return writeStyleTagFor(styleId, _targets);
+}
+
+/** Un fichier RANGÉ est DANS sa déclaration de style : quand `g` tombe sur lui,
+ *  le dossier déclare et le tag suit — une frappe, aucun choix à faire (le clic
+ *  sur la cellule ouvre la palette pour choisir un AUTRE style). Renvoie false
+ *  si la cible est hors des racines Source Data connues. */
+export async function alignStyleToFolder(fullpath: string, style: string): Promise<boolean> {
+  return writeStyleTagFor(style, [fullpath]);
 }
 
 /** Écrit l'année dans le tag (immédiat). */
@@ -278,7 +299,7 @@ function refreshYearBufferHint(): void {
       ? `année saisie : ${_yearBuffer} — Entrée = écrire dans le tag · ⌫ = effacer`
       : _style
         ? `${_style} ✓ — tape 4 chiffres (1991) puis Entrée, ou clique une année`
-        : 'Lettre = style (écrit dans le tag) · 4 chiffres + Entrée = année · Échap = fermer',
+        : 'Clic = style (écrit dans le tag) · 4 chiffres + Entrée = année · Échap = fermer',
   );
 }
 
@@ -402,10 +423,18 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
     b.type = 'button';
     b.className = 'sp-style';
     b.dataset.style = def.id;
+    // EPIC-047 : plus de pavé de touche `<kbd>` dans un bouton CLIQUABLE — le
+    // bouton porte le style et son volume, la lettre reste un raccourci
+    // (documentée dans le pied et dans le title) qu'on n'a pas à deviner.
+    const name = document.createElement('span');
+    name.className = 'sp-style-name';
+    name.textContent = def.id;
+    const count = document.createElement('span');
+    count.className = 'sp-style-count';
+    count.textContent = fmtCount(def.count);
+    b.append(name, count);
     const k = hotkeys.get(def.id);
-    b.innerHTML = `<kbd>${k ?? '·'}</kbd> `;
-    b.appendChild(document.createTextNode(def.id));
-    b.title = `${def.count} fichier${def.count > 1 ? 's' : ''} rangé${def.count > 1 ? 's' : ''} — clic = style écrit dans le tag`;
+    b.title = `${def.count} fichier${def.count > 1 ? 's' : ''} rangé${def.count > 1 ? 's' : ''}${k ? ` · touche ${k}` : ''} — clic = style écrit dans le tag`;
     b.onclick = (ev: MouseEvent) => {
       ev.stopPropagation();
       void pick(def.id);
@@ -435,9 +464,9 @@ export function openStylePalette(targets: string[], anchor: HTMLElement): void {
   dest.className = 'sp-dest';
   if (_suggestion && _targets.length === 1) {
     const pct = Math.round(_suggestion.confidence * 100);
-    dest.textContent = `→ ${_suggestion.style} (${pct}%) — Entrée = accepter · Lettre = style · Échap = annuler`;
+    dest.textContent = `→ ${_suggestion.style} (${pct}%) — Entrée = accepter · Clic = style · Lettre = style · Échap = annuler`;
   } else {
-    dest.textContent = 'Lettre = style (écrit dans le tag) · 4 chiffres + Entrée = année · Échap = fermer';
+    dest.textContent = 'Clic = style (écrit dans le tag) · 4 chiffres + Entrée = année · Échap = fermer';
   }
   el.appendChild(dest);
 

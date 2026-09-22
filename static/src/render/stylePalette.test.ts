@@ -14,8 +14,15 @@ vi.mock('../focus.js', () => ({ focusItemByElement, navigateFocus }));
 const { api } = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../api.js', () => ({ api }));
 
-import { insertStyleCell } from './styleCell.js';
-import { closeStylePalette, isStylePaletteOpen, openStylePalette, YEAR_MAX, YEAR_MIN } from './stylePalette.js';
+import { insertSourceStyleCell, insertStyleCell } from './styleCell.js';
+import {
+  alignStyleToFolder,
+  closeStylePalette,
+  isStylePaletteOpen,
+  openStylePalette,
+  YEAR_MAX,
+  YEAR_MIN,
+} from './stylePalette.js';
 
 const ROOT = '/src/style/';
 const EPARS = '/media/epars';
@@ -116,10 +123,16 @@ describe('render/stylePalette', () => {
     document.removeEventListener('keydown', docSpy);
   });
 
-  it('montre TOUT : tous les styles avec hotkey ET toute la plage d’années', () => {
+  it('montre TOUT : tous les styles (nom + volume) ET toute la plage d’années', () => {
     openStylePalette([A], rowA);
-    const labels = [...palette().querySelectorAll('.sp-style')].map(b => b.textContent);
-    expect(labels).toEqual(['t techno', 'a techno_acid', 'h hardcore', 'i italo_disco']);
+    const labels = [...palette().querySelectorAll('.sp-style')].map(
+      b => (b.querySelector('.sp-style-name') as HTMLElement).textContent,
+    );
+    expect(labels).toEqual(['techno', 'techno_acid', 'hardcore', 'italo_disco']);
+    // EPIC-047 : plus de pavé de touche dans un bouton cliquable — le raccourci
+    // reste actif, il vit dans le title (« touche t »).
+    expect(palette().querySelector('.sp-style kbd')).toBeNull();
+    expect(palette().querySelector('.sp-style')?.getAttribute('title')).toContain('touche t');
     const years = [...palette().querySelectorAll('.sp-year')].map(b => b.textContent);
     expect(years.length).toBe(YEAR_MAX - YEAR_MIN + 1);
     expect(years[0]).toBe(String(YEAR_MIN));
@@ -307,5 +320,41 @@ describe('render/stylePalette', () => {
     expect(lastCall('/styles/apply')?.[1]?.body).toBe(JSON.stringify({ targets: [A], style: 'techno' }));
     await vi.waitFor(() => expect(palette()).toBeNull());
     expect(state.styleChoices.get(A)).toEqual({ style: 'techno', tranche: 1990 });
+  });
+
+  // ── EPIC-050 : `g` sur un RANGÉ = alignement sur le dossier, sans palette ──
+
+  it('alignStyleToFolder : écrit le style du dossier, marque la cellule ✓ et annonce l’annulation', async () => {
+    // La ligne Source Data porte la cellule DÉDIÉE (`.source-style-cell`), celle
+    // dont la référence est le dossier — c'est elle que l'utilisateur regardait
+    // quand il disait « ça ne met toujours pas à jour ».
+    const cellRow = row(S, '2024');
+    cellRow.querySelector('.style-cell')?.remove();
+    insertSourceStyleCell(cellRow, S, { year: '2024', genre: 'house' });
+    document.getElementById('tbs')!.append(cellRow);
+    const chip = () => cellRow.querySelector('.source-style-cell .style-chip');
+    expect(chip()?.textContent).toContain('≠'); // disque ≠ dossier
+
+    await alignStyleToFolder(S, 'techno');
+    expect(lastCall('/styles/apply')?.[1]?.body).toBe(JSON.stringify({ targets: [S], style: 'techno' }));
+    expect(state.sourceFiles[ROOT]['techno_1990-0.mp3'].genre).toBe('techno');
+    expect(chip()?.className).toContain('written');
+    expect(chip()?.textContent).toContain('✓ techno');
+    expect(document.getElementById('status-text')?.textContent).toContain('apply_styles.py --undo');
+    expect(state.styleChoices.size).toBe(0); // rien à planifier : déjà rangé
+  });
+
+  it('alignStyleToFolder : échec du serveur → rien de marqué, le statut le dit', async () => {
+    const cellRow = row(S, '2024');
+    cellRow.querySelector('.style-cell')?.remove();
+    insertSourceStyleCell(cellRow, S, { year: '2024', genre: 'house' });
+    document.getElementById('tbs')!.append(cellRow);
+
+    api.mockImplementationOnce(() =>
+      Promise.resolve({ ok: false, written: 0, count: 1, results: [{ path: S, ok: false, error: 'fichier absent' }] }),
+    );
+    await alignStyleToFolder(S, 'techno');
+    expect(document.getElementById('status-text')?.textContent).toContain('fichier absent');
+    expect(cellRow.querySelector('.source-style-cell .style-chip')?.className).not.toContain('written');
   });
 });

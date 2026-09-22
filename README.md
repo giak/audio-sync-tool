@@ -301,10 +301,20 @@ temps (`italo_disco`). La **taxonomie est dérivée des dossiers existants**
 se déduit de l'année du tag, le dossier cible est calculé.
 
 1. **G** sur la ligne surlignée — **Éparpillé ou Source Data** (un fichier prime
-   sur un dossier, le panneau actif arbitre) → la palette s'ouvre : **lettre** =
-   style, **4 chiffres** = année, **Entrée** = accepter la suggestion locale.
-   La grille des styles est défilante et **les 57 années réelles (1970→2026)**
-   sont toujours proposées en entier.
+   sur un dossier, le panneau actif arbitre) :
+   - **fichier rangé** (Source Data) → le dossier **déclare** le style, donc `G`
+     l'écrit dans le tag tout de suite, en **une frappe** (EPIC-050) : il n'y a
+     rien à choisir. Le **clic** sur la cellule Style ouvre la palette, pour un
+     *autre* style ; un dossier hors grammaire (`_trash`, `2008_08`) n'écrit
+     rien et ouvre la palette ;
+   - **fichier épars** → la palette s'ouvre : **clic** (ou lettre) = style,
+     **4 chiffres** = année, **Entrée** = accepter la suggestion locale.
+   La palette propose les styles **des dossiers du disque** — un dossier encore
+   **vide** est une déclaration de style (`breakbeat_2000` est proposé, et
+   `/styles/apply` l'accepte, même sans fichier dedans) — et s'adapte à l'écran
+   (`clamp(560px, 44vw, 1180px)` : 44 % de la largeur à 2 560 px, colonnes
+   `auto-fill`, **0** pavé de touche `<kbd>` dans un bouton cliquable).
+   **Les 57 années réelles (1970→2026)** sont toujours proposées en entier.
 2. **Le tag est écrit immédiatement** — `TCON`/`GENRE`/`©gen` pour le style,
    `TDRC`/`TYER`/`DATE`/`©day` pour l'année — via `POST /styles/apply` et
    `POST /years/apply` (validation → confinement aux racines configurées →
@@ -326,6 +336,14 @@ ID3 aliasé (0,15) — suggestion retenue si la confiance ≥ 0,30) et la destin
 tooltip (`→ techno_acid_1990`, `→ ➕ … (sera créé)`, `année manquante`).
 Le filtre de la colonne gauche matche aussi le **sous-dossier** épars
 (`_techno`, `2008_08`).
+
+La colonne **Source Data** a sa **propre** cellule « Style » (EPIC-046) : sa
+référence n'est pas un choix de session mais **le dossier** — un fichier rangé
+est *dans* sa déclaration de style. Elle affiche `✓ techno_acid` (tag et dossier
+d'accord), `techno_acid ≠` (divergence, ambre, `G` corrige) ou `techno_acid ?`
+(tag vide) ; un dossier hors grammaire la laisse **vide** (aucune cible
+inventée). Elle est rafraîchie par chaque écriture (copie F5, `G`, alignement),
+donc ce qu'elle montre est ce que le disque dit.
 
 4. **F5 (et tout ce qui copie) écrit le style aussi** — le nom du dossier de
    destination est la déclaration de style, donc une copie vers `techno_acid_1990`
@@ -355,9 +373,21 @@ journal (`--undo`), pas une annulation dans la palette (Échap annule *avant*
 clé) → Discogs (60 req/min, token dans `data/discogs_token`, git-ignoré chmod 600).
 Les résultats sont **mis en cache** (`data/year_cache.jsonl`, `data/discogs_cache.jsonl`,
 `data/itunes_cache.jsonl`, `data/discogs_reform_cache.jsonl`, `data/discogs_reform2_cache.jsonl`,
-`data/beatport_cache.jsonl`, `data/youtube_topic_cache.jsonl` — git-ignorés) : les clés déjà
+`data/youtube_topic_cache.jsonl` — git-ignorés) : les clés déjà
 collectées ne sont **jamais re-interrogées** ; une relance de collecte ne traite que
 l'incrément (reprise JSONL, erreurs re-jetables).
+
+**Un remix doit PROUVER son remixeur (EPIC-048, moteur v3)** : `artist_title()` retire les
+segments parenthésés et `NOISE` effaçait `mix`/`remix`/`edit` **avant** la recherche — la version
+de remix devenait invisible au lieu d'être vérifiée. Conséquence mesurée :
+`age of love - the age of love (cosmic gate mix)(tasnoise).mp3` concluait **1990**, l'année de
+l'**original**, pour un remix de 2004. Le crédit est maintenant lu (`scripts/remix_credit.py` :
+le PREMIER segment qui **nomme quelqu'un** — `(cosmic gate mix)`, jamais `(tasnoise)` ; un
+« Extended Mix » n'est personne), et MusicBrainz comme Deezer doivent **nommer le remixeur** pour
+compter. Sans source nommante : **aucune année n'est écrite**, la suggestion vient de la piste
+web cherchée **avec** le remixeur, et s'il n'y a pas de consensus, il n'y a **pas de
+suggestion** (on ne propose pas l'année de l'original). Le moteur passe en **v3** :
+`--only=remix` re-collecte les seules clés dont le nom porte un remixeur.
 
 **Règle de corroboration (EPIC-040)** : aucune année n'est écrite sur la foi d'une seule
 source quand elle contredit les autres. La clé artiste/titre est construite en orientations
@@ -381,7 +411,7 @@ l'année tout de suite (journal partagé, `source: "audit:revue"` → `apply_yea
 (« Corriger les 38 proposées » / « Garder les 46 ») passent par un dialogue qui dit ce qu'il va
 écrire. Le disque reste autoritaire (déjà au bon millésime → aucune réécriture, aucune ligne de
 journal) et un échec est nommé sans interrompre le lot. Les **339 non vérifiées** sont seulement
-comptées par classe : rien à trancher sans nouvelles sources (re-collecte v2).
+comptées par classe : rien à trancher sans nouvelles sources.
 
 **État au 2026-09-18 — EPIC-033 clôturée** : vague « certaines » **appliquée** (1 349 écritures
 OK, journal = backup `data/year_apply_journal.jsonl`, `--undo` idempotent) — consolidation
@@ -401,12 +431,23 @@ fichier avant de trancher (player global, état conservé à travers les re-rend
 consolidation, journal + `--undo` inchangés. **Aucune écriture ne part de l'interface** hors
 les routes `/years/apply` et `/styles/apply` décrites plus haut.
 
-**Passe Beatport** (techno digitale 2004+, complément des sources vinyle) : Beatport
-n'ouvre pas la création d'apps OAuth au public — méthode éprouvée (celle de beets-beatport4) :
-ouvrir https://api.beatport.com/v4/docs/, onglet Réseau (F12), « Login with Beatport », puis
-copier la réponse JSON du POST `/v4/auth/o/token/` dans `data/beatport_token.json`
-(chmod 600, git-ignoré). Le token expire (~1 h) : recommencer la copie quand le script le
-demande.
+**Passe Beatport — retirée du pipeline (EPIC-049)** : elle n'a **jamais tourné**
+(`data/beatport_cache.jsonl` n'a jamais existé, aucun tag ne vient d'elle) et son
+token devait être recopié à la main toutes les heures depuis l'onglet Réseau du
+portail — friction refusée deux fois. Elle était annoncée dans l'ordre de priorité
+comme une source active : elle n'en était pas une. `scripts/collect_beatport.py` et
+ses tests sont supprimés, et l'app ne la lit plus.
+
+**Recherche web — locale et gratuite (EPIC-049)** : l'ancien provider (Brave,
+`BRAVE_API_KEY`) était **payant et jamais configuré** : il ne produisait rien.
+Le moteur interroge désormais le **DuckDuckGo local** (serveur MCP `search`,
+`http://localhost:8010/mcp` — `data/search_mcp.json` ou `SEARCH_MCP_URL` pour le
+changer) avec repli sur l'endpoint HTML public, **sans clé ni compte**.
+`GET /years/web-status` **sonde** le provider (1 s) et la vue Années peut dire
+« recherche web indisponible » au lieu de laisser croire qu'elle l'est. Les
+années trouvées par le web restent des **candidats** (`web_candidates`) : elles
+ne votent jamais — la règle des 2 sources ne se contourne pas avec un moteur de
+recherche.
 
 ```bash
 # Collecte (incrémentale — inutile tant qu'aucun nouveau fichier n'arrive)
@@ -415,8 +456,12 @@ demande.
 ./venv/bin/python scripts/collect_itunes.py --report       # iTunes sans clé (~20 req/min)
 ./venv/bin/python scripts/collect_discogs_reform.py        # Discogs requêtes reformulées
 ./venv/bin/python scripts/collect_discogs_reform2.py --go  # junk-artiste numérique (aperçu sans --go)
-./venv/bin/python scripts/collect_beatport.py              # Beatport (token portail requis)
 ./venv/bin/python scripts/collect_youtube_topic.py         # YouTube « - Topic » (0/84, relançable)
+./venv/bin/python scripts/collect_years.py --only=remix    # re-collecte des SEULES clés de remix
+
+# Diagnostic d'une clé (réseau réel, record complet)
+./venv/bin/python scripts/collect_years.py "--probe=age of love|the age of love" \
+  "--name=age of love - the age of love (cosmic gate mix)(tasnoise).mp3"
 
 # Rapport consolidé (toutes sources, sans double comptage)
 ./venv/bin/python scripts/report_years.py --files
@@ -461,10 +506,23 @@ L'audit des années déjà écrites a traité son premier cas (Phantasia « Inne
 par Deezer → **1991** sur corroboration Discogs, journal `audit:deezer+discogs`, `--undo`
 disponible) puis a été **exécuté en entier** (408 entrées : 23 confirmées / **38 contredites** /
 8 à revoir / 339 non vérifiées) — ces 46 cas sont maintenant **tranchables dans la vue Années**
-(section ⟲, EPIC-045), aucune correction automatique n'a été appliquée. La **re-collecte
-moteur v2** (EPIC-040 🟡) est engagée à ~30 % : 1 464 clés re-collectées, 3 331 en v1
-volontairement ignorées — c'est elle qui produira des propositions pour les **1 555 fichiers
-sans année**.
+(section ⟲, EPIC-045), aucune correction automatique n'a été appliquée.
+
+**La re-collecte moteur n'est pas « à 30 % » : elle est TERMINÉE, et son rendement est nul.**
+Mesure (2026-09-22) : les 1 555 fichiers sans année font **1 448 clés uniques**, **toutes**
+interrogées (0 restante) → **1 416 `none`** (aucune source ne connaît le morceau), 29 `single`,
+15 `ambiguous`, 3 `conflict`, **1 `found`**. Les 3 331 lignes « v1 » du cache sont la passe
+d'**avant** EPIC-040 sur des clés **depuis résolues** : les compter comme du travail restant
+était une erreur de lecture (lignes ≠ clés).
+
+**La vraie cause du chiffre, elle, est structurelle et non corrigée** : `load_keys()` construit
+la clé de recherche **depuis le nom de fichier**, alors que la fonction qui lit les tags existe
+(`tags_artist_title()`, utilisée par `--probe` et par l'audit). Sur les 1 555 fichiers sans
+année, **1 204** portent artiste **et** titre dans leurs tags et **1 102 (71 %)** ont une clé
+de tags **jamais interrogée** — et ce ne sont pas des nuances de casse : `Gb - Maddix, Fēlēs -
+My Gasoline (Extended Mix).mp3` donne `gb / my gasoline (extended mix)` par le nom contre
+`maddix / …` par les tags. C'est le prochain chantier, borné (~1 100 clés ≈ 1 h, reprenable,
+additionnel) et mesurable (combien des 1 102 se résolvent).
 
 Historique complet, chiffres détaillés et bilan de clôture : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md)
 · corroboration : [EPIC-040](docs/superpowers/epics/EPIC-040-annees-corroboration-2-sources.md).
@@ -520,7 +578,10 @@ Routes REST principales : `/config`, `/scan`, `/scan-progress`, `/load`, `/ping`
 déjà écrites), plus `/copy` (F5 écrit le style du dossier cible). Toutes suivent la même
 grammaire (validation → confinement aux racines configurées → journal `old` → écriture →
 **relecture**) et le **même journal** que les scripts : `apply_years.py --undo` et
-`apply_styles.py --undo` annulent aussi ces écritures. `/years/audit` et `/styles/audit`
+`apply_styles.py --undo` annulent aussi ces écritures. Depuis EPIC-050, **l'écriture remet
+l'index à jour** dans la même requête (le cache de scan prend la valeur relue ; la réponse
+porte `cache_updated`) : sans cela, l'écran resservait la valeur d'avant au rechargement et
+`/styles/audit` continuait de compter un cas déjà corrigé. `/years/audit` et `/styles/audit`
 sont les deux vues d'aperçu, en **lecture seule**.
 
 ## Développement
@@ -586,8 +647,11 @@ focus), `proof_filter_chip.py`, `proof_style_palette.py` (tags relus **sur disqu
   1 492 introuvables (6 non parsables) et `apply_years.py` en dry-run ne trouve **0 candidat**.
   L'audit des années déjà écrites est **exécuté** (408 entrées · 38 contredites · 8 à revoir) et
   **tranchable** dans la vue Années (section ⟲, EPIC-045) — les corrections ne partent que d'un
-  clic, jamais en lot automatique. La re-collecte moteur v2 est **engagée à ~30 %** (EPIC-040 🟡) ;
-  les années « à revue » non tranchées restent hors application automatique.
+  clic, jamais en lot automatique. La re-collecte moteur est **terminée** (1 448 clés, 0
+  restante) avec un rendement quasi nul (1 416 `none`, **1** `found`) ; le gisement suivant est
+  la clé construite depuis les **tags** (1 102 clés jamais interrogées sur les 1 555 fichiers
+  sans année — non corrigé à ce jour) ; les années « à revue » non tranchées restent hors
+  application automatique.
 - **`data/` en JSON** : config, journal, caches, playlists, ratings, beatgrids, journaux
   d'écriture (`year_apply_journal.jsonl`, `style_apply_journal.jsonl` — créés à la première
   écriture). Jamais supprimés par l'outil ; le trash (`<source>/_trash/<date>/`) remplace
@@ -609,7 +673,15 @@ des vérifications de harnais),
 **043** (F5 range **et** tague : le style du dossier cible est écrit sur l'épars et
 sur la copie, journal partagé des scripts, année jamais touchée),
 **044** (le stock de genres rejoint l'arborescence : aperçu, deux modes, disque
-autoritaire, `--undo`).
+autoritaire, `--undo`),
+**045** (l'audit des années écrites a une surface : section ⟲, corriger/garder, `--undo`),
+**046** (le style se lit des deux côtés : colonne Style côté Source Data, référence = le dossier),
+**047** (palette complète — dossiers vides du disque — et à l'échelle de l'écran, plus de `<kbd>`),
+**048** (un remix ne date pas de l'original : le remixeur doit être nommé par la source ; la
+piste web le cherche avec lui),
+**049** (recherche web **locale** DuckDuckGo sans clé, Brave et Beatport retirés du pipeline),
+**050** (l'écriture met l'index à jour, les slashes de racine sont pliés, `G` sur un rangé écrit
+le style de son dossier).
 
 ## Architecture
 

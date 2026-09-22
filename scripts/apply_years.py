@@ -57,7 +57,7 @@ DG_CACHE = os.path.join(ROOT, 'data', 'discogs_cache.jsonl')
 IT_CACHE = os.path.join(ROOT, 'data', 'itunes_cache.jsonl')
 RF_CACHE = os.path.join(ROOT, 'data', 'discogs_reform_cache.jsonl')
 RF2_CACHE = os.path.join(ROOT, 'data', 'discogs_reform2_cache.jsonl')
-BP_CACHE = os.path.join(ROOT, 'data', 'beatport_cache.jsonl')
+
 YT_CACHE = os.path.join(ROOT, 'data', 'youtube_topic_cache.jsonl')
 REVIEW_PATH = os.path.join(ROOT, 'data', 'year_review.json')
 JOURNAL = os.path.join(ROOT, 'data', 'year_apply_journal.jsonl')
@@ -112,7 +112,7 @@ def current_year(path):
 PROVIDER_OF = {
     'musicbrainz': 'musicbrainz', 'deezer': 'deezer', 'discogs': 'discogs',
     'discogs_strict': 'discogs', 'reform_strict': 'discogs',
-    'reform2_strict': 'discogs', 'beatport_strict': 'beatport',
+    'reform2_strict': 'discogs',
     'youtube_topic_strict': 'youtube', 'itunes': 'itunes',
 }
 
@@ -122,7 +122,7 @@ def load_votes():
 
     Sources : `year_cache.jsonl` v≥2 (votes nommés par le moteur corrigé) puis
     les pools d'appoint (discogs_cache, iTunes, reform/reform2 → discogs,
-    Beatport, YouTube). Les enregistrements **v1** de year_cache — première
+    YouTube — Beatport retiré, EPIC-049). Les enregistrements **v1** de year_cache — première
     passe, sans garde artiste/titre sur Deezer et une seule source pour
     conclure — sont ignorés : ils doivent être re-collectés (EPIC-040).
     """
@@ -151,7 +151,6 @@ def load_votes():
     for path, provider in ((DG_CACHE, 'discogs'), (IT_CACHE, 'itunes'),
                            (RF_CACHE, 'reform_strict'),
                            (RF2_CACHE, 'reform2_strict'),
-                           (BP_CACHE, 'beatport_strict'),
                            (YT_CACHE, 'youtube_topic_strict')):
         try:
             f = open(path)

@@ -279,6 +279,12 @@ describe('makeFileTable (colgroup fixe)', () => {
     expect(source.className).toBe('file-table');
   });
 
+  it('withStyleCol + Cues (EPIC-046, Source Data) : 8 colonnes + has-style', () => {
+    const t = makeFileTable(true, true);
+    expect(t.querySelectorAll('col').length).toBe(8);
+    expect(t.classList.contains('has-style')).toBe(true);
+  });
+
   it('withStyleCol (EPIC-035, épars) : 7 colonnes + classe has-style', () => {
     const t = makeFileTable(false, true);
     expect(t.querySelectorAll('col').length).toBe(7);

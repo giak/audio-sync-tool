@@ -109,10 +109,11 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(apply_years, 'IT_CACHE', str(tmp_path / 'itunes_cache.jsonl'))
     monkeypatch.setattr(apply_years, 'RF_CACHE', str(tmp_path / 'discogs_reform_cache.jsonl'))
     monkeypatch.setattr(apply_years, 'RF2_CACHE', str(tmp_path / 'discogs_reform2_cache.jsonl'))
-    monkeypatch.setattr(apply_years, 'BP_CACHE', str(tmp_path / 'beatport_cache.jsonl'))
+    # YouTube : 5ᵉ pool d'appoint depuis le retrait de Beatport (EPIC-049).
+    monkeypatch.setattr(apply_years, 'YT_CACHE', str(tmp_path / 'youtube_topic_cache.jsonl'))
     monkeypatch.setattr(apply_years, 'REVIEW_PATH', str(tmp_path / 'year_review.json'))
     for p in ('itunes_cache.jsonl', 'discogs_reform_cache.jsonl',
-              'beatport_cache.jsonl'):
+              'youtube_topic_cache.jsonl'):
         (tmp_path / p).write_text('')
     # iTunes corrobore t3 (discogs_strict 2001) : 2 providers indépendants.
     (tmp_path / 'itunes_cache.jsonl').write_text(
@@ -166,9 +167,9 @@ def test_pools_comptent_une_voix_par_provider(env):
     assert '\tseul_reform' not in apply_years.load_found()
 
     # désaccord entre providers : jamais écrit (revue)
-    with open(tmp_path / 'beatport_cache.jsonl', 'w') as f:
+    with open(tmp_path / 'youtube_topic_cache.jsonl', 'w') as f:
         f.write(json.dumps({'key': '\tnouveau_it', 'status': 'found',
-                            'year': '2001', 'source': 'beatport_strict'}) + '\n')
+                            'year': '2001', 'source': 'youtube_topic_strict'}) + '\n')
     assert '\tnouveau_it' not in apply_years.load_found()
 
 

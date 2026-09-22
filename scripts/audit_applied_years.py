@@ -40,7 +40,7 @@ AUDIT_PATH = os.path.join(ROOT, 'data', 'year_audit.json')
 # Sources dont l'année est la date de l'ÉDITION matchée (donc suspecte d'être une
 # réédition) : ce sont celles à re-vérifier. Les sources « première sortie »
 # (musicbrainz, discogs) ne sont pas auditées ici.
-EDITION_SOURCES = ('deezer', 'itunes', 'beatport_strict', 'youtube_topic_strict',
+EDITION_SOURCES = ('deezer', 'itunes', 'youtube_topic_strict',
                    'reform_strict', 'reform2_strict')
 FIRST_SOURCES = ('musicbrainz', 'discogs')
 

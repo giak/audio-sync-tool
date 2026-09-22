@@ -136,8 +136,8 @@ def test_deezer_ignore_une_duree_trop_differente(monkeypatch):
 # ─── 3. règle des 2 providers indépendants concordants ─────────────────────
 
 def _stub_sources(monkeypatch, mb=('none', None, []), dz=None, dg=None):
-    monkeypatch.setattr(cy, 'mb_lookup', lambda a, t, d, p: mb)
-    monkeypatch.setattr(cy, 'dz_lookup', lambda a, t, d: dz or
+    monkeypatch.setattr(cy, 'mb_lookup', lambda a, t, d, p, req=(): mb)
+    monkeypatch.setattr(cy, 'dz_lookup', lambda a, t, d, req=(): dz or
                         {'status': 'none', 'year': None, 'years': [], 'evidence': []})
     monkeypatch.setattr(cy, 'discogs_vote', lambda a, t, d: dg or
                         {'status': 'none', 'year': None, 'years': []})
@@ -150,7 +150,7 @@ def test_regression_phantasia_2024_ne_conclut_pas(monkeypatch):
     def mb(a, t, d, p):
         return ('none', None, [])
 
-    def dz(a, t, d):
+    def dz(a, t, d, require=()):
         # seul l'ordre (artiste, titre) a un sens pour Deezer
         if (a, t) == ('phantasia', 'inner light'):
             return {'status': 'found', 'year': '2024', 'years': ['2024'],
@@ -174,14 +174,13 @@ def test_regression_phantasia_2024_ne_conclut_pas(monkeypatch):
     assert rec['sources'] == {'deezer': '2024', 'discogs': '1991'}
     assert rec['classes'] == {'deezer': 'edition', 'discogs': 'first'}
     assert rec['variant'] == 'inverse'          # l'orientation a été auto-corrigée
-    assert rec['v'] == 2
+    assert rec['v'] == cy.ENGINE_VERSION
 
 
 def test_deux_sources_concordantes_ecrivent(monkeypatch):
     _stub_sources(monkeypatch, mb=('found', '1991', ['1991']))
-    monkeypatch.setattr(cy, 'discogs_vote',
-                        lambda a, t, d: {'status': 'found', 'year': '1991',
-                                         'years': ['1991']})
+    monkeypatch.setattr(cy, 'discogs_vote',                        lambda a, t, d, req=(): {'status': 'found', 'year': '1991',
+                                                 'years': ['1991']})
     rec = cy.lookup('phantasia', 'inner light', set(), cy.Pacer(0))
     assert rec['status'] == 'found' and rec['year'] == '1991'
     assert rec['source'] == 'discogs+musicbrainz'
@@ -191,7 +190,7 @@ def test_deux_sources_concordantes_ecrivent(monkeypatch):
 def test_une_seule_source_ne_conclut_pas(monkeypatch):
     _stub_sources(monkeypatch, mb=('none', None, []))
     monkeypatch.setattr(cy, 'dz_lookup',
-                        lambda a, t, d: {'status': 'found', 'year': '2024',
+                        lambda a, t, d, req=(): {'status': 'found', 'year': '2024',
                                          'years': ['2024'], 'evidence': []})
     rec = cy.lookup('phantasia', 'inner light', set(), cy.Pacer(0))
     assert rec['status'] == 'single' and rec['year'] == '2024'
@@ -221,26 +220,118 @@ class _FakeResp:
         return False
 
 
+def _stub_web(monkeypatch, results, provider='html', error=None):
+    """Fournisseur de recherche remplacé : AUCUN réseau dans les tests."""
+    monkeypatch.setattr(cy.web_search, 'search',
+                        lambda q, limit=5, timeout=10, fetch=None: {
+                            'results': results, 'provider': provider, 'error': error})
+
+
 def test_web_vote_extrait_des_candidats(monkeypatch):
-    monkeypatch.setattr(cy, 'search_token', lambda: 'jeton')
-    payload = {'web': {'results': [
+    """EPIC-049 : le moteur est LOCAL (DuckDuckGo) et ne produit que des
+    candidats — deux résultats concordants font un `web_proposed`, jamais un vote."""
+    _stub_web(monkeypatch, [
         {'title': 'Phantasia - Inner Light (1991) Discogs',
-         'url': 'https://www.discogs.com/release/x',
-         'description': 'released April 1991'},
+         'url': 'https://www.discogs.com/release/x', 'snippet': 'released April 1991'},
         {'title': 'Phantasia - Inner Light [1991]',
-         'url': 'https://www.youtube.com/watch?v=y',
-         'description': 'R&S 1991'},
-    ]}}
-    monkeypatch.setattr(cy.urllib.request, 'urlopen', lambda *a, **k: _FakeResp(payload))
+         'url': 'https://www.youtube.com/watch?v=y', 'snippet': 'R&S 1991'},
+    ])
     rec = cy.web_vote('phantasia', 'inner light')
     assert rec['web_candidates'] == ['1991']
     assert rec['web_proposed'] == '1991'      # ≥ 2 résultats concordants
     assert rec['status'] == 'candidates'
+    assert rec['provider'] == 'html'
 
 
-def test_web_vote_sans_token_est_ignore(monkeypatch):
-    monkeypatch.setattr(cy, 'search_token', lambda: None)
-    assert cy.web_vote('a', 'b')['status'] == 'skip'
+def test_web_vote_sans_fournisseur_est_ignore(monkeypatch):
+    """Aucun moteur joignable → statut `skip` ET la raison remonte (un
+    fournisseur muet se déclare : « pas de réponse » ≠ « pas de moteur »)."""
+    _stub_web(monkeypatch, [], provider=None,
+              error='mcp: URLError · html: page anti-robot (202/anomaly)')
+    rec = cy.web_vote('a', 'b')
+    assert rec['status'] == 'skip'
+    assert rec['web_candidates'] == []
+    assert 'anti-robot' in rec['error']
+
+
+def test_collect_years_ne_reference_plus_brave():
+    """Brave Search (payant) est RETIRÉ : aucun résidu dans le moteur."""
+    with open(cy.__file__) as f:
+        src = f.read()
+    assert 'BRAVE' not in src and 'brave' not in src
+    assert not hasattr(cy, 'search_token')
+
+
+# ─── 4bis. EPIC-048 : un remix ne date pas de l'original ──────────────────
+
+def _mb_payload(*records):
+    """Réponse MusicBrainz minimale pour `mb_lookup` (deux enregistrements :
+    l'original 1990 et le remix Cosmic Gate 2004 du même titre)."""
+    return {'recordings': list(records)}
+
+
+def _mb_rec(title, date, artist='Age Of Love'):
+    return {'title': title, 'first-release-date': date,
+            'artist-credit': [{'artist': {'name': artist}}]}
+
+
+def test_mb_lookup_exige_le_remixeur_quand_le_nom_en_porte_un(monkeypatch):
+    """LA garde d'EPIC-048, testée sur le VRAI `mb_lookup` (seul `get` est
+    remplacé) : sans crédit exigé, l'original 1990 répond ; avec
+    `require=('cosmic','gate')`, l'enregistrement qui ne NOMME pas le remixeur
+    est écarté et seul le remix 2004 reste — c'est la date de la version du
+    fichier, pas celle de l'original."""
+    monkeypatch.setattr(cy, 'get', lambda url, ua, timeout=15, retries=3: _mb_payload(
+        _mb_rec('The Age Of Love', '1990-01-01'),
+        _mb_rec('The Age Of Love (Cosmic Gate Mix)', '2004-05-10'),
+    ))
+    pacer = cy.Pacer(0)
+    assert cy.mb_lookup('age of love', 'the age of love', set(), pacer) == \
+        ('ambiguous', None, ['1990', '2004'])
+    assert cy.mb_lookup('age of love', 'the age of love', set(), pacer,
+                        ('cosmic', 'gate')) == ('found', '2004', ['Age Of Love — The Age Of Love (Cosmic Gate Mix)'])
+    # Et la garde n'écarte pas un remix qui, lui, ne nomme personne dans la
+    # réponse : « Extended Mix » est un mot de VERSION → aucun crédit requis.
+    assert cy.remix_mod.remix_credit('x - y (Extended Mix).mp3')['kind'] == 'original'
+
+
+def test_remix_sans_source_nommante_ne_propose_pas_l_annee_de_l_original(monkeypatch):
+    """Quand PLUS AUCUNE source ne nomme le remixeur, rien ne conclut (donc rien
+    n'est écrit) et la seule suggestion utile vient de la piste web — cherchée
+    AVEC le remixeur (« 2004 » pour le Cosmic Gate Mix), jamais 1990."""
+    # Stubs qui honorent le contrat réel : `req` non vide → la source se taît
+    # (c'est exactement ce que font mb_lookup/dz_lookup, testé ci-dessus).
+    monkeypatch.setattr(cy, 'mb_lookup', lambda a, t, d, p, req=():
+                        ('none', None, []) if req else ('found', '1990', ['1990']))
+    monkeypatch.setattr(cy, 'dz_lookup', lambda a, t, d, req=():
+                        {'status': 'none', 'year': None, 'years': [], 'evidence': []})
+    monkeypatch.setattr(cy, 'discogs_vote', lambda a, t, d: {
+        'status': 'ambiguous', 'year': None, 'years': ['1990', '1992', '2009']})
+    seen = []
+    def web(a, t, extra='', **_):
+        seen.append(extra)
+        return {'status': 'candidates', 'web_candidates': ['2004'],
+                'web_proposed': '2004', 'evidence': []}
+    monkeypatch.setattr(cy, 'web_vote', web)
+
+    rec = cy.lookup('age of love', 'the age of love', set(), cy.Pacer(0),
+                    require=('cosmic', 'gate'), remix_label='cosmic gate mix')
+    assert rec['status'] == 'ambiguous' and rec['year'] is None   # rien d'écrit
+    assert rec['web_candidates'] == ['2004']
+    assert rec['proposed'] == '2004'          # le remix, pas l'original
+    assert rec['required_remix'] == ['cosmic', 'gate']
+    assert seen == ['cosmic gate mix']        # la recherche web porte le remixeur
+
+    # Sans consensus web : AUCUNE suggestion — 1990 (l'original) est un piège,
+    # pas une proposition. Mesuré : la 2ᵉ passe web a rendu 1999/2004, sans
+    # consensus, et `proposed` retombait sur 1990.
+    monkeypatch.setattr(cy, 'web_vote', lambda a, t, extra='', **_: {
+        'status': 'candidates', 'web_candidates': ['1999', '2004'],
+        'web_proposed': None, 'evidence': []})
+    rec2 = cy.lookup('age of love', 'the age of love', set(), cy.Pacer(0),
+                     require=('cosmic', 'gate'), remix_label='cosmic gate mix')
+    assert rec2['proposed'] is None
+    assert rec2['web_candidates'] == ['1999', '2004']   # la piste reste visible
 
 
 def test_web_candidat_n_est_jamais_un_vote(monkeypatch):
@@ -248,9 +339,9 @@ def test_web_candidat_n_est_jamais_un_vote(monkeypatch):
     candidats et `web_proposed`, jamais `sources` (la règle des 2 sources ne se
     contourne pas avec un moteur de recherche)."""
     _stub_sources(monkeypatch, mb=('none', None, []))
-    monkeypatch.setattr(cy, 'dz_lookup', lambda a, t, d: {
-        'status': 'found', 'year': '2024', 'years': ['2024'], 'evidence': []})
-    monkeypatch.setattr(cy, 'web_vote', lambda a, t: {
+    monkeypatch.setattr(cy, 'dz_lookup', lambda a, t, d, req=(): {
+            'status': 'found', 'year': '2024', 'years': ['2024'], 'evidence': []})
+    monkeypatch.setattr(cy, 'web_vote', lambda a, t, extra='': {
         'status': 'candidates', 'web_candidates': ['1991'],
         'web_proposed': '1991', 'evidence': []})
     rec = cy.lookup('phantasia', 'inner light', set(), cy.Pacer(0))
@@ -268,11 +359,11 @@ def test_youtube_est_un_vote_d_edition_qui_corrobore(monkeypatch):
         'status': 'found', 'year': '1991', 'years': ['1991'], 'videos': []})
     monkeypatch.setitem(sys.modules, 'collect_youtube_topic', fake)
     monkeypatch.setattr(cy, 'mb_lookup', lambda a, t, d, p: ('none', None, []))
-    monkeypatch.setattr(cy, 'dz_lookup', lambda a, t, d: {
+    monkeypatch.setattr(cy, 'dz_lookup', lambda a, t, d, req=(): {
         'status': 'none', 'year': None, 'years': [], 'evidence': []})
     monkeypatch.setattr(cy, 'discogs_vote', lambda a, t, d: {
         'status': 'found', 'year': '1991', 'years': ['1991']})
-    monkeypatch.setattr(cy, 'web_vote', lambda a, t: {
+    monkeypatch.setattr(cy, 'web_vote', lambda a, t, extra='': {
         'status': 'none', 'web_candidates': [], 'web_proposed': None,
         'evidence': []})
     rec = cy.lookup('phantasia', 'inner light', set(), cy.Pacer(0), youtube=True)
@@ -288,7 +379,7 @@ def test_done_keys_ignore_le_moteur_v1(tmp_path, monkeypatch):
     cache = tmp_path / 'year_cache.jsonl'
     cache.write_text('\n'.join(json.dumps(r) for r in (
         {'key': 'a\tb', 'status': 'found', 'year': '2024', 'source': 'deezer'},
-        {'key': 'c\td', 'status': 'single', 'year': '1999', 'v': 2},
+        {'key': 'c\td', 'status': 'single', 'year': '1999', 'v': cy.ENGINE_VERSION},
     )) + '\n')
     monkeypatch.setattr(cy, 'PROG', str(cache))
     done = cy.done_keys()

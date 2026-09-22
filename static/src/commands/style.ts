@@ -1,7 +1,10 @@
 // ─── Style command: g (EPIC-035, scope-aware EPIC-041) ─────────────────────
-// `g` (genre) ouvre la palette sur le MORCEAU surligné — celui de la liste qui
-// porte le focus, colonne Éparpillé **ou** Source Data. La palette écrit alors
-// le style et l'année dans les tags du fichier, tout de suite (EPIC-041).
+// `g` (genre) agit sur le MORCEAU surligné — celui de la liste qui porte le
+// focus, colonne Éparpillé **ou** Source Data :
+//   · fichier RANGÉ  → le style déclaré par son dossier est écrit dans le tag,
+//     tout de suite, une frappe (EPIC-050 — il n'y a rien à choisir) ;
+//   · fichier ÉPARS  → la palette s'ouvre (style à choisir + rangement), et
+//     elle écrit le style et l'année dans les tags, tout de suite (EPIC-041).
 //
 // Avant EPIC-041, le binding exigeait `activePanel: 'epars'` : cliquer une
 // seule fois dans la colonne droite (ce qu'on fait en permanence pour
@@ -22,7 +25,8 @@
 
 import { setStatus } from '../core/feedback.js';
 import { openGenreAudit } from '../render/styleAudit.js';
-import { openStylePalette } from '../render/stylePalette.js';
+import { sourceStyleOf } from '../render/styleCell.js';
+import { alignStyleToFolder, openStylePalette } from '../render/stylePalette.js';
 import { openStylePreview } from '../render/stylePreview.js';
 import { state } from '../state.js';
 import { registry } from './registry.js';
@@ -103,6 +107,16 @@ export function openPaletteOnFocus(): void {
     setStatus('Ligne sans chemin de fichier — impossible de taguer.');
     return;
   }
+  // EPIC-050 : sur un fichier DÉJÀ RANGÉ, il n'y a rien à choisir — le dossier
+  // de rangement DÉCLARE le style, donc `g` l'écrit (le signalement « g ne met
+  // toujours pas à jour » venait de là : la palette s'ouvrait et attendait un
+  // clic). Le clic sur la cellule Style ouvre la palette pour un AUTRE style.
+  const declared = sourceStyleOf(fullpath);
+  if (declared) {
+    setStatus(`g — écriture du style « ${declared} » déclaré par le dossier…`);
+    void alignStyleToFolder(fullpath, declared);
+    return;
+  }
   openStylePalette([fullpath], item.el);
 }
 
@@ -112,7 +126,7 @@ registry.bind({
   isInput: false,
   activeModal: null,
   isContextMenuOpen: false,
-  label: 'Poser un style et une année',
+  label: 'Style : écrit celui du dossier (rangé) ou ouvre la palette (épars)',
   group: 'sync',
   handler: openPaletteOnFocus,
 });

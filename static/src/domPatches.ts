@@ -9,6 +9,7 @@ import { focusItemByElement, setActivePanel } from './focus.js';
 import { getRating } from './ratings.js';
 import { openCueEditor } from './render/cueEditor.js';
 import { makeFileTable } from './render/fileRow.js';
+import { insertSourceStyleCell } from './render/styleCell.js';
 import { state, type TreeNode } from './state.js';
 import { computeStatus, countAllEparsFiles, formatDuration } from './utils.js';
 
@@ -145,7 +146,7 @@ export function patchSourceFileAfterCopy(
       // contient pas encore de table, on en crée une et on y déplace les rows.
       let tbody = dirEl.querySelector('.file-table tbody') as HTMLTableSectionElement | null;
       if (!tbody) {
-        const table = makeFileTable(true);
+        const table = makeFileTable(true, true);
         tbody = table.querySelector('tbody');
         for (const r of [...children.children]) {
           if (r.classList.contains('file-row')) tbody?.appendChild(r);
@@ -209,6 +210,13 @@ export function patchSourceFileAfterCopy(
       };
       cueTd.appendChild(cueBtn);
       newRow.appendChild(cueTd);
+
+      // EPIC-046 : la ligne créée par la copie porte la cellule Style comme
+      // toutes les autres — avec le genre RELU par /copy (jamais celui d'avant).
+      insertSourceStyleCell(newRow, `${destDir}/${filename}`, {
+        year: fileData.year,
+        genre: fileData.genre ?? null,
+      });
 
       newRow.onclick = (e: MouseEvent) => {
         e.stopPropagation();

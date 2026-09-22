@@ -4,6 +4,7 @@ import sys
 import json
 import math
 import shutil
+import socket
 import multiprocessing
 import unicodedata
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -87,6 +88,61 @@ def load_extra_dirs():
 def save_extra_dirs(dirs):
     """Persistance triée/dédupliquée des dossiers racine additionnels."""
     save_json(EXTRA_DIRS_PATH, sorted(set(dirs)))
+
+
+# ── EPIC-047 : les dossiers de la racine, même vides ─────────────────────
+# `index_files` n'indexe que les fichiers audio : un dossier SANS fichier
+# était invisible du cache, donc de la taxonomie client (`buildTaxonomy`) et de
+# `_known_styles`. Mesuré sur la collection : 92 dossiers sur le disque, 86
+# dans la taxonomie — `breakbeat_2000/2005`, `house_1990/1995`,
+# `techno_hard_2005`, `techno_house_2010` manquaient à la palette, et
+# `POST /styles/apply` aurait refusé `breakbeat` (400 « style inconnu »).
+# La source de vérité redevient le DISQUE (un dossier est une déclaration de
+# style, EPIC-035), sans rien maintenir à la main.
+#
+# 🗑 (`/mkdir` DELETE) garde son sens : le dossier RETIRÉ de l'index va dans
+# `hidden_dirs.json` — sinon il réapparaîtrait au chargement suivant, maintenant
+# que les dossiers vides sont visibles. Fichier séparé (aucune migration de
+# `extra_dirs.json`, dont le format *liste* reste lu tel quel).
+HIDDEN_DIRS_PATH = os.path.join(DATA_DIR, 'hidden_dirs.json')
+
+
+def load_hidden_dirs():
+    """Dossiers présents sur le disque mais RETIRÉS de l'index (🗑)."""
+    return load_json(HIDDEN_DIRS_PATH, [])
+
+
+def save_hidden_dirs(dirs):
+    save_json(HIDDEN_DIRS_PATH, sorted(set(dirs)))
+
+
+def _source_root_dirs():
+    """Dossiers de 1ᵉʳ niveau de la racine Source Data ACTIVE, tels qu'ils sont
+    sur le disque, moins ceux retirés de l'index (🗑). Chemins absolus triés.
+    Racine absente ou illisible → [] (jamais d'exception : /load ne doit pas
+    tomber parce qu'un disque externe est débranché)."""
+    root = get_active_config().get('source_data') or ''
+    if not root:
+        return []
+    hidden = {os.path.abspath(d) for d in load_hidden_dirs()}
+    out = []
+    try:
+        with os.scandir(root) as it:
+            for entry in it:
+                if entry.name.startswith('.') or not entry.is_dir():
+                    continue
+                path = os.path.abspath(entry.path)
+                if path not in hidden:
+                    out.append(path)
+    except OSError:
+        return []
+    return sorted(out)
+
+
+def indexed_source_dirs():
+    """Dossiers racine à AFFICHER (et donc à connaître de la taxonomie) : ceux
+    créés via ➕ et ceux présents sur le disque, dédupliqués et triés."""
+    return sorted(set(load_extra_dirs()) | set(_source_root_dirs()))
 
 # ── Scan progress tracking ────────────────────────────────────────────────
 _scan_progress = {
@@ -506,7 +562,7 @@ def scan():
             result['source'][source_dir] = index_files(source_dir, 'Source Data')
         for d in epars_dirs:
             result['epars'][d] = index_files(d, 'Éparpillé')
-        result['extra_dirs'] = load_extra_dirs()
+        result['extra_dirs'] = indexed_source_dirs()
         result['source_index'] = _build_source_index(result.get('source', {}))
 
         save_json(CACHE_PATH, result)
@@ -530,7 +586,7 @@ def scan():
 def load_cached():
     data = load_json(CACHE_PATH, {'source': {}, 'epars': {}})
     data.setdefault('source', {})
-    data['extra_dirs'] = load_extra_dirs()
+    data['extra_dirs'] = indexed_source_dirs()
     data.setdefault('source_index', {})
     return jsonify(data)
 
@@ -562,10 +618,16 @@ def mkdir_source_dir():
 
     if request.method == 'DELETE':
         dirs = load_extra_dirs()
-        if target not in dirs:
+        hidden = load_hidden_dirs()
+        if target in hidden:
             return jsonify({'ok': False, 'error': "Dossier introuvable dans l'index"}), 404
-        dirs.remove(target)
-        save_extra_dirs(dirs)
+        # EPIC-047 : n'importe quel dossier de 1ᵉʳ niveau est retirable, pas
+        # seulement ceux créés via ➕ — les dossiers vides vivants sont
+        # désormais affichés, donc le 🗑 doit pouvoir les cacher.
+        if target not in dirs and not os.path.isdir(target):
+            return jsonify({'ok': False, 'error': "Dossier introuvable dans l'index"}), 404
+        save_extra_dirs([d for d in dirs if d != target])
+        save_hidden_dirs(hidden + [target])
         log_journal({
             'timestamp': datetime.now().isoformat(),
             'action': "Dossier retiré de l'index",
@@ -583,6 +645,8 @@ def mkdir_source_dir():
     if target not in dirs:
         dirs.append(target)
         save_extra_dirs(dirs)
+    # Re-créer via ➕ ce qui avait été retiré de l'index → il redevient visible.
+    save_hidden_dirs([d for d in load_hidden_dirs() if d != target])
     log_journal({
         'timestamp': datetime.now().isoformat(),
         'action': 'Dossier créé',
@@ -1158,7 +1222,10 @@ DISCOGS_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_cache.jsonl')
 ITUNES_CACHE_PATH = os.path.join(DATA_DIR, 'itunes_cache.jsonl')
 REFORM_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_reform_cache.jsonl')
 REFORM2_CACHE_PATH = os.path.join(DATA_DIR, 'discogs_reform2_cache.jsonl')
-BEATPORT_CACHE_PATH = os.path.join(DATA_DIR, 'beatport_cache.jsonl')
+# Beatport RETIRÉ du pipeline (EPIC-049) : la passe n'a jamais tourné (token
+# recopié à la main, friction refusée deux fois) et sa place dans l'ordre de
+# priorité faisait croire à une source active. Aucun cache à lire, aucun tag
+# concerné.
 YOUTUBE_CACHE_PATH = os.path.join(DATA_DIR, 'youtube_topic_cache.jsonl')
 
 # Miroir de scripts/collect_years.py (NOISE + artist_title) : le parse des clés
@@ -1245,8 +1312,7 @@ def _load_years_caches():
     périmées des runs corrigés), priorité ENTRE fichiers ensuite."""
     pools = []
     for path in (YEAR_CACHE_PATH, DISCOGS_CACHE_PATH, ITUNES_CACHE_PATH,
-                 REFORM_CACHE_PATH, REFORM2_CACHE_PATH, BEATPORT_CACHE_PATH,
-                 YOUTUBE_CACHE_PATH):
+                 REFORM_CACHE_PATH, REFORM2_CACHE_PATH, YOUTUBE_CACHE_PATH):
         if not os.path.exists(path):
             continue
         pool = {}
@@ -1293,6 +1359,55 @@ def _years_wave(pool, rec):
     if st == 'lax':
         return 'a_revue'
     return 'introuvables'
+
+
+# ── EPIC-049 : état du fournisseur de recherche web ───────────────────────
+# Brave (payant, jamais configuré) est retiré ; le moteur est LOCAL : DuckDuckGo
+# via le MCP `search` s'il écoute (défaut `http://localhost:8010/mcp`,
+# `data/search_mcp.json` ou `SEARCH_MCP_URL` pour le changer), sinon l'endpoint
+# HTML public. Cette route SONDÈLE (1 s, sans clé) : la vue Années peut dire
+# « recherche web indisponible » au lieu de laisser croire que le dernier
+# recours est en service. Miroir de scripts/web_search.py (app.py n'importe
+# volontairement pas scripts/).
+SEARCH_MCP_CONFIG = os.path.join(DATA_DIR, 'search_mcp.json')
+SEARCH_MCP_DEFAULT = 'http://localhost:8010/mcp'
+SEARCH_HTML_URL = 'https://html.duckduckgo.com/html/'
+
+
+def _search_mcp_url():
+    env = os.environ.get('SEARCH_MCP_URL')
+    if env is not None:
+        return env.strip()
+    cfg = load_json(SEARCH_MCP_CONFIG, {})
+    if isinstance(cfg, dict) and cfg.get('url') is not None:
+        return str(cfg['url']).strip()
+    return SEARCH_MCP_DEFAULT
+
+
+@app.route('/years/web-status')
+def years_web_status():
+    """{provider, url, reachable, error} — sonde TCP, jamais bloquante."""
+    url = _search_mcp_url()
+    if not url:
+        return jsonify({'provider': 'html', 'url': SEARCH_HTML_URL, 'reachable': True,
+                        'error': 'MCP désactivé (SEARCH_MCP_URL vide) — repli HTML'})
+    host, port = 'localhost', 8010
+    try:
+        after_scheme = url.split('://', 1)[-1]
+        authority = after_scheme.split('/', 1)[0]
+        if ':' in authority:
+            host, port = authority.rsplit(':', 1)[0] or 'localhost', int(authority.rsplit(':', 1)[1])
+        else:
+            host = authority or 'localhost'
+    except (ValueError, IndexError):
+        pass
+    try:
+        with socket.create_connection((host, port), timeout=1):
+            pass
+        return jsonify({'provider': 'mcp', 'url': url, 'reachable': True, 'error': None})
+    except OSError as exc:
+        return jsonify({'provider': 'html', 'url': SEARCH_HTML_URL, 'reachable': True,
+                        'error': f'MCP injoignable ({host}:{port}) — repli HTML DuckDuckGo : {exc}'})
 
 
 @app.route('/years/preview')
@@ -1397,10 +1512,22 @@ def years_review():
 STYLES_REVIEW_PATH = os.path.join(DATA_DIR, 'style_review.json')
 
 
+def _style_of_root_dir(path):
+    """Style déclaré par un dossier racine ABSOLU (nom du dossier, sans la
+    tranche) — même règle que les chemins du cache, appliquée aux dossiers
+    présents sur le disque (EPIC-047)."""
+    folder = os.path.basename(os.path.normpath(path))
+    m = re.match(r'^(.+)_(\d{4})$', folder)
+    return m.group(1) if m else folder
+
+
 def _known_styles():
-    """Ensemble des styles connus, dérivé des dossiers source du cache
-    (même grammaire que la taxonomie client : style = 1er segment de path,
-    sans la tranche YYYY éventuelle). Cache vide → ensemble vide."""
+    """Ensemble des styles connus, dérivé des dossiers source du cache ET des
+    dossiers présents sur le disque (même grammaire que la taxonomie client :
+    style = nom de dossier sans la tranche YYYY éventuelle). Cache vide →
+    ensemble des styles des dossiers de la racine (EPIC-047 : un dossier vide
+    est une déclaration de style, la palette doit pouvoir le proposer et
+    `/styles/apply` l'accepter)."""
     cache = load_json(CACHE_PATH, {})
     styles = set()
     for files in cache.get('source', {}).values():
@@ -1412,6 +1539,8 @@ def _known_styles():
             folder = path[:slash]
             m = re.match(r'^(.+)_(\d{4})$', folder)
             styles.add(m.group(1) if m else folder)
+    for path in _source_root_dirs() + list(load_extra_dirs()):
+        styles.add(_style_of_root_dir(path))
     return styles
 
 
@@ -1535,8 +1664,29 @@ def _apply_tag(body, kind):
     journal = STYLE_JOURNAL if kind == 'style' else YEAR_JOURNAL
     results = [_write_target(t, value, kind, journal, 'palette', roots) for t in targets]
     written = sum(1 for r in results if r['ok'])
+
+    # EPIC-050 : le tag écrit doit se voir TOUT DE SUITE. Sans ce patch, le
+    # cache gardait l'ancien genre/année jusqu'au scan suivant : après `g` (ou un
+    # rechargement de page), la cellule Style reprenait l'ancienne valeur et
+    # `/styles/audit` continuait de compter le fichier « à corriger » alors que
+    # le disque était déjà bon — mesure : disque `house`, cache `techno_hard`.
+    # Même geste que `/copy` et `/styles/align` (une seule écriture du cache
+    # pour tout le lot, jamais une par cible).
+    cache = load_json(CACHE_PATH, {})
+    cache_dirty = False
+    if cache:
+        for r in results:
+            if not r.get('ok'):
+                continue
+            upd = {'genre': r['style']} if kind == 'style' else {'year': r['year']}
+            if _cache_update_meta(cache, r['path'], upd):
+                cache_dirty = True
+        if cache_dirty:
+            save_json(CACHE_PATH, cache)
+
     return jsonify({'ok': written > 0, 'written': written, 'count': len(results),
-                    'results': results, kind: value})
+                    'results': results, kind: value,
+                    'cache_updated': cache_dirty})
 
 
 # ── EPIC-040 : revue des années DÉJÀ écrites (audit) depuis la vue Années ──

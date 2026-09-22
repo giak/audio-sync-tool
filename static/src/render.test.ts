@@ -1556,3 +1556,45 @@ describe('updatePlaylistLedIndicator', () => {
     expect(document.body.querySelectorAll('.led-playing').length).toBe(0);
   });
 });
+
+// ── EPIC-046 : la ligne COPIÉE porte la cellule Style de Source Data ──────
+// La copie écrit le tag sur la copie ET sur l'épars (EPIC-043) — sans cette
+// cellule, la colonne de droite ne le montrait nulle part (« la mise à jour
+// ID3 dans les 2 colonnes ne s'est pas faite »).
+describe('patchSourceFileAfterCopy — cellule Style (EPIC-046)', () => {
+  it('insère td.source-style-cell devant .codec, avec le genre RELU par /copy', () => {
+    resetState();
+    document.body.innerHTML = `
+      <div id="source-container"></div>
+      <span id="source-header-count"></span>
+      <span id="source-filter-count"></span>
+      <span id="epars-container"></span>`;
+    const dirEl = document.createElement('div');
+    dirEl.className = 'directory';
+    dirEl.dataset.dirpath = '/home/Music/techno_acid_1990';
+    dirEl.appendChild(Object.assign(document.createElement('div'), { className: 'children' }));
+    document.getElementById('source-container')!.appendChild(dirEl);
+    state.sourceFiles = { '/home/Music': { 'old.mp3': { path: 'techno_acid_1990/old.mp3' } } };
+    state.sourceNodeMap.set('/home/Music/techno_acid_1990', {
+      node: { __files__: [] } as never,
+      baseDir: '/home/Music',
+    });
+
+    patchSourceFileAfterCopy('/home/Music/techno_acid_1990', 'x.mp3', {
+      path: 'techno_acid_1990/x.mp3',
+      year: '1990',
+      duration: 200,
+      codec: 'MP3 320kbps',
+      genre: 'techno_acid',
+    });
+
+    const row = document.querySelector('#source-container .file-row')!;
+    const cell = row.querySelector('td.source-style-cell') as HTMLElement | null;
+    expect(cell).not.toBeNull();
+    expect(cell!.dataset.fullpath).toBe('/home/Music/techno_acid_1990/x.mp3');
+    // le genre écrit par la copie s'affiche en vert : dossier == tag
+    expect(cell!.querySelector('.style-chip')?.textContent).toBe('✓ techno_acid');
+    expect(cell!.nextElementSibling?.classList.contains('codec')).toBe(true);
+    state.sourceNodeMap.clear();
+  });
+});
