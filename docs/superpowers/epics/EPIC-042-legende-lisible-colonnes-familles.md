@@ -33,7 +33,7 @@ cd /tmp/epic042_before && node build.js && python3 scripts/measure_legend.py /tm
 | **Une ligne sans marqueur** | « Double-clic Renommer / recolorer le cue » n'avait ni touche, ni pastille, ni badge (la seule du DOM) | **1 ligne sans marqueur** | **0** |
 | **Colonnes déséquilibrées** | sections de tailles très inégales dans 4 cellules | ratio max/min **1,65** `[1713, 1713, 1713, 1036]` | **1,32** `[425, 500, 425, 563]` |
 
-Score du harnais : **3/10 → 11/11** (10 vérifications de forme + 1 de contenu, cf. « Régression »). Les captures avant/après sont dans
+Score du harnais : **3/10 → 12/12** (10 vérifications de forme, + **H** « section vide » et **I** « colonnes homogènes », nées des deux régressions ci-dessous). Les captures avant/après sont dans
 `/tmp/epic042_before_out/1-legende.png` et `/tmp/epic042_final/1-legende.png` (rapports texte
 complets à côté).
 
@@ -214,7 +214,7 @@ navigateur (un harnais lancé sans rebuild mesure la version précédente).
 | `411433d` | Légende lisible : 4 colonnes jamais étirées, une abscisse par section (`subgrid`), familles de touches (8× `Échap` → 1 ligne), libellés raccourcis, harnais de mesure 10/10 (3/10 avant) |
 | `c96b90e` | Traçabilité de l'EPIC (commit ci-dessus) |
 | `8211f8b` | **Régression corrigée** : la légende des états ne peut plus être effacée par un template d'une autre version (adoption par titre + conservation `console.warn`), vérification H du harnais, test de contrat (1 145 vitest) |
-| _(ce commit)_ | **Régression 2 corrigée** : plus de table de colonnes (flux multi-colonnes adaptatif), vérification I du harnais, contrat F scoped aux largeurs où il est tenable — 12/12 sur 7 largeurs |
+| `92a6423` | **Régression 2 corrigée** : plus de table de colonnes (flux multi-colonnes adaptatif), vérification I du harnais, contrat F scoped aux largeurs où il est tenable — 12/12 sur 7 largeurs |
 
 ## Décisions
 
