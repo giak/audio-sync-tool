@@ -100,10 +100,13 @@ export function formatPlan(plan: RangementPlan): string {
  *  {copied, total}. */
 export async function applyRangementPlan(plan: RangementPlan): Promise<{ copied: number; total: number }> {
   const done: string[] = [];
+  const notes = new Set<string>();
   let total = 0;
   for (const g of plan.groups) {
     total += g.files.length;
-    done.push(...(await copyFilesTo(g.dest.dir, g.files)));
+    const r = await copyFilesTo(g.dest.dir, g.files);
+    done.push(...r.copied);
+    if (r.styleNote) notes.add(r.styleNote); // EPIC-043 : le tag suit le rangement
   }
   if (done.length) {
     await exportStyleChoices(done);
@@ -113,7 +116,9 @@ export async function applyRangementPlan(plan: RangementPlan): Promise<{ copied:
     refreshStyleCells(done);
   }
   updateStyleRecap();
-  showToast(`✓ ${done.length}/${total} copié${done.length > 1 ? 's' : ''} · ${plural(plan.groups.length, 'dossier')}`);
+  showToast(
+    `✓ ${done.length}/${total} copié${done.length > 1 ? 's' : ''} · ${plural(plan.groups.length, 'dossier')}${[...notes].join('')}`,
+  );
   return { copied: done.length, total };
 }
 

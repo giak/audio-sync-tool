@@ -89,6 +89,9 @@ import {
   initConfigUI,
   renderConfigSelect,
   runScan,
+  styleConsentLine,
+  styleNoteOf,
+  styleOfDestDir,
 } from './actions.js';
 
 // ── Config tests (separate describe — needs cfgSelect elements in DOM) ────
@@ -486,11 +489,11 @@ describe('actions', () => {
         url === '/journal' ? [] : { ok: true, year: '1996', codec: 'MP3' },
       );
 
-      const n = await copyFilesTo('/source/techno_1995', [
+      const { copied } = await copyFilesTo('/source/techno_1995', [
         { filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/_techno/f.mp3' },
       ]);
 
-      expect(n).toEqual(['/epars/_techno/f.mp3']);
+      expect(copied).toEqual(['/epars/_techno/f.mp3']);
       expect(api).toHaveBeenCalledWith('/copy', expect.objectContaining({ method: 'POST' }));
       expect(JSON.parse((api.mock.calls[0][1] as { body: string }).body)).toEqual({
         source_path: '/epars/_techno/f.mp3',
@@ -502,6 +505,7 @@ describe('actions', () => {
         year: '1996',
         duration: null,
         codec: 'MP3',
+        genre: null,
       });
       expect(patchEparsFileAfterCopy).toHaveBeenCalledWith('f.mp3', '/epars');
       expect(state.sourceExpanded.has('/source/techno_1995')).toBe(true);
@@ -512,12 +516,177 @@ describe('actions', () => {
       state.eparsFiles = { '/epars': { 'f.mp3': { path: 'f.mp3', year: null, duration: null, codec: null } } };
       state.sourceFiles = { '/source': {} };
       api.mockImplementation(async (url: string) => (url === '/journal' ? [] : { ok: false }));
-      const n = await copyFilesTo('/source/x', [
+      const { copied } = await copyFilesTo('/source/x', [
         { filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/f.mp3' },
         { filename: 'ghost.mp3', eparDir: '/epars', fullpath: '/epars/ghost.mp3' },
       ]);
-      expect(n).toEqual([]);
+      expect(copied).toEqual([]);
       expect(Object.keys(state.sourceFiles['/source'])).toEqual([]);
+    });
+  });
+
+  // ── EPIC-043 : le style du dossier cible est écrit (épars + copie) ──────
+
+  describe('style écrit à la copie (EPIC-043)', () => {
+    // Réponse serveur d'une copie qui a écrit le style des deux côtés.
+    const styleRes = (over: Record<string, unknown> = {}) => ({
+      ok: true,
+      year: '1996',
+      duration: null,
+      codec: 'MP3',
+      genre: 'techno',
+      style: 'techno',
+      style_writes: [
+        { path: '/epars/_techno/f.mp3', role: 'epars', ok: true, changed: true, style: 'techno' },
+        { path: '/source/techno_1995/f.mp3', role: 'copie', ok: true, changed: true, style: 'techno' },
+      ],
+      style_error: null,
+      ...over,
+    });
+
+    /// Un cas par classe de classement (style, style_tranche, hors temps,
+    /// techniques, daté, capitalisé). La table EXHAUSTIVE de la grammaire est
+    /// partagée avec Python dans `styles.test.ts` (=
+    /// `test_app.py::STYLE_FOLDER_CASES`) : ici on teste la plomberie — premier
+    /// segment du chemin relatif à la racine Source Data.
+    const FOLDER_CASES: Array<[string, string | null]> = [
+      ['techno_1995', 'techno'],
+      ['italo_disco', 'italo_disco'],
+      ['techno_acid_1990', 'techno_acid'],
+      ['_trash', null],
+      ['2008_08', null],
+      ['Techno', null],
+    ];
+
+    it('styleOfDestDir : premier segment de la destination, grammaire stricte', () => {
+      state.sourceFiles = { '/source': {} };
+      for (const [name, expected] of FOLDER_CASES) {
+        expect([name, styleOfDestDir(`/source/${name}`)]).toEqual([name, expected]);
+      }
+      expect(styleOfDestDir('/source/techno_1995/sous_dossier')).toBe('techno'); // sous-dossier : même style
+      expect(styleOfDestDir('/source')).toBeNull(); // la racine Source Data ne déclare rien
+      expect(styleOfDestDir('/ailleurs/techno_1995')).toBeNull(); // hors racine connue
+    });
+
+    it('copyFilesTo : genre patché des deux côtés + note de statut', async () => {
+      const c = document.createElement('div');
+      c.id = 'source-container';
+      document.body.appendChild(c);
+      state.eparsFiles = {
+        '/epars': { 'f.mp3': { path: '_techno/f.mp3', year: '1996', duration: null, codec: null, genre: 'Blues' } },
+      };
+      state.sourceFiles = { '/source': {} };
+      state.sourceNodeMap.set('/source/techno_1995', { node: { __files__: [] } as any, baseDir: '/source' });
+      api.mockImplementation(async (url: string) => (url === '/journal' ? [] : styleRes()));
+
+      const r = await copyFilesTo('/source/techno_1995', [
+        { filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/_techno/f.mp3' },
+      ]);
+
+      expect(r.copied).toEqual(['/epars/_techno/f.mp3']);
+      expect(r.styleNote).toBe(' · style « techno » écrit (epars + copie)');
+      expect(state.eparsFiles['/epars']['f.mp3'].genre).toBe('techno');
+      expect(state.sourceFiles['/source']['f.mp3'].genre).toBe('techno');
+      expect(patchSourceFileAfterCopy).toHaveBeenCalledWith(
+        '/source/techno_1995',
+        'f.mp3',
+        expect.objectContaining({ genre: 'techno' }),
+      );
+      state.sourceNodeMap.clear();
+    });
+
+    it('destination sans style déclaré : aucun genre patché, aucune note', async () => {
+      state.eparsFiles = {
+        '/epars': { 'f.mp3': { path: 'f.mp3', year: null, duration: null, codec: null, genre: 'Blues' } },
+      };
+      state.sourceFiles = { '/source': {} };
+      state.sourceNodeMap.set('/source/_trash', { node: { __files__: [] } as any, baseDir: '/source' });
+      api.mockImplementation(async (url: string) =>
+        url === '/journal'
+          ? []
+          : { ok: true, year: null, duration: null, codec: 'MP3', genre: 'Blues', style: null, style_writes: [] },
+      );
+
+      const r = await copyFilesTo('/source/_trash', [
+        { filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/f.mp3' },
+      ]);
+
+      expect(r.styleNote).toBe('');
+      expect(state.eparsFiles['/epars']['f.mp3'].genre).toBe('Blues'); // l'épars n'est pas touché
+      expect(state.sourceFiles['/source']['f.mp3'].genre).toBe('Blues'); // genre de la copie, tel quel
+      state.sourceNodeMap.clear();
+    });
+
+    it('échec d’écriture : note rapportée, la copie reste comptée', async () => {
+      state.eparsFiles = { '/epars': { 'f.mp3': { path: 'f.mp3', year: null, duration: null, codec: null } } };
+      state.sourceFiles = { '/source': {} };
+      state.sourceNodeMap.set('/source/techno_1995', { node: { __files__: [] } as any, baseDir: '/source' });
+      api.mockImplementation(async (url: string) =>
+        url === '/journal'
+          ? []
+          : styleRes({
+              style_writes: [
+                { path: '/epars/f.mp3', role: 'epars', ok: false, changed: true, error: "relu 'Blues'" },
+                { path: '/source/techno_1995/f.mp3', role: 'copie', ok: true, changed: true },
+              ],
+            }),
+      );
+
+      const r = await copyFilesTo('/source/techno_1995', [
+        { filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/f.mp3' },
+      ]);
+
+      expect(r.copied).toEqual(['/epars/f.mp3']); // la copie a réussi
+      expect(r.styleNote).toBe(" · style « techno » non écrit sur epars : relu 'Blues'");
+      expect(state.eparsFiles['/epars']['f.mp3'].genre).toBeUndefined(); // pas d'écriture → pas de patch
+      state.sourceNodeMap.clear();
+    });
+
+    it('styleNoteOf : muet sans style déclaré, « déjà à jour » quand rien n’a changé', () => {
+      expect(styleNoteOf({ ok: true })).toBe('');
+      expect(styleNoteOf({ ok: true, style: null, style_error: 'mutagen indisponible' })).toBe(
+        ' · style non écrit : mutagen indisponible',
+      );
+      expect(
+        styleNoteOf({
+          ok: true,
+          style: 'techno',
+          style_writes: [
+            { path: 'a', role: 'epars', ok: true, changed: false },
+            { path: 'b', role: 'copie', ok: true, changed: false },
+          ],
+        }),
+      ).toBe(' · style « techno » déjà à jour');
+    });
+
+    it('styleConsentLine : la modale F5 annonce l’écriture seulement si un style est déclaré', () => {
+      state.sourceFiles = { '/source': {} };
+      expect(styleConsentLine('/source/techno_1995')).toContain('« techno »');
+      expect(styleConsentLine('/source/techno_1995')).toContain("l'année n'est pas touchée");
+      expect(styleConsentLine('/source/_trash/2026-09-22')).toBe('');
+    });
+
+    it('modale F5 batch : la phrase de consentement est ajoutée au message', () => {
+      const msg = document.createElement('div');
+      msg.id = 'dialog-msg';
+      document.body.appendChild(msg);
+      const confirm = document.createElement('button');
+      confirm.id = 'dialog-confirm';
+      document.body.appendChild(confirm);
+      const cancel = document.createElement('button');
+      cancel.id = 'dialog-cancel';
+      document.body.appendChild(cancel);
+      state.sourceFiles = { '/source': {} };
+      getBatchCopy.mockReturnValue({
+        target: '/source/techno_1995',
+        files: [{ filename: 'f.mp3', eparDir: '/epars', fullpath: '/epars/f.mp3' }],
+      });
+
+      executeCopy();
+
+      expect(msg.textContent).toContain('Copier "f.mp3" vers "/source/techno_1995" ?');
+      expect(msg.textContent).toContain('« techno »');
+      expect(msg.textContent).toContain("l'année n'est pas touchée");
     });
   });
 

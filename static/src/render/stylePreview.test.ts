@@ -130,9 +130,10 @@ describe('render/stylePreview', () => {
       [B, { style: 'techno_acid', tranche: null }],
       [D, { style: 'hardcore', tranche: null }],
     ]);
-    copyFilesTo.mockImplementation(async (dir: string, files: Array<{ fullpath: string }>) =>
-      dir.endsWith('hardcore_1995') ? [] : files.map(f => f.fullpath).filter(fp => fp !== B),
-    );
+    copyFilesTo.mockImplementation(async (dir: string, files: Array<{ fullpath: string }>) => ({
+      copied: dir.endsWith('hardcore_1995') ? [] : files.map(f => f.fullpath).filter(fp => fp !== B),
+      styleNote: '',
+    }));
     const res = await applyRangementPlan(buildRangementPlan());
     expect(res).toEqual({ copied: 1, total: 3 });
     expect(copyFilesTo).toHaveBeenCalledTimes(2);
@@ -148,9 +149,10 @@ describe('render/stylePreview', () => {
       [A, { style: 'techno_acid', tranche: null }],
       [D, { style: 'hardcore', tranche: null }],
     ]);
-    copyFilesTo.mockImplementation(async (_d: string, files: Array<{ fullpath: string }>) =>
-      files.map(f => f.fullpath),
-    );
+    copyFilesTo.mockImplementation(async (_d: string, files: Array<{ fullpath: string }>) => ({
+      copied: files.map(f => f.fullpath),
+      styleNote: '',
+    }));
     await applyRangementPlan(buildRangementPlan());
     expect(apiMock).toHaveBeenCalledTimes(1);
     const [url, opts] = apiMock.mock.calls[0] as [string, { method: string; body: string }];
@@ -161,9 +163,17 @@ describe('render/stylePreview', () => {
     expect(sent.choices[D]).toEqual({ style: 'hardcore', tranche: null });
   });
 
+  it('applyRangementPlan : la note de style de la copie (EPIC-043) sort dans le toast', async () => {
+    state.styleChoices = new Map([[A, { style: 'techno_acid', tranche: null }]]);
+    copyFilesTo.mockResolvedValue({ copied: [A], styleNote: ' · style « techno_acid » écrit (epars + copie)' });
+    const res = await applyRangementPlan(buildRangementPlan());
+    expect(res).toEqual({ copied: 1, total: 1 });
+    expect(showToast).toHaveBeenCalledWith('✓ 1/1 copié · 1 dossier · style « techno_acid » écrit (epars + copie)');
+  });
+
   it('applyRangementPlan : échec de l’export non bloquant (copies déjà réussies)', async () => {
     state.styleChoices = new Map([[A, { style: 'techno_acid', tranche: null }]]);
-    copyFilesTo.mockResolvedValue([A]);
+    copyFilesTo.mockResolvedValue({ copied: [A], styleNote: '' });
     apiMock.mockRejectedValue(new Error('network down'));
     const res = await applyRangementPlan(buildRangementPlan());
     expect(res).toEqual({ copied: 1, total: 1 });
@@ -190,9 +200,10 @@ describe('render/stylePreview', () => {
         [A, { style: 'techno_acid', tranche: null }],
         [D, { style: 'hardcore', tranche: null }],
       ]);
-      copyFilesTo.mockImplementation(async (_d: string, files: Array<{ fullpath: string }>) =>
-        files.map(f => f.fullpath),
-      );
+      copyFilesTo.mockImplementation(async (_d: string, files: Array<{ fullpath: string }>) => ({
+        copied: files.map(f => f.fullpath),
+        styleNote: '',
+      }));
       openStylePreview();
       expect(confirmDialog).toHaveBeenCalledTimes(1);
       const [msg, onConfirm, label] = confirmDialog.mock.calls[0] as [string, () => void, string];

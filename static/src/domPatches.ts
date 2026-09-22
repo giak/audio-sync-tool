@@ -56,7 +56,15 @@ export function patchEparsFileAfterCopy(filename: string, eparDir: string): void
 export function patchSourceFileAfterCopy(
   destDir: string,
   filename: string,
-  fileData: { path: string; year: string | null; duration: number | null; codec: string | null },
+  fileData: {
+    path: string;
+    year: string | null;
+    duration: number | null;
+    codec: string | null;
+    /** EPIC-043 : genre relu après l'écriture de style déclenchée par la copie
+     *  (`null` = aucune écriture, la valeur d'avant est conservée). */
+    genre?: string | null;
+  },
 ): boolean {
   let curr = destDir;
   let ancestorInfo: { node: TreeNode; baseDir: string } | undefined;
@@ -90,6 +98,7 @@ export function patchSourceFileAfterCopy(
       year: string | null;
       duration: number | null;
       codec: string | null;
+      genre?: string | null;
       baseDir: string;
     }>) || [];
   if (!node.__files__) node.__files__ = entries;
@@ -99,6 +108,7 @@ export function patchSourceFileAfterCopy(
     year: fileData.year,
     duration: fileData.duration,
     codec: fileData.codec,
+    genre: fileData.genre ?? null,
     baseDir: ancestorInfo.baseDir,
   });
 

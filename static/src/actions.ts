@@ -9,8 +9,10 @@ import { durationCompatible, type VersionGroup } from './dupGroups.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
 import { loadRatings } from './ratings.js';
 import { revealSourceDir } from './render/sourceTree.js';
+import { refreshStyleCell } from './render/styleCell.js';
 import { getBatchCopy } from './render.js';
 import { type FileIndex, state } from './state.js';
+import { parseFolderName } from './styles.js';
 import { closeAllModals, confirmDialog, openModal, promptDialog, showError } from './ui.js';
 
 // ── Config types ───────────────────────────────────────────────────────────
@@ -196,28 +198,106 @@ export function refreshDupMatches(): void {
 
 // ── Copy (F5) ─────────────────────────────────────────────────────────────
 
+/** Un fichier de la paire épars/copie touché par l'écriture de style
+ *  déclenchée par /copy (EPIC-043), tel que le renvoie le serveur. */
+export interface CopyStyleWrite {
+  path: string;
+  role: 'epars' | 'copie';
+  ok: boolean;
+  changed: boolean;
+  style?: string | null;
+  error?: string;
+}
+
+interface CopyResponse {
+  ok: boolean;
+  year?: string | null;
+  duration?: number | null;
+  codec?: string | null;
+  genre?: string | null;
+  style?: string | null;
+  style_writes?: CopyStyleWrite[];
+  style_error?: string | null;
+}
+
+/** Racines Source Data connues du client : les racines scannées + celle de la
+ *  config active (une racine jamais scannée déclare quand même ses dossiers). */
+function sourceRoots(): string[] {
+  const roots = Object.keys(state.sourceFiles);
+  const cfg = configData.configs[configData.active];
+  if (cfg?.source_data && !roots.includes(cfg.source_data)) roots.push(cfg.source_data);
+  return roots;
+}
+
+/** Style déclaré par un dossier de destination, vu depuis une racine Source
+ *  Data : **premier segment** du chemin relatif. Miroir client de
+ *  `_style_of_dest_dir` (app.py) — même grammaire `parseFolderName`, tenue
+ *  honnête par une table de noms testée des deux côtés. null si la destination
+ *  n'est pas sous une racine connue, ou si le segment ne déclare rien
+ *  (`_trash`, `2008_08`, dossier capitalisé). */
+export function styleOfDestDir(destDir: string): string | null {
+  const root = sourceRoots().find(dir => destDir === dir || destDir.startsWith(dir.endsWith('/') ? dir : `${dir}/`));
+  if (!root) return null;
+  const rel = destDir === root ? '' : destDir.substring(root.length).replace(/^\/+/, '');
+  const seg = rel.split('/')[0];
+  return seg ? (parseFolderName(seg)?.style ?? null) : null;
+}
+
+/** Phrase de consentement de la modale F5 : la copie écrit le style déclaré par
+ *  le dossier cible (EPIC-043). '' si la destination ne déclare rien — le
+ *  comportement d'avant, sans mention. */
+export function styleConsentLine(destDir: string): string {
+  const style = styleOfDestDir(destDir);
+  return style
+    ? `Le style « ${style} » du dossier cible sera écrit dans le tag genre, sur l'épars et sur la copie (l'année n'est pas touchée).`
+    : '';
+}
+
+/** Note de statut de l'écriture de style ('' si rien à signaler). Un échec est
+ *  RAPPORTÉ, jamais bloquant : la copie a réussi, le tag est un effet de bord. */
+export function styleNoteOf(res: CopyResponse): string {
+  if (!res.style) return res.style_error ? ` · style non écrit : ${res.style_error}` : '';
+  if (res.style_error) return ` · style « ${res.style} » non écrit : ${res.style_error}`;
+  const writes = res.style_writes ?? [];
+  const ko = writes.filter(w => !w.ok);
+  if (ko.length) {
+    return ` · style « ${res.style} » non écrit sur ${ko.map(w => w.role).join(' + ')} : ${ko[0].error ?? 'échec'}`;
+  }
+  const changed = writes.filter(w => w.changed).map(w => w.role);
+  return changed.length
+    ? ` · style « ${res.style} » écrit (${changed.join(' + ')})`
+    : ` · style « ${res.style} » déjà à jour`;
+}
+
+/** Répercute l'écriture de style sur l'état local : genre de l'épars (seulement
+ *  s'il a été écrit) et cellule *Style* de la ligne (le chip « écrit ✓ »
+ *  compare `entry.genre` au style choisi — sans ce patch il mentirait). */
+function applyCopyStyle(fullSrc: string, eparDir: string, filename: string, res: CopyResponse): void {
+  if (!res.style) return;
+  const epars = (res.style_writes ?? []).find(w => w.role === 'epars');
+  const entry = state.eparsFiles[eparDir]?.[filename];
+  if (entry && epars?.ok) entry.genre = epars.style ?? res.style ?? null;
+  refreshStyleCell(fullSrc);
+}
+
 /** Copie `files` (épars) vers `destDir`, patch l'index + le DOM, recharge le
  *  journal, vide la sélection et révèle le dossier destination. Renvoie les
- *  fullpaths épars effectivement copiés. Extrait du handler batch de F5
- *  (EPIC-035) pour être enchaîné par dossier cible depuis l'aperçu de
- *  rangement — corps iso-comportement, aucune confirmation ici (l'appelant
- *  l'a déjà obtenue). */
+ *  fullpaths épars effectivement copiés et la note de style éventuelle
+ *  (EPIC-043). Extrait du handler batch de F5 (EPIC-035) pour être enchaîné par
+ *  dossier cible depuis l'aperçu de rangement — corps iso-comportement, aucune
+ *  confirmation ici (l'appelant l'a déjà obtenue). */
 export async function copyFilesTo(
   destDir: string,
   files: Array<{ filename: string; eparDir: string; fullpath: string }>,
-): Promise<string[]> {
+): Promise<{ copied: string[]; styleNote: string }> {
   const copied: string[] = [];
+  const notes = new Set<string>();
   for (const f of files) {
     const relPath = state.eparsFiles[f.eparDir]?.[f.filename]?.path;
     if (!relPath) continue;
     const fullSrc = `${f.eparDir}/${relPath}`;
     try {
-      const res = await api<{
-        ok: boolean;
-        year?: string | null;
-        duration?: number | null;
-        codec?: string | null;
-      }>('/copy', {
+      const res = await api<CopyResponse>('/copy', {
         method: 'POST',
         body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename: f.filename }),
       });
@@ -234,6 +314,7 @@ export async function copyFilesTo(
           year: res.year ?? null,
           duration: res.duration ?? null,
           codec: res.codec ?? null,
+          genre: res.genre ?? null,
         };
       }
       patchEparsFileAfterCopy(f.filename, f.eparDir);
@@ -242,7 +323,11 @@ export async function copyFilesTo(
         year: res.year ?? null,
         duration: res.duration ?? null,
         codec: res.codec ?? null,
+        genre: res.genre ?? null,
       });
+      applyCopyStyle(fullSrc, f.eparDir, f.filename, res);
+      const note = styleNoteOf(res);
+      if (note) notes.add(note);
     } catch (_) {
       /* continue */
     }
@@ -255,7 +340,7 @@ export async function copyFilesTo(
   // replié) pour montrer la copie — l'expansion persiste ensuite.
   revealSourceDir(destDir);
   requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
-  return copied;
+  return { copied, styleNote: [...notes].join('') };
 }
 
 export function executeCopy(): void {
@@ -266,10 +351,12 @@ export function executeCopy(): void {
     const files = batch.files;
     const dialogMsg = document.getElementById('dialog-msg');
     if (dialogMsg) {
-      dialogMsg.textContent =
+      const base =
         files.length === 1
           ? `Copier "${files[0].filename}" vers "${destDir}" ?`
           : `Copier ${files.length} fichiers vers "${destDir}" ?`;
+      const consent = styleConsentLine(destDir);
+      dialogMsg.textContent = consent ? `${base}\n${consent}` : base;
     }
     openModal('dialog');
     const confirmBtn = document.getElementById('dialog-confirm');
@@ -277,9 +364,10 @@ export function executeCopy(): void {
     if (confirmBtn) {
       confirmBtn.onclick = async () => {
         closeAllModals();
-        const copied = (await copyFilesTo(destDir, files)).length;
+        const { copied, styleNote } = await copyFilesTo(destDir, files);
+        const n = copied.length;
         setStatus(
-          `✓ ${copied}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}`,
+          `✓ ${n}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}${styleNote}`,
         );
       };
     }
@@ -319,7 +407,11 @@ export function executeCopy(): void {
   const destDir = rightFocus.dataset.dirpath || '';
 
   const dialogMsg = document.getElementById('dialog-msg');
-  if (dialogMsg) dialogMsg.textContent = `Copier "${filename}" vers "${destDir}" ?`;
+  if (dialogMsg) {
+    const base = `Copier "${filename}" vers "${destDir}" ?`;
+    const consent = styleConsentLine(destDir);
+    dialogMsg.textContent = consent ? `${base}\n${consent}` : base;
+  }
   openModal('dialog');
 
   const confirmBtn = document.getElementById('dialog-confirm');
@@ -329,13 +421,10 @@ export function executeCopy(): void {
     confirmBtn.onclick = async () => {
       closeAllModals();
       try {
-        const res = await api<{ ok: boolean; year?: string | null; duration?: number | null; codec?: string | null }>(
-          '/copy',
-          {
-            method: 'POST',
-            body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename }),
-          },
-        );
+        const res = await api<CopyResponse>('/copy', {
+          method: 'POST',
+          body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename }),
+        });
         state.journal = await api('/journal');
         let relPathNew = filename;
         const sourceDir = Object.keys(state.sourceFiles).find(dir => destDir === dir || destDir.startsWith(`${dir}/`));
@@ -348,6 +437,7 @@ export function executeCopy(): void {
             year: res.year ?? null,
             duration: res.duration ?? null,
             codec: res.codec ?? null,
+            genre: res.genre ?? null,
           };
         }
         patchEparsFileAfterCopy(filename, eparDir);
@@ -356,7 +446,9 @@ export function executeCopy(): void {
           year: res.year ?? null,
           duration: res.duration ?? null,
           codec: res.codec ?? null,
+          genre: res.genre ?? null,
         });
+        applyCopyStyle(fullSrc, eparDir, filename, res);
         // Trigger EventEmitter for nested sourceFiles mutations
         state.sourceFiles = { ...state.sourceFiles };
         refreshDupMatches(); // l'index droit vient de muter → la Map peut être périmée
@@ -364,7 +456,7 @@ export function executeCopy(): void {
         // Auto-expansion mémoire : montrer la copie sans re-déplier.
         revealSourceDir(destDir);
         requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
-        setStatus(`✓ ${filename} copié vers ${destDir}`);
+        setStatus(`✓ ${filename} copié vers ${destDir}${styleNoteOf(res)}`);
       } catch (err) {
         showError(`Échec de la copie : ${err instanceof Error ? err.message : String(err)}`);
       }

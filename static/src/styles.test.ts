@@ -143,6 +143,30 @@ describe('styles — parseFolderName', () => {
   it('parse les 86 dossiers réels', () => {
     for (const [dir] of REAL_FOLDERS) expect(parseFolderName(dir), dir).not.toBeNull();
   });
+  it('MÊME table que test_app.py::STYLE_FOLDER_CASES (EPIC-043)', () => {
+    // Miroir Python/TS de la grammaire : la dérivation du style à la copie
+    // (app.py::_style_of_folder) et le client doivent classer ces noms pareil.
+    // Toute divergence casse l'un des deux côtés, pas les deux en silence.
+    const CASES: Array<[string, string | null]> = [
+      ['techno_acid_1990', 'techno_acid'],
+      ['techno_1990', 'techno'],
+      ['italo_disco', 'italo_disco'],
+      ['intro', 'intro'],
+      ['_trash', null],
+      ['_playlists', null],
+      ['_oldies', null],
+      ['2008_08', null],
+      ['1_2008_08', null],
+      ['Techno_1990', null],
+      ['techno acid', null],
+      ['techno-acid', null],
+      ['techno_acid_1990_x', null],
+      ['techno_acid_199O', null],
+    ];
+    for (const [name, expected] of CASES) {
+      expect(parseFolderName(name)?.style ?? null, name).toBe(expected);
+    }
+  });
 });
 
 describe('styles — trancheOf / yearOf / TRANCHES', () => {

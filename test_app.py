@@ -3042,12 +3042,14 @@ def test_years_review_fichier_corrompu_revanire_vide(client, tmp_path, monkeypat
 # (`apply_styles.py --undo` / `apply_years.py --undo` restent la sortie de secours).
 
 
-def make_tagged_mp3(path, year=None):
+def make_tagged_mp3(path, year=None, genre=None):
     """MP3 minimal valide (mutagen exige une synchro MPEG)."""
-    from mutagen.id3 import ID3, TDRC
+    from mutagen.id3 import ID3, TCON, TDRC
     tags = ID3()
     if year:
         tags.add(TDRC(encoding=0, text=year))
+    if genre:
+        tags.add(TCON(encoding=0, text=genre))
     tags.save(str(path), v2_version=4)
     with open(path, 'ab') as f:
         for _ in range(3):
@@ -3157,3 +3159,148 @@ def test_apply_tags_validation(client, monkeypatch, tmp_path):
     body = client.post('/styles/apply',
                        json={'targets': [str(txt)], 'style': 'techno'}).get_json()
     assert body['written'] == 0 and 'extension' in body['results'][0]['error']
+
+
+# ── EPIC-043 : le style est écrit au moment de la copie (F5) ───────────────
+# Le dossier de destination DÉCLARE le style (grammaire `<style>_<tranche>`) :
+# /copy l'écrit sur la copie ET sur l'épars d'origine, dans le MÊME journal que
+# les scripts (`apply_styles.py --undo` reste la sortie de secours). Jamais
+# l'année, jamais bloquant, jamais réécrit si le tag est déjà le bon.
+
+# Table partagée avec static/src/styles.test.ts : la même liste de noms est
+# testée des deux côtés (miroir Python/TS de `parseFolderName`).
+STYLE_FOLDER_CASES = [
+    ('techno_acid_1990', 'techno_acid'),
+    ('techno_1990', 'techno'),
+    ('italo_disco', 'italo_disco'),
+    ('intro', 'intro'),
+    ('_trash', None),
+    ('_playlists', None),
+    ('_oldies', None),
+    ('2008_08', None),
+    ('1_2008_08', None),
+    ('Techno_1990', None),
+    ('techno acid', None),
+    ('techno-acid', None),
+    ('techno_acid_1990_x', None),
+    ('techno_acid_199O', None),
+]
+
+
+def _copy_env(client, monkeypatch, tmp_path):
+    """Monde épars + Source Data pour /copy : racine source avec un dossier de
+    style, épars tagué 'Blues' (déjà dans le cache → son genre doit suivre)."""
+    from app import STYLE_JOURNAL
+    src = tmp_path / 'style'
+    ep = tmp_path / 'epars'
+    (src / 'techno_1990').mkdir(parents=True)
+    ep.mkdir()
+    style_journal = tmp_path / 'style_journal.jsonl'
+    monkeypatch.setattr('app.STYLE_JOURNAL', str(style_journal))
+    client.post('/config', json=make_cfg(source_data=str(src), epars_dirs=[str(ep)]))
+    track = ep / 'hit.mp3'
+    make_tagged_mp3(track, year='1992', genre='Blues')
+    (tmp_path / 'cache.json').write_text(json.dumps({
+        'source': {str(src): {}},
+        'epars': {str(ep): {'hit.mp3': {'path': 'hit.mp3', 'year': '1992',
+                                        'duration': 200, 'codec': 'MP3 320kbps',
+                                        'genre': 'Blues'}}},
+    }))
+    assert STYLE_JOURNAL                     # le chemin réel est bien celui des scripts
+    return style_journal, src, ep, track
+
+
+def _copy(client, track, dest_dir):
+    return client.post('/copy', json={'source_path': str(track),
+                                      'dest_dir': str(dest_dir),
+                                      'filename': track.name})
+
+
+def test_style_par_dossier_partage_avec_le_client():
+    from app import _style_of_folder
+    assert [(n, _style_of_folder(n)) for n, _ in STYLE_FOLDER_CASES] == STYLE_FOLDER_CASES
+
+
+def test_copy_ecrit_le_style_des_deux_cotes(client, monkeypatch, tmp_path):
+    """F5 vers techno_1990 : le tag part sur la copie ET sur l'épars, journalisé."""
+    style_journal, src, ep, track = _copy_env(client, monkeypatch, tmp_path)
+    body = _copy(client, track, src / 'techno_1990').get_json()
+
+    assert body['ok'] is True and body['style'] == 'techno' and body['style_error'] is None
+    copied = src / 'techno_1990' / 'hit.mp3'
+    assert get_audio_meta(str(track))[3] == 'techno'      # l'épars suit son rangement
+    assert get_audio_meta(str(copied))[3] == 'techno'
+    assert body['genre'] == 'techno'                      # relu après écriture
+    writes = {w['role']: w for w in body['style_writes']}
+    assert set(writes) == {'epars', 'copie'}
+    assert writes['epars']['changed'] and writes['epars']['old'] == 'Blues'
+    assert writes['copie']['changed'] and writes['copie']['frame'] == 'TCON'
+    lines = [json.loads(x) for x in style_journal.read_text().splitlines() if x]
+    assert [(l['old'], l['new'], l['source'], l['ok']) for l in lines] == [
+        ('Blues', 'techno', 'copy-f5', True), ('Blues', 'techno', 'copy-f5', True)]
+    # cache : le genre de l'épars est rafraîchi (le scan suivant relit la même vérité)
+    cache = json.loads((tmp_path / 'cache.json').read_text())
+    assert cache['epars'][str(ep)]['hit.mp3']['genre'] == 'techno'
+    assert cache['source'][str(src)]['hit.mp3']['genre'] == 'techno'
+
+
+def test_copy_style_du_sous_dossier_et_annee_intacte(client, monkeypatch, tmp_path):
+    """Un sous-dossier ne change rien (1er segment) et l'année n'est pas écrite."""
+    _, src, _, track = _copy_env(client, monkeypatch, tmp_path)
+    body = _copy(client, track, src / 'techno_1990' / 'sous-dossier').get_json()
+
+    assert body['style'] == 'techno'
+    assert get_audio_meta(str(track))[0] == '1992'   # TDRC jamais touché par une copie
+    assert get_audio_meta(str(src / 'techno_1990' / 'sous-dossier' / 'hit.mp3'))[3] == 'techno'
+
+
+def test_copy_sans_style_declare_ne_touche_a_rien(client, monkeypatch, tmp_path):
+    """Hors grammaire (`_trash`, daté) : aucun style dérivé, aucun tag écrit."""
+    style_journal, src, _, track = _copy_env(client, monkeypatch, tmp_path)
+    for dest in (src / '_trash' / '2026-09-22', src / '2008_08', tmp_path / 'hors-racine'):
+        body = _copy(client, track, dest).get_json()
+        assert body['ok'] is True
+        assert body['style'] is None and body['style_writes'] == []
+    assert not style_journal.exists()
+    assert get_audio_meta(str(track))[3] == 'Blues'          # l'épars est intact
+
+
+def test_copy_style_idempotent_sans_bruit_de_journal(client, monkeypatch, tmp_path):
+    """Deuxième copie : tag déjà au bon genre → changed False, zéro journal."""
+    style_journal, src, _, track = _copy_env(client, monkeypatch, tmp_path)
+    _copy(client, track, src / 'techno_1990')
+    before = style_journal.read_text()
+
+    body = _copy(client, track, src / 'techno_1990').get_json()
+    assert body['style'] == 'techno'
+    assert all(w['changed'] is False and w['ok'] for w in body['style_writes'])
+    assert all(w['old'] == 'techno' for w in body['style_writes'])
+    assert style_journal.read_text() == before
+
+
+def test_copy_style_non_bloquant(client, monkeypatch, tmp_path):
+    """Format non géré / mutagen absent : la copie reste ok, l'échec est rapporté."""
+    style_journal, src, ep, _ = _copy_env(client, monkeypatch, tmp_path)
+    wma = ep / 'dub.wma'
+    wma.write_bytes(b'0' * 64)
+
+    body = _copy(client, wma, src / 'techno_1990').get_json()
+    assert body['ok'] is True and body['style'] == 'techno'
+    assert [(w['role'], w['ok'], w['error']) for w in body['style_writes']] == [
+        ('epars', False, 'extension non gérée'), ('copie', False, 'extension non gérée')]
+    assert not style_journal.exists()
+
+    monkeypatch.setattr('app.HAS_MUTAGEN', False)
+    body = _copy(client, ep / 'hit.mp3', src / 'techno_1990').get_json()
+    assert body['ok'] is True and body['style_writes'] == []
+    assert body['style_error'] == 'mutagen indisponible'
+
+
+def test_move_vers_trash_ne_tague_pas(client, monkeypatch, tmp_path):
+    """Périmètre : /move ne dérive aucun style (le trash ne déclare rien)."""
+    style_journal, src, _, track = _copy_env(client, monkeypatch, tmp_path)
+    trash = src / '_trash' / '2026-09-22'
+    body = client.post('/move', json={'source_path': str(track), 'dest_dir': str(trash)}).get_json()
+    assert body['ok'] is True
+    assert get_audio_meta(str(trash / 'hit.mp3'))[3] == 'Blues'
+    assert not style_journal.exists()

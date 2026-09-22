@@ -592,6 +592,93 @@ def mkdir_source_dir():
     return jsonify({'ok': True, 'name': name, 'path': target})
 
 
+# ── EPIC-043 : le style est écrit au moment de la copie ────────────────
+# Le dossier de destination DÉCLARE le style (grammaire `<style>_<tranche>`,
+# la seule déclaration humaine du style dans cette app). La copie enregistre
+# cette décision dans le système de fichiers : elle doit l'enregistrer dans le
+# tag au même instant, sur la copie ET sur l'épars d'origine — sinon le scan
+# suivant remonte l'ancien genre, la cellule « Style » (chip « écrit ✓ ») et le
+# filtre genre travaillent sur une valeur qui contredit le rangement.
+# L'année n'est JAMAIS écrite par une copie (la tranche reste du rangement).
+# Miroir exact de `parseFolderName` (static/src/styles.ts) : les deux
+# implémentations sont tenues honnêtes par une MÊME table de noms testée des
+# deux côtés (test_app.py / styles.test.ts).
+STYLE_FOLDER_RX = re.compile(r'^([a-z]+(?:_[a-z]+)*?)(?:_(\d{4}))?$')
+
+
+def _style_of_folder(name):
+    """Style déclaré par un nom de dossier : 'techno_acid_1990' →
+    'techno_acid', 'italo_disco' → 'italo_disco', hors grammaire → None.
+    Les dossiers techniques (`_trash`, `_playlists`, `_oldies` — préfixe `_`),
+    datés (`2008_08`) ou capitalisés ne déclarent rien."""
+    m = STYLE_FOLDER_RX.match(name or '')
+    return m.group(1) if m else None
+
+
+def _style_of_dest_dir(dest_dir, source_data):
+    """Style du dossier de destination vu depuis la racine Source Data —
+    premier segment du chemin relatif (même règle que la taxonomie client et
+    `_known_styles`). None si la destination n'est pas sous la racine Source
+    Data, ou si le premier segment ne suit pas la grammaire."""
+    if not dest_dir or not source_data:
+        return None
+    root = os.path.abspath(source_data)
+    dest = os.path.abspath(dest_dir)
+    if dest == root or not dest.startswith(root + os.sep):
+        return None
+    rel = os.path.relpath(dest, root)
+    return _style_of_folder(rel.split(os.sep)[0])
+
+
+def _write_style_at_copy(path, style, role):
+    """Écrit le style sur un fichier de la paire épars/copie. Ne lève jamais :
+    la copie a réussi, un échec de tag est RAPPORTÉ (jamais bloquant).
+    Idempotent : déjà au bon genre → ni écriture, ni ligne de journal
+    (`changed: False`) — les copies sont fréquentes, le journal d'annulation
+    (`apply_styles.py --undo`) doit rester lisible."""
+    res = {'path': path, 'role': role, 'ok': False, 'changed': False}
+    try:
+        if os.path.splitext(path)[1].lower() not in AUDIO_EXTS:
+            res['error'] = 'extension non gérée'
+        elif not os.path.isfile(path):
+            res['error'] = 'fichier absent'
+        else:
+            old = get_audio_meta(path)[3]
+            res['old'] = old
+            if old == style:
+                res.update({'ok': True, 'changed': False, 'style': old})
+            else:
+                frame = _write_tag(path, style, 'style')
+                read_back = get_audio_meta(path)[3]
+                ok = read_back == style
+                _journal_line(STYLE_JOURNAL, {'path': path, 'old': old, 'new': style,
+                                              'source': 'copy-f5', 'frame': frame,
+                                              'ok': ok})
+                res.update({'ok': ok, 'changed': True, 'frame': frame, 'style': read_back})
+                if not ok:
+                    res['error'] = f'relu {read_back!r}'
+    except Exception as exc:                      # pragma: no cover - filet
+        res['error'] = f'{type(exc).__name__}: {exc}'
+    return res
+
+
+def _cache_update_meta(cache, abs_path, meta):
+    """Met à jour l'entrée de cache d'un fichier (épars ou source) après une
+    écriture de tag : le genre relu au scan suivant ne doit pas contredire ce
+    qui vient d'être écrit. False si le fichier n'est pas dans le cache."""
+    parent = os.path.dirname(abs_path)
+    base = os.path.basename(abs_path)
+    for side in ('epars', 'source'):
+        for root in list(cache.get(side, {}).keys()):
+            if parent == root or parent.startswith(root.rstrip('/') + '/'):
+                entry = cache[side][root].get(base)
+                if entry is None:
+                    continue
+                entry.update(meta)
+                return True
+    return False
+
+
 @app.route('/copy', methods=['POST'])
 def copy_file():
     def _resp(ok, **kw):
@@ -631,10 +718,30 @@ def copy_file():
         'status': 'copied'
     })
 
+    # EPIC-043 : le style déclaré par le dossier de destination est écrit sur la
+    # copie ET sur l'épars d'origine (jamais l'année). Non bloquant : la copie
+    # est déjà faite, un échec de tag est rapporté, jamais propagé.
+    active = get_active_config()
+    style = _style_of_dest_dir(dst_dir, active.get('source_data') or '')
+    style_writes = []
+    style_error = None
+    if style:
+        if not HAS_MUTAGEN:
+            style_error = 'mutagen indisponible'
+        else:
+            for path, role in ((src, 'epars'), (dst, 'copie')):
+                if os.path.abspath(path) == os.path.abspath(dst) and role == 'epars':
+                    continue                      # src == dst : une seule cible
+                style_writes.append(_write_style_at_copy(path, style, role))
+
     # Update cache so /load reflects the new file on refresh
     cache = load_json(CACHE_PATH)
     if cache:
+        written_epars = next((w for w in style_writes if w['role'] == 'epars' and w.get('ok')), None)
+        if written_epars:
+            _cache_update_meta(cache, src, {'genre': written_epars.get('style', style)})
         year, duration, codec, genre = get_audio_meta(dst)
+        saved = False
         for source_dir in list(cache.get('source', {}).keys()):
             if dst_dir == source_dir or dst_dir.startswith(source_dir.rstrip('/') + '/'):
                 rel = os.path.relpath(dst_dir, source_dir) if dst_dir != source_dir else '.'
@@ -642,10 +749,13 @@ def copy_file():
                 cache['source'][source_dir][filename] = {
                     'path': rel_path, 'year': year, 'duration': duration, 'codec': codec, 'genre': genre
                 }
-                save_json(CACHE_PATH, cache)
+                saved = True
                 break
+        if saved or written_epars:
+            save_json(CACHE_PATH, cache)
 
-    return _resp(True, _src=dst)
+    return _resp(True, _src=dst, style=style, style_writes=style_writes,
+                 style_error=style_error)
 
 
 @app.route('/move', methods=['POST'])
