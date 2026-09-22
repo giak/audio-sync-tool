@@ -252,7 +252,7 @@ navigateur (un harnais lancé sans rebuild mesure la version précédente).
 | `411433d` | Légende lisible : 4 colonnes jamais étirées, une abscisse par section (`subgrid`), familles de touches (8× `Échap` → 1 ligne), libellés raccourcis, harnais de mesure 10/10 (3/10 avant) |
 | `c96b90e` | Traçabilité de l'EPIC (commit ci-dessus) |
 | `8211f8b` | **Régression corrigée** : la légende des états ne peut plus être effacée par un template d'une autre version (adoption par titre + conservation `console.warn`), vérification H du harnais, test de contrat (1 145 vitest) |
-| _(ce commit)_ | **Défaut 3 corrigé** : une seule abscisse de libellé pour toute la feuille (`--legend-key`, fin de `subgrid`), modale `min(1800px, 95vw)`, palier 3 colonnes écarté après mesure, vérification J — 13/13 à 3440, 2560, 1920, 1600, 1366, 1000 et 700 px |
+| `23659fc` | **Défaut 3 corrigé** : une seule abscisse de libellé pour toute la feuille (`--legend-key`, fin de `subgrid`), modale `min(1800px, 95vw)`, palier 3 colonnes écarté après mesure, vérification J — 13/13 à 3440, 2560, 1920, 1600, 1366, 1000 et 700 px |
 | `92a6423` | **Régression 2 corrigée** : plus de table de colonnes (flux multi-colonnes adaptatif), vérification I du harnais, contrat F scoped aux largeurs où il est tenable — 12/12 sur 7 largeurs |
 
 ## Décisions
