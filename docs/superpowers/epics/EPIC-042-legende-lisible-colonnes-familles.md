@@ -177,7 +177,7 @@ navigateur (un harnais lancé sans rebuild mesure la version précédente).
 |---|---|
 | `411433d` | Légende lisible : 4 colonnes jamais étirées, une abscisse par section (`subgrid`), familles de touches (8× `Échap` → 1 ligne), libellés raccourcis, harnais de mesure 10/10 (3/10 avant) |
 | `c96b90e` | Traçabilité de l'EPIC (commit ci-dessus) |
-| _(ce commit)_ | **Régression corrigée** : la légende des états ne peut plus être effacée par un template d'une autre version (adoption par titre + conservation `console.warn`), vérification H du harnais, test de contrat (1 145 vitest) |
+| `8211f8b` | **Régression corrigée** : la légende des états ne peut plus être effacée par un template d'une autre version (adoption par titre + conservation `console.warn`), vérification H du harnais, test de contrat (1 145 vitest) |
 
 ## Décisions
 
