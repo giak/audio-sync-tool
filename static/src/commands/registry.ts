@@ -55,6 +55,16 @@ export interface CommandBinding {
   label?: string;
   /** Section de légende (défaut : global). */
   group?: LegendGroup;
+  /** Famille de légende (EPIC-042) : les bindings d'une MÊME section qui
+   *  partagent cette clé sont rendus sur **une seule ligne** — leurs touches
+   *  s'affichent côte à côte, le texte est celui du binding marqué
+   *  `legendFamilyTitle`. Évite les feuilles de 8 lignes « Échap fermer X »
+   *  qui décrivent la même touche. Le binding reste actif au clavier : la
+   *  famille ne change QUE l'affichage de la légende. */
+  legendFamily?: string;
+  /** Binding dont le `label` sert de titre à la famille (exactement un par
+   *  famille — vérifié par legend.test.ts), et dont la position donne l'ordre. */
+  legendFamilyTitle?: boolean;
 }
 
 class CommandRegistry {

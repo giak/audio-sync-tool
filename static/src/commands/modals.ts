@@ -12,8 +12,9 @@ import { registry } from './registry.js';
 registry.bind({
   key: 'Escape',
   activeModal: 'dialog',
-  label: 'Fermer la modale',
+  label: 'Fermer la boîte de dialogue',
   group: 'global',
+  legendFamily: 'fermer',
   handler: () => closeAllModals(),
 });
 registry.bind({
@@ -21,6 +22,7 @@ registry.bind({
   activeModal: 'config',
   label: 'Fermer la config',
   group: 'global',
+  legendFamily: 'fermer',
   handler: () => closeAllModals(),
 });
 registry.bind({
@@ -28,6 +30,7 @@ registry.bind({
   activeModal: 'legend',
   label: 'Fermer la légende',
   group: 'global',
+  legendFamily: 'fermer',
   handler: () => closeAllModals(),
 });
 registry.bind({
@@ -35,6 +38,7 @@ registry.bind({
   activeModal: 'journal',
   label: 'Fermer le journal',
   group: 'global',
+  legendFamily: 'fermer',
   handler: () => closeAllModals(),
 });
 registry.bind({
@@ -42,6 +46,7 @@ registry.bind({
   activeModal: 'playlists',
   label: 'Fermer le gestionnaire de playlists',
   group: 'global',
+  legendFamily: 'fermer',
   handler: () => closeAllModals(),
 });
 registry.bind({
@@ -49,6 +54,7 @@ registry.bind({
   activeModal: 'cueEditor',
   label: 'Fermer l’éditeur de cues',
   group: 'global',
+  legendFamily: 'fermer',
   handler: () => closeAllModals(),
 });
 
@@ -60,7 +66,7 @@ registry.bind({
   isInput: false,
   activeModal: null,
   isContextMenuOpen: false,
-  label: 'Ouvrir la légende (raccourcis & états)',
+  label: 'Ouvrir cette légende',
   group: 'global',
   handler: () => openModal('legend'),
 });

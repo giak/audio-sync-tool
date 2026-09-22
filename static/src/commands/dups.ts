@@ -8,20 +8,23 @@ import { registry } from './registry.js';
 
 registry.bind({
   key: 'ArrowDown',
+  legendFamily: 'nav-paires',
+  legendFamilyTitle: true,
   page: 'dups',
   activeModal: null,
   isInput: false,
-  label: 'Naviguer vers le bas (paires de doublons)',
+  label: 'Naviguer dans les paires',
   group: 'dups',
   handler: () => dupsMoveFocus(1),
 });
 
 registry.bind({
   key: 'ArrowUp',
+  legendFamily: 'nav-paires',
   page: 'dups',
   activeModal: null,
   isInput: false,
-  label: 'Naviguer vers le haut (paires de doublons)',
+  label: 'Naviguer dans les paires',
   group: 'dups',
   handler: () => dupsMoveFocus(-1),
 });
@@ -31,7 +34,7 @@ registry.bind({
   page: 'dups',
   activeModal: null,
   isInput: false,
-  label: 'Appliquer le plan de rangement (perdants → _trash)',
+  label: 'Appliquer le plan de rangement',
   group: 'dups',
   handler: () => dupsApplyFocused(),
 });

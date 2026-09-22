@@ -37,7 +37,7 @@ registry.bind({
   key: 'F10',
   shiftKey: true,
   isContextMenuOpen: false,
-  label: 'Ouvrir le menu contextuel de l’élément focusé',
+  label: 'Menu contextuel (élément)',
   group: 'global',
   handler: openContextMenuOnFocused,
 });
@@ -47,15 +47,18 @@ registry.bind({
 registry.bind({
   key: 'ArrowDown',
   isContextMenuOpen: true,
-  label: 'Menu contextuel : item suivant',
+  label: 'Menu contextuel : parcourir',
   group: 'global',
+  legendFamily: 'menu',
+  legendFamilyTitle: true,
   handler: () => moveContextMenuHighlight(1),
 });
 registry.bind({
   key: 'ArrowUp',
   isContextMenuOpen: true,
-  label: 'Menu contextuel : item précédent',
+  label: 'Menu contextuel : parcourir',
   group: 'global',
+  legendFamily: 'menu',
   handler: () => moveContextMenuHighlight(-1),
 });
 
@@ -63,7 +66,7 @@ registry.bind({
 registry.bind({
   key: 'Enter',
   isContextMenuOpen: true,
-  label: 'Menu contextuel : valider l’item surligné',
+  label: 'Menu contextuel : valider',
   group: 'global',
   handler: () => activateContextMenuItem(),
 });
@@ -74,7 +77,9 @@ registry.bind({
 registry.bind({
   key: 'Escape',
   isContextMenuOpen: true,
-  label: 'Fermer le menu contextuel',
+  label: 'Fermer ce qui est ouvert',
   group: 'global',
+  legendFamily: 'fermer',
+  legendFamilyTitle: true,
   handler: () => closeContextMenu(),
 });

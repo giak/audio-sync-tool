@@ -148,6 +148,8 @@ registry.bind({
   isInput: false,
   label: 'Retirer la piste du sidebar',
   group: 'playlist',
+  legendFamily: 'retirer-piste',
+  legendFamilyTitle: true,
   handler: () => {
     const focused = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
     if (focused) {
@@ -165,8 +167,9 @@ registry.bind({
   playlistMode: true,
   playlistFocus: 'sidebar',
   isInput: false,
-  label: 'Retirer la piste du sidebar (Backspace)',
+  label: 'Retirer la piste du sidebar',
   group: 'playlist',
+  legendFamily: 'retirer-piste',
   handler: () => {
     const focused = document.querySelector('#playlist-tracks .focused') as HTMLElement | null;
     if (focused) {
@@ -251,7 +254,9 @@ registry.bind({
   key: 'ArrowDown',
   playlistMode: true,
   isInput: false,
-  label: 'Naviguer vers le bas (source / pistes)',
+  label: 'Naviguer (source / pistes)',
+  legendFamily: 'nav-pistes',
+  legendFamilyTitle: true,
   group: 'playlist',
   handler: () => {
     if (state.playlistFocus === 'source') {
@@ -279,7 +284,8 @@ registry.bind({
   key: 'ArrowUp',
   playlistMode: true,
   isInput: false,
-  label: 'Naviguer vers le haut (source / pistes)',
+  label: 'Naviguer (source / pistes)',
+  legendFamily: 'nav-pistes',
   group: 'playlist',
   handler: () => {
     if (state.playlistFocus === 'source') {
@@ -309,7 +315,7 @@ registry.bind({
   playlistMode: true,
   playlistFocus: 'source',
   isInput: false,
-  label: 'Jouer le fichier / déplier le dossier',
+  label: 'Jouer / déplier le dossier',
   group: 'playlist',
   handler: () => {
     const container = document.getElementById('playlist-source-container');
@@ -328,7 +334,7 @@ registry.bind({
   key: 'ArrowLeft',
   playlistMode: true,
   isInput: false,
-  label: 'Colonne précédente / seek audio en lecture',
+  label: 'Colonne précédente / seek',
   group: 'playlist',
   handler: () => {
     const container = document.getElementById('playlist-source-container');
@@ -342,7 +348,7 @@ registry.bind({
   key: 'ArrowRight',
   playlistMode: true,
   isInput: false,
-  label: 'Colonne suivante / seek audio en lecture',
+  label: 'Colonne suivante / seek',
   group: 'playlist',
   handler: () => {
     const container = document.getElementById('playlist-source-container');

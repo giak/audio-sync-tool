@@ -8,20 +8,23 @@ import { registry } from './registry.js';
 
 registry.bind({
   key: 'ArrowDown',
+  legendFamily: 'nav-annees',
+  legendFamilyTitle: true,
   page: 'years',
   activeModal: null,
   isInput: false,
-  label: 'Naviguer vers le bas (années à revue)',
+  label: 'Naviguer dans les années',
   group: 'years',
   handler: () => yearsMoveFocus(1),
 });
 
 registry.bind({
   key: 'ArrowUp',
+  legendFamily: 'nav-annees',
   page: 'years',
   activeModal: null,
   isInput: false,
-  label: 'Naviguer vers le haut (années à revue)',
+  label: 'Naviguer dans les années',
   group: 'years',
   handler: () => yearsMoveFocus(-1),
 });
@@ -31,7 +34,7 @@ registry.bind({
   page: 'years',
   activeModal: null,
   isInput: false,
-  label: 'Exporter les choix de revue (→ apply_years --review)',
+  label: 'Exporter les choix (apply_years)',
   group: 'years',
   handler: () => exportChoices(),
 });

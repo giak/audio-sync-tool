@@ -22,8 +22,10 @@ registry.bind({
   activePanel: 'epars',
   isInput: false,
   playlistMode: false,
-  label: 'Panneau gauche → droite',
+  label: 'Changer de colonne',
   group: 'sync',
+  legendFamily: 'colonne',
+  legendFamilyTitle: true,
   handler: () => setActivePanel('source'),
 });
 registry.bind({
@@ -31,8 +33,9 @@ registry.bind({
   activePanel: 'source',
   isInput: false,
   playlistMode: false,
-  label: 'Panneau droit → gauche',
+  label: 'Changer de colonne (retour)',
   group: 'sync',
+  legendFamily: 'colonne',
   handler: () => setActivePanel('epars'),
 });
 
@@ -42,8 +45,10 @@ registry.bind({
   page: 'sync', // SUSPECT (EPIC-031) : sans garde page, shadowe dups ↓ (pm:false passe en dups)
   isInput: false,
   playlistMode: false,
-  label: 'Naviguer vers le bas (liste focusée)',
+  label: 'Naviguer dans la liste',
   group: 'sync',
+  legendFamily: 'nav-vertical',
+  legendFamilyTitle: true,
   handler: () => {
     const container =
       state.activePanel === 'source'
@@ -59,8 +64,9 @@ registry.bind({
   page: 'sync', // SUSPECT (EPIC-031) : sans garde page, shadowe dups ↑ (pm:false passe en dups)
   isInput: false,
   playlistMode: false,
-  label: 'Naviguer vers le haut (liste focusée)',
+  label: 'Naviguer dans la liste',
   group: 'sync',
+  legendFamily: 'nav-vertical',
   handler: () => {
     const container =
       state.activePanel === 'source'
@@ -77,7 +83,7 @@ registry.bind({
   isInput: false,
   playlistMode: false,
   altKey: false, // FINDING 3 (EPIC-031) : sinon shadowe Alt+← (historique)
-  label: 'Colonne précédente (Source Data)',
+  label: 'Colonne précédente',
   group: 'sync',
   handler: () => {
     const container = document.getElementById('source-container');
@@ -92,7 +98,7 @@ registry.bind({
   isInput: false,
   playlistMode: false,
   altKey: false, // FINDING 3 (EPIC-031) : sinon shadowe Alt+→ (historique)
-  label: 'Colonne suivante (Source Data)',
+  label: 'Colonne suivante',
   group: 'sync',
   handler: () => {
     const container = document.getElementById('source-container');
@@ -109,7 +115,7 @@ registry.bind({
   isAudioPlaying: false,
   shiftKey: false,
   altKey: false,
-  label: 'Épars : ← sans effet (seek audio en lecture)',
+  label: 'Épars : ← seek (en écoute)',
   group: 'sync',
   handler: () => {},
 });
@@ -121,7 +127,7 @@ registry.bind({
   isAudioPlaying: false,
   shiftKey: false,
   altKey: false,
-  label: 'Épars : → sans effet (seek audio en lecture)',
+  label: 'Épars : → seek (en écoute)',
   group: 'sync',
   handler: () => {},
 });
@@ -131,7 +137,7 @@ registry.bind({
   key: 'Enter',
   isInput: false,
   playlistMode: false,
-  label: 'Jouer le fichier / déplier le dossier',
+  label: 'Jouer / déplier le dossier',
   group: 'sync',
   handler: () => {
     const container =
@@ -153,7 +159,7 @@ registry.bind({
   key: ' ',
   isInput: false,
   playlistMode: false,
-  label: 'Sélectionner le fichier (multi-copie)',
+  label: 'Sélectionner (multi-copie)',
   group: 'sync',
   handler: () => {
     const container =
@@ -177,7 +183,7 @@ registry.bind({
   isInput: false,
   activeModal: null,
   playlistMode: false,
-  label: 'Focus le dossier parent',
+  label: 'Aller au dossier parent',
   group: 'sync',
   handler: () => {
     const container =
@@ -204,7 +210,7 @@ registry.bind({
   key: 'l',
   ctrlKey: true,
   isInput: false,
-  label: 'Focus le fichier en cours de lecture',
+  label: 'Aller au fichier en lecture',
   group: 'sync',
   handler: () => {
     const playingRow = document.querySelector('.led-playing')?.closest('.file-row') as HTMLElement | null;
@@ -227,7 +233,7 @@ registry.bind({
   key: 'ArrowLeft',
   altKey: true,
   isInput: false,
-  label: 'Historique : revenir en arrière',
+  label: 'Historique : reculer',
   group: 'sync',
   handler: () => navigateHistory(-1),
 });
@@ -256,8 +262,10 @@ registry.bind({
   key: 'Escape',
   isFilterInputFocused: true,
   activeModal: null,
-  label: 'Fermer le filtre (rendre le focus à la liste)',
+  label: 'Fermer filtre, puis dossier',
   group: 'sync',
+  legendFamily: 'fermer-sync',
+  legendFamilyTitle: true,
   handler: () => {
     (document.activeElement as HTMLElement | null)?.blur();
     hideFilterChip();
@@ -279,15 +287,16 @@ function focusFilterScopeList(): void {
 registry.bind({
   key: 'ArrowDown',
   isFilterInputFocused: true,
-  label: 'Du filtre → liste de la colonne du filtre',
+  label: 'Du filtre, entrer dans la liste',
   group: 'sync',
   handler: focusFilterScopeList,
 });
 registry.bind({
   key: 'Tab',
   isFilterInputFocused: true,
-  label: 'Du filtre → colonne voisine (Sync) ou liste de la colonne',
+  label: 'Changer de colonne',
   group: 'sync',
+  legendFamily: 'colonne',
   handler: () => {
     // Page sync : la convention Tab = bascule de colonne s'applique (symétrique).
     if (state.page === 'sync' && !state.playlistMode) {
@@ -311,8 +320,9 @@ registry.bind({
   isExpandedDirFocused: true,
   isFilterInputFocused: false,
   activeModal: null,
-  label: 'Refermer le dossier déplié focusé (avant le stop audio)',
+  label: 'Fermer filtre, puis dossier',
   group: 'sync',
+  legendFamily: 'fermer-sync',
   handler: () => {
     const dir = getFocusedExpandedDir();
     if (!dir) return;

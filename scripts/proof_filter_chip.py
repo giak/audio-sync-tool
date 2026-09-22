@@ -55,7 +55,9 @@ MEASURE = """(() => {
 })()"""
 
 
-def bootstrap():
+def bootstrap(window=None):
+    """Monde isolé + Flask + Chrome. `window` = taille Chrome ('L,H') pour les
+    harnais qui mesurent une mise en page dépendante de la fenêtre (modales)."""
     tmp = '/tmp/epic037_proof_world'
     if os.path.exists(tmp):
         shutil.rmtree(tmp)
@@ -81,7 +83,7 @@ def bootstrap():
     chrome = subprocess.Popen(
         ['google-chrome', '--headless=new', '--no-sandbox', '--disable-gpu',
          f'--remote-debugging-port={cdp}', '--remote-allow-origins=*',
-         f'--user-data-dir={tmp}/.chrome', f'--window-size={WINDOW}', 'about:blank'],
+         f'--user-data-dir={tmp}/.chrome', f'--window-size={window or WINDOW}', 'about:blank'],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return tmp, port, cdp, server, chrome
 

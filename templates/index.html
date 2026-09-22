@@ -167,46 +167,49 @@
       <h3>❓ Raccourcis & Légende</h3>
       <button class="modal-close" data-modal="legend">✕</button>
     </div>
+    <!-- Structure : 4 colonnes construites par render/legend.ts (EPIC-042).
+         Les sections STATIQUES (États, Cue editor) vivent ici et sont
+         DÉPLACÉES dans leur colonne (`data-legend-section`) ; les sections de
+         raccourcis sont GÉNÉRÉES depuis les bindings — éditer les raccourcis
+         dans commands/*.ts, jamais ici.
+         Une ligne = 2 cellules : `.legend-mark` (touche, pastille ou badge) et
+         `.legend-text` (le sens). -->
     <div id="legend-grid">
-      <div class="legend-section">
-        <h4>États — page Sync</h4>
-        <div class="legend-row"><span class="led-demo led-demo-nouveau"></span> Nouveau — pas dans la Source Data</div>
-        <div class="legend-row"><span class="led-demo led-demo-doublon"></span> Doublon — déjà présent (nom de fichier exact)</div>
-        <div class="legend-row"><span class="led-demo led-demo-dup-fuzzy"></span> Homonyme probable — matche un rangé (durée + nom, ↔)</div>
-        <div class="legend-row"><span class="led-demo led-demo-traite"></span> Traité — copié vers la Source Data</div>
-        <div class="legend-row"><span class="led-demo led-demo-playing"></span> En lecture (audio)</div>
-        <div class="legend-row"><span class="led-demo led-demo-selected"></span> Sélectionné (multi-copie, Espace)</div>
-        <div class="legend-row"><span class="twin-demo"></span> Halo ambre pulsé (colonne droite) — jumeau du doublon focusé</div>
-        <div class="legend-row"><span class="badge-demo">87</span> Note personnelle (0-100, touche N)</div>
-        <div class="legend-row"><span class="badge-demo">✅</span> Dans la playlist active</div>
-        <div class="legend-row"><span class="badge-demo">✓ NML</span> Matché dans la collection Traktor</div>
-        <div class="legend-row"><span class="badge-demo">≈ homonymes</span> Plusieurs entrées NML</div>
-        <div class="legend-row"><span class="badge-demo">✕ non importé</span> Absent du NML</div>
+      <div class="legend-section" data-legend-section="etats">
+        <h4>États &amp; pastilles</h4>
+        <div class="legend-row"><span class="legend-mark"><span class="led-demo led-demo-nouveau"></span></span><span class="legend-text">Nouveau — hors Source Data</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="led-demo led-demo-doublon"></span></span><span class="legend-text">Doublon — nom identique</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="led-demo led-demo-dup-fuzzy"></span></span><span class="legend-text">Homonyme probable</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="led-demo led-demo-traite"></span></span><span class="legend-text">Traité — déjà copié</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="led-demo led-demo-playing"></span></span><span class="legend-text">En lecture</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="led-demo led-demo-selected"></span></span><span class="legend-text">Sélectionné (multi-copie)</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="twin-demo"></span></span><span class="legend-text">Jumeau du doublon surligné</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="badge-demo">87</span></span><span class="legend-text">Note personnelle (0-100)</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="badge-demo">✅</span></span><span class="legend-text">Dans la playlist active</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="badge-demo">✓ NML</span></span><span class="legend-text">Matché dans Traktor</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="badge-demo">≈ homonymes</span></span><span class="legend-text">Plusieurs entrées Traktor</span></div>
+        <div class="legend-row"><span class="legend-mark"><span class="badge-demo">✕ non importé</span></span><span class="legend-text">Absent de Traktor</span></div>
       </div>
-      <!-- Sections « Raccourcis » GÉNÉRÉES depuis les bindings labellisés
-           (render/legend.ts, EPIC-031 P1) — insérées après la section États.
-           Éditer les raccourcis dans commands/*.ts, jamais ici. -->
-      <div class="legend-section">
-        <h4>Raccourcis — Cue editor</h4>
-        <div class="legend-row"><kbd>←→</kbd> Seek ±5 s</div>
-        <div class="legend-row"><kbd>+</kbd> / <kbd>−</kbd> Zoom (molette aussi)</div>
-        <div class="legend-row"><kbd>1–8</kbd> Poser un cue (slots A–H)</div>
-        <div class="legend-row"><kbd>C</kbd> Poser un cue au curseur</div>
-        <div class="legend-row"><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> Annuler / rétablir</div>
-        <div class="legend-row"><kbd>⟳ Loop</kbd> / <kbd>🔁 Play</kbd> Dessiner / lire une boucle</div>
-        <div class="legend-row"><kbd>← 1/4</kbd> / <kbd>→ 1/4</kbd> Calage grille (phase)</div>
-        <div class="legend-row"><kbd>◎ Beat 1</kbd> Poser le premier beat</div>
-        <div class="legend-row"><kbd>🔍 Analyser</kbd> Analyse serveur (BPM + phase)</div>
-        <div class="legend-row"><kbd>💾 Grille</kbd> Écrire dans le collection.nml</div>
-        <div class="legend-row"><kbd>Suppr</kbd> / clic droit Retirer / supprimer un cue</div>
-        <div class="legend-row">Double-clic Renommer / recolorer le cue</div>
-        <div class="legend-row"><kbd>Échap</kbd> Fermer l'éditeur (ou quitter le plein écran)</div>
+      <div class="legend-section" data-legend-section="cue">
+        <h4>Cue editor</h4>
+        <div class="legend-row"><span class="legend-mark"><kbd>←</kbd><kbd>→</kbd></span><span class="legend-text">Seek ±5 s</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>+</kbd><kbd>−</kbd></span><span class="legend-text">Zoom (molette aussi)</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>1–8</kbd></span><span class="legend-text">Poser un cue (slots A–H)</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>C</kbd></span><span class="legend-text">Poser un cue au curseur</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>Ctrl</kbd><kbd>Z</kbd></span><span class="legend-text">Annuler</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>Z</kbd></span><span class="legend-text">Rétablir</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>⟳</kbd><kbd>🔁</kbd></span><span class="legend-text">Dessiner / lire une boucle</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>← 1/4</kbd><kbd>→ 1/4</kbd></span><span class="legend-text">Calage de la grille (phase)</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>◎</kbd></span><span class="legend-text">Poser le premier beat</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>🔍</kbd></span><span class="legend-text">Analyser (BPM + phase)</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>💾</kbd></span><span class="legend-text">Écrire la grille dans le NML</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>Suppr</kbd></span><span class="legend-text">Retirer le cue (clic droit)</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>Double-clic</kbd></span><span class="legend-text">Renommer / recolorer</span></div>
+        <div class="legend-row"><span class="legend-mark"><kbd>Échap</kbd></span><span class="legend-text">Fermer / plein écran</span></div>
       </div>
     </div>
     <div id="legend-footer">
-      <span><kbd>Échap</kbd> ferme dans l'ordre : menu → modale → filtre → dossier déplié → stop audio (page Sync)</span>
-      <span>Menu contextuel au clavier : <kbd>Shift</kbd> + <kbd>F10</kbd> ouvre, <kbd>↑↓</kbd> + <kbd>Entrée</kbd> naviguent, <kbd>?</kbd> affiche cette légende</span>
-      <span>Seek : <kbd>Shift + ←→</kbd> ±20s (Sync) · <kbd>←→</kbd> ±5s (cue editor)</span>
+      <span class="legend-row"><span class="legend-mark"><kbd>Échap</kbd></span><span class="legend-text">Ferme dans l'ordre : menu → modale → filtre → dossier déplié → stop audio</span></span>
     </div>
   </div>
 </div>

@@ -111,7 +111,7 @@ registry.bind({
   isInput: false,
   activeModal: null,
   isContextMenuOpen: false,
-  label: 'Poser un style + une année (palette : lettre = style, 4 chiffres = année)',
+  label: 'Poser un style et une année',
   group: 'sync',
   handler: openPaletteOnFocus,
 });
@@ -124,7 +124,7 @@ registry.bind({
   isInput: false,
   activeModal: null,
   isContextMenuOpen: false,
-  label: 'Aperçu du rangement par style (copies par dossier cible)',
+  label: 'Aperçu du rangement par style',
   group: 'sync',
   handler: () => openStylePreview(),
 });

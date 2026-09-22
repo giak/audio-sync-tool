@@ -11,7 +11,7 @@ registry.bind({
   page: 'sync',
   activeModal: null,
   isInput: false,
-  label: 'Remplacer l’homonyme rangé (l’ancien → _trash)',
+  label: 'Remplacer l’homonyme rangé',
   group: 'sync',
   handler: () => {
     const el = document.querySelector('#epars-container .focused .file') as HTMLElement | null;

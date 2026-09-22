@@ -47,7 +47,7 @@ function filterInputFocused(): boolean {
 registry.bind({
   key: 'F7',
   activeModal: null,
-  label: 'Afficher / masquer le filtre de la liste focusée',
+  label: 'Afficher / masquer le filtre',
   group: 'sync',
   handler: () => {
     // Déjà dans l'input filtre → F7 referme (toggle)
@@ -61,7 +61,7 @@ registry.bind({
 
 registry.bind({
   key: '/',
-  label: 'Ouvrir le filtre (convention vim, même depuis un input)',
+  label: 'Ouvrir le filtre partout',
   group: 'sync',
   handler: focusCurrentChip,
 });

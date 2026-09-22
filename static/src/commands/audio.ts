@@ -14,8 +14,10 @@ registry.bind({
   isInput: false,
   isAudioPlaying: true,
   shiftKey: false,
-  label: 'Seek audio −20 s',
+  label: 'Seek ±20 s (en écoute)',
   group: 'global',
+  legendFamily: 'seek',
+  legendFamilyTitle: true,
   handler: () => seekAudio(-1),
 });
 registry.bind({
@@ -24,8 +26,9 @@ registry.bind({
   isInput: false,
   isAudioPlaying: true,
   shiftKey: false,
-  label: 'Seek audio +20 s',
+  label: 'Seek ±20 s (en écoute)',
   group: 'global',
+  legendFamily: 'seek',
   handler: () => seekAudio(1),
 });
 
@@ -36,8 +39,10 @@ registry.bind({
   isInput: false,
   shiftKey: true,
   isAudioPlaying: true,
-  label: 'Seek audio −20 s (avec Shift)',
+  label: 'Seek ±20 s (⇧ maintenu)',
   group: 'global',
+  legendFamily: 'seek-shift',
+  legendFamilyTitle: true,
   handler: () => seekAudio(-1),
 });
 registry.bind({
@@ -46,8 +51,9 @@ registry.bind({
   isInput: false,
   shiftKey: true,
   isAudioPlaying: true,
-  label: 'Seek audio +20 s (avec Shift)',
+  label: 'Seek ±20 s (⇧ maintenu)',
   group: 'global',
+  legendFamily: 'seek-shift',
   handler: () => seekAudio(1),
 });
 
@@ -59,7 +65,8 @@ registry.bind({
   page: 'sync',
   activeModal: null,
   isAudioPlaying: true,
-  label: 'Stopper la lecture (dernier recours après menu/filtre/dossier)',
+  label: 'Stopper la lecture (dernier recours)',
   group: 'global',
+  legendFamily: 'fermer',
   handler: () => stopPlayer(),
 });

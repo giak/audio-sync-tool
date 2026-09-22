@@ -1,22 +1,56 @@
-// ─── Generated keyboard legend (EPIC-031 P1) ───────────────────────────────
-// Les sections « Raccourcis » de #modal-legend sont GÉNÉRÉES depuis les
-// bindings labellisés du registry (bind({..., label, group})) : la légende ne
-// peut plus diverger du code — ajouter un raccourci = un seul endroit. Le test
-// bijection (legend.test.ts) garantit que tout binding labellisé apparaît et
-// que toute ligne générée vient d'un binding.
+// ─── Legend « ❓ Raccourcis & Légende » (EPIC-031 P1, refondue EPIC-042) ────
+// Les sections de RACCOURCIS sont GÉNÉRÉES depuis les bindings labellisés du
+// registry (bind({..., label, group})) : la légende ne peut plus diverger du
+// code — ajouter un raccourci = un seul endroit. legend.test.ts verrouille la
+// bijection (tout binding labellisé apparaît, aucune ligne orpheline).
 //
-// Restent statiques (HTML) : la section « États » (LED/badges — décrit les
-// couleurs du DOM, pas les touches) et la section « Cue editor » (ses touches
-// vivent dans un sous-système à listeners propres, hors registry).
+// EPIC-042 — lisibilité, après mesure (harnais `scripts/measure_legend.py`) :
+//   · la grille 4×N étirait chaque section à la hauteur de la plus haute
+//     (2 385 px d'espace mort, 52 libellés sur 89 renvoyés à la ligne) ;
+//     → 4 COLONNES explicites, sections affectées pour équilibrer, jamais
+//       étirées ;
+//   · l'abscisse des libellés dépendait de la largeur des touches de CHAQUE
+//     ligne (grille `max-content 1fr` par ligne) → désalignement ;
+//     → la section est une grille à 2 pistes (`max-content 1fr`) et chaque
+//       ligne s'y aligne en `subgrid` : une seule abscisse par section ;
+//   · 8 lignes « Échap — fermer X » décrivaient la même touche ;
+//     → FAMILLES (`legendFamily`) : une ligne par famille, les touches côte à
+//       côte, le texte du binding marqué `legendFamilyTitle` ;
+//   · un seul marqueur en tête de ligne (touche, pastille ou badge), une seule
+//     échelle typographique.
+//
+// Restent STATIQUES (HTML) : la section « États & pastilles » (elle décrit des
+// couleurs du DOM, pas des touches) et la section « Cue editor » (ses touches
+// vivent dans un sous-système à listeners propres, hors registry). legend.ts
+// les DÉPLACE dans leur colonne et les préserve telles quelles.
 
 import { registry } from '../commands/registry.js';
 
-const GROUPS: Array<{ id: 'sync' | 'playlist' | 'dups' | 'years' | 'global'; title: string }> = [
-  { id: 'sync', title: 'Raccourcis — page Sync' },
-  { id: 'playlist', title: 'Raccourcis — page Playlist' },
-  { id: 'dups', title: 'Raccourcis — page Doublons' },
-  { id: 'years', title: 'Raccourcis — page Années' },
-  { id: 'global', title: 'Transverse — audio, modales & menus' },
+export type LegendSectionId = 'etats' | 'sync' | 'playlist' | 'dups' | 'years' | 'global' | 'cue';
+
+interface SectionDef {
+  id: LegendSectionId;
+  title: string;
+}
+
+/** Colonnes de la feuille, dans l'ordre de lecture. L'affectation est
+ *  explicite (et non laissée au flux) : c'est elle qui équilibre les hauteurs
+ *  mesurées — une grille auto étirait les cellules et créait l'espace mort.
+ *  Les rangs sont choisis sur les COMPTES de lignes par section. */
+export const LEGEND_COLUMNS: ReadonlyArray<ReadonlyArray<SectionDef>> = [
+  [
+    { id: 'etats', title: 'États & pastilles' },
+    { id: 'dups', title: 'Doublons' },
+  ],
+  [{ id: 'sync', title: 'Sync' }],
+  [
+    { id: 'playlist', title: 'Playlist' },
+    { id: 'years', title: 'Années' },
+  ],
+  [
+    { id: 'global', title: 'Transverse' },
+    { id: 'cue', title: 'Cue editor' },
+  ],
 ];
 
 const KEY_NAMES: Record<string, string> = {
@@ -35,46 +69,102 @@ const KEY_NAMES: Record<string, string> = {
   F10: 'F10',
 };
 
-/** Élément <kbd> de la ligne : modificateurs puis touche lisible. */
-function kbdHtml(key: string, b: { ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean }): string {
+/** Touches d'un binding, en chips `<kbd>` (modificateurs puis touche). */
+function kbdHtml(b: { key: string; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean }): string {
   const parts: string[] = [];
   if (b.ctrlKey) parts.push('<kbd>Ctrl</kbd>');
   if (b.altKey) parts.push('<kbd>Alt</kbd>');
   if (b.shiftKey) parts.push('<kbd>⇧</kbd>');
-  parts.push(`<kbd>${KEY_NAMES[key] ?? key.toUpperCase()}</kbd>`);
-  return parts.join(' + ');
+  parts.push(`<kbd>${KEY_NAMES[b.key] ?? b.key.toUpperCase()}</kbd>`);
+  return parts.join('<span class="legend-plus">+</span>');
 }
 
-/** Écrit (ou réécrit) les sections « Raccourcis » de #legend-grid depuis les
- *  bindings labellisés. Idempotent : les sections générées portent
- *  data-origin="bindings" et remplacent leurs homologues à chaque exécution ;
- *  toute autre section (États, Cue editor) est préservée telle quelle. */
+interface LegendRow {
+  keys: string[];
+  text: string;
+}
+
+/** Projection des bindings labellisés en lignes de légende, section par
+ *  section : chaque binding donne une ligne, sauf ceux d'une même
+ *  `legendFamily` qui sont GROUPÉS sur la ligne de leur `legendFamilyTitle`. */
+export function legendRows(): Map<LegendSectionId, LegendRow[]> {
+  const out = new Map<LegendSectionId, LegendRow[]>();
+  const families = new Map<string, LegendRow>();
+  for (const b of registry.list()) {
+    if (!b.label) continue;
+    const section = (b.group ?? 'global') as LegendSectionId;
+    const rows = out.get(section) ?? [];
+    out.set(section, rows);
+    if (!b.legendFamily) {
+      rows.push({ keys: [kbdHtml(b)], text: b.label });
+      continue;
+    }
+    const familyKey = `${section}|${b.legendFamily}`;
+    let row = families.get(familyKey);
+    if (!row) {
+      row = { keys: [], text: b.legendFamilyTitle ? b.label : '' };
+      families.set(familyKey, row);
+      rows.push(row);
+    }
+    // Chips DÉDOUBLONNÉS : « 8×Échap » doit s'afficher « Échap » (les familles
+    // regroupent justement des bindings qui partagent la même touche).
+    const chip = kbdHtml(b);
+    if (!row.keys.includes(chip)) row.keys.push(chip);
+    if (b.legendFamilyTitle) {
+      // Le titre peut être enregistré après des membres : la ligne reste à la
+      // place de son PREMIER membre (ordre de tabulation stable).
+      row.text = b.label;
+    }
+  }
+  for (const rows of out.values()) {
+    for (const row of rows) if (!row.text) row.text = row.keys.length > 1 ? 'Sans titre' : '';
+  }
+  return out;
+}
+
+function renderRows(rows: LegendRow[]): string {
+  return rows
+    .map(r => {
+      const mark = `<span class="legend-mark">${r.keys.join('')}</span>`;
+      return `<div class="legend-row">${mark}<span class="legend-text">${r.text}</span></div>`;
+    })
+    .join('');
+}
+
+/** Écrit (ou réécrit) les colonnes de #legend-grid. Idempotent : chaque appel
+ *  reconstruit les colonnes, y REPLACE les sections statiques (États, Cue
+ *  editor) récupérées par `data-legend-section`, et régénère les autres. */
 export function renderKeyboardLegend(): void {
   const grid = document.getElementById('legend-grid');
   if (!grid) return;
 
-  const grouped = new Map<string, string[]>();
-  for (const b of registry.list()) {
-    if (!b.label) continue; // binding non labellisé → invisible en légende
-    const rows = grouped.get(b.group ?? 'global') ?? [];
-    rows.push(`<div class="legend-row">${kbdHtml(b.key, b)} ${b.label}</div>`);
-    grouped.set(b.group ?? 'global', rows);
-  }
-
-  for (const el of Array.from(grid.querySelectorAll('.legend-section[data-origin="bindings"]'))) {
+  // Sections statiques : détachées avant reconstruction (jamais recréées — le
+  // HTML reste leur source de vérité), quelle que soit la structure en place.
+  const statics = new Map<LegendSectionId, HTMLElement>();
+  for (const el of Array.from(grid.querySelectorAll<HTMLElement>('[data-legend-section]'))) {
+    statics.set(el.dataset.legendSection as LegendSectionId, el);
     el.remove();
   }
 
-  const anchor = grid.querySelector('.legend-section'); // première section (États)
+  const rows = legendRows();
   const frag = document.createDocumentFragment();
-  for (const g of GROUPS) {
-    const section = document.createElement('div');
-    section.className = 'legend-section';
-    section.dataset.origin = 'bindings';
-    const rows = grouped.get(g.id) ?? [];
-    section.innerHTML = `<h4>${g.title}</h4>${rows.join('')}`;
-    frag.appendChild(section);
+  for (const column of LEGEND_COLUMNS) {
+    const col = document.createElement('div');
+    col.className = 'legend-col';
+    for (const def of column) {
+      const existing = statics.get(def.id);
+      if (existing) {
+        col.appendChild(existing);
+        continue;
+      }
+      const section = document.createElement('div');
+      section.className = 'legend-section';
+      section.dataset.legendSection = def.id;
+      section.dataset.origin = 'bindings';
+      section.innerHTML = `<h4>${def.title}</h4>${renderRows(rows.get(def.id) ?? [])}`;
+      col.appendChild(section);
+    }
+    frag.appendChild(col);
   }
-  if (anchor) anchor.after(frag);
-  else grid.appendChild(frag);
+  grid.replaceChildren(frag);
 }
