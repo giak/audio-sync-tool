@@ -101,7 +101,12 @@ beforeEach(() => {
   // module) — certains ne nettoient pas en fin de test. En shuffle, le terme
   // résiduel filtre les cartes → 0 carte rendue → échecs en cascade.
   state.filters = {};
-  api.mockResolvedValue(JSON.parse(JSON.stringify(FIXTURE)));
+  // La vue Années ne doit RIEN changer quand l'audit est absent : la route
+  // GET /years/audit n'existe pas dans ce mock (app dont le process n'a pas
+  // encore redémarré) → la section ⟲ ne doit pas apparaître.
+  api.mockImplementation((url: string) =>
+    url === '/years/audit' ? Promise.reject(new Error('404')) : Promise.resolve(JSON.parse(JSON.stringify(FIXTURE))),
+  );
 });
 
 afterAll(() => {
@@ -144,8 +149,9 @@ describe('yearsUI (EPIC-033 T2/T4)', () => {
     (cands[1] as HTMLElement).click(); // choisir 2003
     const chosen = document.querySelector('.years-btn.chosen');
     expect(chosen!.textContent).toBe('2003');
-    // Aucun appel d'écriture : preview + reprise des choix (2 GET), jamais de POST.
-    expect(api).toHaveBeenCalledTimes(2);
+    // Aucun appel d'écriture : que des GET (preview + audit + reprise des
+    // choix), jamais de POST. On ne compte PLUS les appels : chaque lecture
+    // nouvelle (ici l'audit) ferait échouer un test qui parle d'écriture.
     expect(api.mock.calls.every(([, o]) => (o as RequestInit | undefined)?.method !== 'POST')).toBe(true);
   });
 
@@ -183,6 +189,15 @@ describe('yearsUI (EPIC-033 T2/T4)', () => {
 
 /** Mock review GET → {} (session vierge) : la map de choix persiste entre
  * tests (module-level), la reprise la vide à chaque openYearsMode. */
+/** L'appel POST du /years/review, cherché PAR URL : indexer les appels (le
+ * « 3e ») casse dès qu'une lecture s'ajoute — l'audit l'a fait.
+ * Les GET de la page : preview, audit, reprise des choix. */
+function exportPost(): [string, RequestInit] | undefined {
+  return api.mock.calls.find(([u, o]) => u === '/years/review' && (o as RequestInit | undefined)?.method === 'POST') as
+    | [string, RequestInit]
+    | undefined;
+}
+
 function mockFreshSession(): void {
   api.mockImplementation((url: string) =>
     url === '/years/review' ? Promise.resolve({}) : Promise.resolve(JSON.parse(JSON.stringify(FIXTURE))),
@@ -202,9 +217,9 @@ describe('yearsUI export (EPIC-033 P2)', () => {
     api.mockResolvedValue({ ok: true, count: 2 });
     const n = await exportChoices();
     expect(n).toBe(2);
-    const [url, opts] = api.mock.calls[2]; // [0] preview, [1] reprise GET, [2] POST
+    const [url, opts] = exportPost()!;
     expect(url).toBe('/years/review');
-    expect((opts as RequestInit).method).toBe('POST');
+    expect(opts.method).toBe('POST');
     const body = JSON.parse((opts as { body: string }).body);
     expect(body.choices).toEqual({ 'baz\tqux': '2003', 'naems\tfollow me': null });
     expect(document.getElementById('status-text')!.textContent).toContain('2 choix exportés');
@@ -253,7 +268,7 @@ describe('yearsUI export (EPIC-033 P2)', () => {
     input.dispatchEvent(new Event('input'));
     api.mockResolvedValue({ ok: true, count: 1 });
     await exportChoices();
-    const body = JSON.parse((api.mock.calls[2][1] as { body: string }).body); // POST
+    const body = JSON.parse((exportPost()![1] as { body: string }).body); // POST
     expect(body.choices['naems\tfollow me']).toBe('1999');
     expect(input.value).toBe(''); // champ vidé après usage
   });

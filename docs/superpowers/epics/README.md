@@ -65,8 +65,28 @@
 | [EPIC-043](EPIC-043-style-ecrit-a-la-copie-f5.md) | **Le style est écrit à la copie** : F5 range **et** tague — le nom du dossier de destination (`<style>_<tranche>`, la déclaration de style de l'app) est écrit dans le tag genre **sur l'épars et sur la copie**, tout de suite, dans le journal partagé des scripts (`source: "copy-f5"`). L'année n'est **jamais** touchée ; pas de validation contre la taxonomie (un dossier neuf marche du premier coup) ; hors grammaire = rien ; idempotent (aucune ligne de journal si `old == style`) ; **jamais bloquant** (copie `ok`, échec rapporté) | 🟢 **Livré (2026-09-22)** — `POST /copy` renvoie `style` / `style_writes` / `style_error` ; `genre` patché des deux côtés côté client + cellule *Style* rafraîchie + phrase de consentement dans la modale F5 ; gate **1 154 vitest / 342 pytest**, lint 0, typecheck 0 | Haute | spec `2026-09-22-style-a-la-copie-design.md` · EPIC-035 (grammaire) · EPIC-041 (écriture immédiate) · EPIC-034 (flux F5) |
 | [EPIC-044](EPIC-044-alignement-genres-arborescence.md) | **Le stock de genres rejoint l'arborescence** : EPIC-043 avait fermé la fuite pour le futur (chaque copie écrit le style du dossier cible), mais sur 1 604 rangés **1 023 contredisaient** leur dossier (« Techno », « Electronic », « Dance »…) et **258** n'avaient aucun genre. `A` (page Sync) ouvre un **aperçu** (rien n'est écrit), puis un dialogue à **deux modes** — corriger + remplir, ou **remplir seulement les vides** — et écrit via le **journal partagé** des scripts (`source: "align"` ⇒ `apply_styles.py --undo` restaure, y compris `old: null`). Le **disque est autoritaire** (un cache périmé n'écrase jamais un genre en mode « vides »), l'**année n'est jamais touchée**, un échec n'interrompt pas le lot, et les épars sont **hors périmètre** (leur genre est une entrée de suggestion, pas un rangement) | 🟢 **Livré (2026-09-22)** — aperçu réel : 323 alignés / 1 023 à corriger / 258 sans genre / 0 hors grammaire ; dry-run **1 281** écritures (mode `tous`) et **258** (mode `vides`) en **0,46 s**, aucun tag touché ; gate **1 171 vitest / 351 pytest**, lint 0, typecheck 0 | Haute | spec `2026-09-22-alignement-genres-design.md` · EPIC-043 · EPIC-035 · EPIC-033/040 (même forme) |
 
+| [EPIC-045](EPIC-045-revue-annees-ecrites.md) | **L'audit des années écrites a enfin une surface** : EPIC-040 avait corrigé le robinet **et** classé les écritures passées (`data/year_audit.json`, 408 entrées) — mais ce fichier n'était lisible par personne dans l'app, et la vue Années ne montre que les fichiers **sans** année. Sur les 408 auditées : **23 confirmées · 38 contredites** (le tag dit autre chose que la première sortie, **proposition** fournie) **· 8 à revoir · 339 non vérifiées**. La vue Années ouvre désormais sur une section **⟲** : badge `écrit 2024 → 1991`, sources et fiche de sortie, **Corriger** (écriture immédiate, journal partagé `source: "audit:revue"` ⇒ `apply_years.py --undo` **restaure** l'année d'avant), candidates cliquables, **Garder** (rien n'est touché, le cas sort de la file) et **lots sous confirmation**. Le disque est autoritaire (`deja`, pas de réécriture ni de journal), les refus sont nommés sans interrompre le lot, et une route absente laisse la page **inchangée** | 🟢 **Livré (2026-09-22)** — 11 pytest (dont `--undo` réellement exécuté), 17 vitest, gate **1 188 vitest / 362 pytest**, lint 0 ; **bout en bout dans le navigateur sur bac à sable** : tag relu sur disque (2024 → **1991**, genre intact), journal partagé, `--undo` → 2024 restauré ; lecture sur la collection réelle : 408 / 23 / 38 / 8 / 339, **46 à trancher**, aucune écriture déclenchée | Haute | spec `2026-09-22-revue-annees-ecrites-design.md` · EPIC-040 (dernier maillon) · EPIC-033 · EPIC-041/043/044 (même grammaire) |
+
 ## État actuel du projet (2026-09-19)
 
+- **Session 2026-09-22 — EPIC-045 livrée** : EPIC-040 avait demandé trois choses —
+  la re-collecte, l'audit des 408, et **l'exposition des items en revue**. L'audit
+  est fait (408 entrées : 23 confirmées, **38 contredites** avec proposition,
+  8 à revoir, 339 non vérifiées) mais il vivait dans un JSON que personne
+  n'ouvre — et la vue Années ne montre que les fichiers **sans** année, donc rien
+  ne pouvait jamais contredire un « 2024 » écrit sur un morceau de 1991. La
+  section **⟲** de la vue Années comble ce trou : elle affiche `écrit 2024 →
+  1991` avec les années de chaque source (`musicbrainz 1995 · deezer 2004`) et la
+  fiche de sortie, puis **Corriger** (écriture immédiate, journal partagé
+  `audit:revue`, `--undo` restaure l'année d'avant), une **autre candidate**, ou
+  **Garder** (rien n'est touché, le cas quitte la file — décision persistée).
+  Deux pièges trouvés en chemin : les décisions se comptaient sous `garde` alors
+  que le POST écrit `garder` (l'item gardé restait proposé — corrigé à la racine,
+  vocabulaire unique), et `evidence` est une liste d'**objets** de sortie (le
+  premier rendu réel affichait `[object Object]`). Preuve : bac à sable distinct
+  (config/audit/journal redirigés) → clic réel dans le navigateur, tag relu sur
+  disque, boucle `--undo` exécutée ; la bibliothèque réelle n'a **pas** été
+  touchée (elle attend un clic).
 - **Session 2026-09-22 — EPIC-044 livrée** : EPIC-043 avait rendu F5 **complète**
   (elle range **et** tague), mais elle ne corrigeait que le futur. Mesuré sur la
   collection : **1 023** des 1 604 fichiers rangés portent un genre qui contredit

@@ -1,9 +1,9 @@
 # EPIC-040 — Années corroborées : plus jamais une réédition écrite comme année du morceau
 
-> **Statut** : 🟡 Moteur + audit livrés, re-collecte et exposition en revue à suivre
-> **Créée** : 2026-09-21 · **Dernière mise à jour** : 2026-09-21
+> **Statut** : 🟡 Moteur + audit + **revue livrés** (EPIC-045), re-collecte complète à suivre
+> **Créée** : 2026-09-21 · **Dernière mise à jour** : 2026-09-22
 > **Priorité** : Haute
-> **Docs liées** : spec `2026-09-21-annees-corroboration-design.md` · EPIC-033 (collecte d'origine) · mémoire MnemoLite `a4494da3`
+> **Docs liées** : spec `2026-09-21-annees-corroboration-design.md` · **EPIC-045** (revue des items, dernier maillon) · EPIC-033 (collecte d'origine) · mémoire MnemoLite `a4494da3`
 
 ## Objectif
 
@@ -76,9 +76,9 @@ source (0 recoupement local, par construction).
 - [x] **Cas signalé corrigé** : les 2 fichiers Phantasia « Inner Light » sont passés de **2024 → 1991** (journal : `old=2024, new=1991, source=audit:deezer+discogs`).
 - [x] **YouTube Topic** câblé comme 4ᵉ provider **en direct** (`--youtube`) : classe `edition` (release_date YouTube) → il ne conclut pas seul mais **corrobore** une source `first`. Coût réel (yt-dlp, sous-processus) → flag opt-in, à réserver aux clés non résolues (`--only=unresolved`) — sa passe historique n'avait produit **aucune** année (168 lignes, 0 found).
 - [x] **Recherche web** (Brave Search, `BRAVE_API_KEY` ou `data/search_token`) comme source de **dernier recours** : elle alimente `web_candidates` / `web_proposed` et l'`evidence` (titre + URL + extrait), et **ne vote jamais** — un extrait de page web n'a pas le niveau de preuve d'une API de disques, la règle des 2 sources ne doit pas se contourner avec un moteur de recherche.
-- [ ] **Re-collecte complète** (`collect_years.py`, moteur v2) : ~3 700 clés × 3 providers, reprenable ; c'est elle qui produira les propositions pour les fichiers **sans** année. **Commandes fournies à l'utilisateur** (session 2026-09-21).
-- [ ] **Exposition en revue** des items `contredit` / `a_revoir` / `non_verifie` dans la vue Années (le fichier `data/year_audit.json` et les `single`/`conflict` du collecteur sont prêts à être servis ; la route et le rendu restent à câbler).
-- [ ] Audit complet des 408 (le script est reprenable : `--limit`, `--match`, sauvegarde partielle toutes les 25 entrées).
+- [ ] **Re-collecte complète** (`collect_years.py`, moteur v2) : ~3 700 clés × 3 providers, reprenable ; c'est elle qui produira les propositions pour les fichiers **sans** année — **engagée à ~30 %** (1 464 clés en v2, 3 331 en v1 volontairement ignorées).
+- [x] **Audit complet des 408 exécuté** (2026-09-22, `data/year_audit.json`) : **23 confirmées · 38 contredites** (proposition fournie) **· 8 à revoir · 339 non vérifiées** (100 aucune source / 13 candidats sans corroboration / 226 une seule source « édition »). Aucune écriture déclenchée : les 38 corrections attendent la revue.
+- [x] **Exposition en revue** des items dans la vue Années — **livrée en [EPIC-045](EPIC-045-revue-annees-ecrites.md)** : section **⟲** (badge `écrit 2024 → 1991`, sources, fiche de sortie), **GET `/years/audit`** (lecture seule, `non_verifie` allégés et comptés par classe), **POST `/years/audit/review`** (`corriger` écrit **tout de suite** via le journal partagé `source: "audit:revue"` ⇒ `apply_years.py --undo` restaure ; `garder` sort le cas de la file, décision persistée).
 
 ## Fichiers impactés
 

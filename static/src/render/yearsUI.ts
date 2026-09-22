@@ -17,6 +17,7 @@ import { fmtCount } from '../core/format.js';
 import { subjectFromName } from '../filterEngine.js';
 import { goPage } from '../router.js';
 import { ensureFilterChip, isFilterActive, subjectMatches, updateFilterCount } from './filterChip.js';
+import { refreshYearAudit, renderYearAudit, resetYearAudit } from './yearAudit.js';
 
 export interface YearFile {
   path: string;
@@ -174,6 +175,13 @@ export function renderYears(): void {
     },
   });
   const restore = beginRender(list); // EPIC-036 P2 : wipe centralisé (scroll = scrollIntoView, iso-comportement)
+
+  // ── Déjà écrites : l'audit EPIC-040 ouvre la page ───────────────────────
+  // C'est le seul bloc qui parle de tags DÉJÀ posés (dont une réédition écrite
+  // comme année du morceau) : il passe avant les propositions, pas après 46
+  // cartes que personne ne fait défiler. Rien à afficher sans audit : la
+  // section s'efface et la page reste ce qu'elle était.
+  renderYearAudit(list, () => renderYears());
 
   const count = document.getElementById('years-count');
   if (count) {
@@ -365,9 +373,11 @@ export async function openYearsMode(): Promise<void> {
   focusIndex = -1; // ouverture = vue fraîche (pas de focus hérité)
   setStatus(
     '📅 Vue Années — ↑↓ naviguer · clic = choisir/rejeter · e = exporter · F7 ou / = filtrer · ' +
-      'Échap revenir. Export = choix persistés (year_review.json) → scripts/apply_years.py --review.',
+      'Échap revenir. Export = choix persistés (year_review.json) → scripts/apply_years.py --review. ' +
+      'En haut : l’audit des années DÉJÀ écrites (⟲) — corriger écrit tout de suite, garder sort le cas de la file.',
   );
-  await refreshYears();
+  resetYearAudit(); // une lecture fraîche par ouverture (l'audit change sur disque)
+  await Promise.all([refreshYears(), refreshYearAudit()]);
   await loadChoices();
   renderYears();
 }

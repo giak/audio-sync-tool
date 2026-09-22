@@ -34,7 +34,10 @@ Stack : **Python 3.12 + Flask 3.1**, **TypeScript vanilla** bundlé par esbuild
   déjà rangé** sur son arborescence — voir « Rangement par style ».
 - **Années manquantes** : page de revue des années douteuses (consolidation
   multi-sources), avec filtre, écoute avant de trancher, et export des choix —
-  voir « Enrichissement des années ».
+  voir « Enrichissement des années ». En tête de page, la section **⟲ Années
+  déjà écrites** tranche les cas où le tag contredit les sources (« écrit 2024 →
+  1991 ») : **Corriger** écrit tout de suite (annulable), **Garder** sort le cas
+  de la file.
 - **Doublons** : vue dédiée des groupes de versions d'un même morceau (épars
   et/ou rangés) — arbitrage automatique par qualité (FLAC > 320 > 128), override
   au clic, application du plan (gagnant rangé à droite, perdants rangés → trash).
@@ -364,8 +367,21 @@ première sortie — et **deux providers indépendants concordants** sont exigé
 3ᵉ provider) ; sinon la ligne part en **revue humaine**. Motif : 408 écritures Deezer dont
 **173 ≥ 2015 (42,4 %)** pour des morceaux des années 90. Audit des années déjà écrites :
 `scripts/audit_applied_years.py` (classe `confirme` / `contredit` / `a_revoir` /
-`non_verifie`, dry-run par défaut) — premier passage appliqué : **2 corrections 2024 → 1991**
-(Phantasia), journal `audit:deezer+discogs`.
+`non_verifie`) — **audit complet exécuté le 2026-09-22** (`data/year_audit.json`, 408 entrées) :
+**23 confirmées · 38 contredites** (le tag dit autre chose que la première sortie, proposition
+fournie) **· 8 à revoir · 339 non vérifiées** (226 « une seule source « édition » », 100 « aucune
+source », 13 candidats sans corroboration).
+
+**Revue des années déjà écrites (EPIC-045)** : la vue Années ouvre sur la section **⟲** — pour
+chaque cas à trancher, l'année écrite et la proposition (badge `écrit 2024 → 1991`), les années
+de chaque source (`musicbrainz 1995 · deezer 2004`) et la fiche de sortie. **Corriger** écrit
+l'année tout de suite (journal partagé, `source: "audit:revue"` → `apply_years.py --undo`
+**restaure** l'année d'avant), une **candidate** de l'audit est cliquable (édition, remaster),
+**Garder** ne touche à rien et sort le cas de la file (décision persistée), et les lots
+(« Corriger les 38 proposées » / « Garder les 46 ») passent par un dialogue qui dit ce qu'il va
+écrire. Le disque reste autoritaire (déjà au bon millésime → aucune réécriture, aucune ligne de
+journal) et un échec est nommé sans interrompre le lot. Les **339 non vérifiées** sont seulement
+comptées par classe : rien à trancher sans nouvelles sources (re-collecte v2).
 
 **État au 2026-09-18 — EPIC-033 clôturée** : vague « certaines » **appliquée** (1 349 écritures
 OK, journal = backup `data/year_apply_journal.jsonl`, `--undo` idempotent) — consolidation
@@ -443,8 +459,12 @@ consolidé ne propose plus que **3 fichiers « certaines » / 54 en revue / 1 49
 (6 non parsables) et `apply_years.py` en dry-run ne trouve **0 candidat** — plus rien à écrire.
 L'audit des années déjà écrites a traité son premier cas (Phantasia « Inner Light » : 2024 écrit
 par Deezer → **1991** sur corroboration Discogs, journal `audit:deezer+discogs`, `--undo`
-disponible) ; l'audit **complet** des 408 écritures Deezer et la re-collecte moteur v2
-(EPIC-040 🟡) restent à lancer.
+disponible) puis a été **exécuté en entier** (408 entrées : 23 confirmées / **38 contredites** /
+8 à revoir / 339 non vérifiées) — ces 46 cas sont maintenant **tranchables dans la vue Années**
+(section ⟲, EPIC-045), aucune correction automatique n'a été appliquée. La **re-collecte
+moteur v2** (EPIC-040 🟡) est engagée à ~30 % : 1 464 clés re-collectées, 3 331 en v1
+volontairement ignorées — c'est elle qui produira des propositions pour les **1 555 fichiers
+sans année**.
 
 Historique complet, chiffres détaillés et bilan de clôture : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md)
 · corroboration : [EPIC-040](docs/superpowers/epics/EPIC-040-annees-corroboration-2-sources.md).
@@ -491,12 +511,17 @@ Routes REST principales : `/config`, `/scan`, `/scan-progress`, `/load`, `/ping`
 `/copy`, `/move`, `/delete`, `/mkdir`, `/journal` (GET/DELETE), `/audio`,
 `/ratings`, `/playlists` (+ `/<name>`, `/export`), `/years/preview`,
 `/years/review`, `/years/apply`, `/styles/review`, `/styles/apply`,
+`/styles/audit`, `/styles/align`, `/years/audit`, `/years/audit/review`,
 `/api/nml/status`, `/api/track/match`, `/api/track/add`, `/api/track/cues`,
 `/api/track/grid`, `/api/beatgrid`, `/api/track/analyze`.
 
-`/styles/apply` et `/years/apply` sont les **seules** routes qui écrivent des tags
-depuis l'interface (validation → confinement aux racines configurées → journal
-`old` → écriture → relecture).
+**Routes qui écrivent des tags** — `/years/apply` et `/styles/apply` (palette `G`),
+`/styles/align` (`A`, alignement genre ↔ dossier) et `/years/audit/review` (revue des années
+déjà écrites), plus `/copy` (F5 écrit le style du dossier cible). Toutes suivent la même
+grammaire (validation → confinement aux racines configurées → journal `old` → écriture →
+**relecture**) et le **même journal** que les scripts : `apply_years.py --undo` et
+`apply_styles.py --undo` annulent aussi ces écritures. `/years/audit` et `/styles/audit`
+sont les deux vues d'aperçu, en **lecture seule**.
 
 ## Développement
 
@@ -559,8 +584,10 @@ focus), `proof_filter_chip.py`, `proof_style_palette.py` (tags relus **sur disqu
 - **Années** : le re-scan du 2026-09-21 laisse **1 555 fichiers sans année sur 6 696 (76,8 %
   couverts)** ; le rapport consolidé ne propose plus que 3 fichiers « certaines » / 54 en revue /
   1 492 introuvables (6 non parsables) et `apply_years.py` en dry-run ne trouve **0 candidat**.
-  L'audit complet des années déjà écrites (408 Deezer) et la re-collecte moteur v2 restent à
-  lancer (EPIC-040 🟡) ; les années « à revue » non tranchées restent hors application automatique.
+  L'audit des années déjà écrites est **exécuté** (408 entrées · 38 contredites · 8 à revoir) et
+  **tranchable** dans la vue Années (section ⟲, EPIC-045) — les corrections ne partent que d'un
+  clic, jamais en lot automatique. La re-collecte moteur v2 est **engagée à ~30 %** (EPIC-040 🟡) ;
+  les années « à revue » non tranchées restent hors application automatique.
 - **`data/` en JSON** : config, journal, caches, playlists, ratings, beatgrids, journaux
   d'écriture (`year_apply_journal.jsonl`, `style_apply_journal.jsonl` — créés à la première
   écriture). Jamais supprimés par l'outil ; le trash (`<source>/_trash/<date>/`) remplace

@@ -1482,6 +1482,37 @@ def years_apply():
     return _apply_tag(request.get_json(silent=True) or {}, 'year')
 
 
+def _write_target(target, value, kind, journal, source, roots):
+    """Écrit UN tag (style/année) : confinement aux racines → extension →
+    présence → journal (AVANT la relecture) → tag → relecture. Ne lève jamais :
+    l'appelant décide si l'échec est bloquant (il ne l'est pas en lot)."""
+    res = {'path': target, 'ok': False}
+    try:
+        path = os.path.abspath(str(target))
+        res['path'] = path
+        if not any(path.startswith(r + os.sep) for r in roots):
+            res['error'] = 'hors des racines configurées'
+        elif os.path.splitext(path)[1].lower() not in AUDIO_EXTS:
+            res['error'] = 'extension non gérée'
+        elif not os.path.isfile(path):
+            res['error'] = 'fichier absent'
+        else:
+            before = get_audio_meta(path)
+            old = before[0] if kind == 'year' else before[3]
+            frame = _write_tag(path, value, kind)
+            after = get_audio_meta(path)
+            read_back = after[0] if kind == 'year' else after[3]
+            ok = read_back == value
+            _journal_line(journal, {'path': path, 'old': old, 'new': value,
+                                    'source': source, 'frame': frame, 'ok': ok})
+            res.update({'ok': ok, 'frame': frame, kind: read_back, 'old': old})
+            if not ok:
+                res['error'] = f'relu {read_back!r}'
+    except Exception as exc:                          # pragma: no cover - filet
+        res['error'] = f'{type(exc).__name__}: {exc}'
+    return res
+
+
 def _apply_tag(body, kind):
     """Écriture commune style/année : validation → confinement → journal → tag.
     `kind` = 'style' (TCON/GENRE/©gen) ou 'year' (TDRC/TYER/DATE/©day)."""
@@ -1502,37 +1533,165 @@ def _apply_tag(body, kind):
     roots = [active.get('source_data') or ''] + list(active.get('epars_dirs') or [])
     roots = [os.path.abspath(r) for r in roots if r]
     journal = STYLE_JOURNAL if kind == 'style' else YEAR_JOURNAL
-    results = []
-    for target in targets:
-        res = {'path': target, 'ok': False}
-        try:
-            path = os.path.abspath(str(target))
-            if not any(path.startswith(r + os.sep) for r in roots):
-                res['error'] = 'hors des racines configurées'
-            elif os.path.splitext(path)[1].lower() not in AUDIO_EXTS:
-                res['error'] = 'extension non gérée'
-            elif not os.path.isfile(path):
-                res['error'] = 'fichier absent'
-            else:
-                before = get_audio_meta(path)
-                old = before[0] if kind == 'year' else before[3]
-                frame = _write_tag(path, value, kind)
-                after = get_audio_meta(path)
-                read_back = after[0] if kind == 'year' else after[3]
-                ok = read_back == value
-                _journal_line(journal, {'path': path, 'old': old, 'new': value,
-                                        'source': 'palette', 'frame': frame,
-                                        'ok': ok})
-                res.update({'ok': ok, 'frame': frame,
-                            kind: read_back, 'old': old})
-                if not ok:
-                    res['error'] = f'relu {read_back!r}'
-        except Exception as exc:                      # pragma: no cover - filet
-            res['error'] = f'{type(exc).__name__}: {exc}'
-        results.append(res)
+    results = [_write_target(t, value, kind, journal, 'palette', roots) for t in targets]
     written = sum(1 for r in results if r['ok'])
     return jsonify({'ok': written > 0, 'written': written, 'count': len(results),
                     'results': results, kind: value})
+
+
+# ── EPIC-040 : revue des années DÉJÀ écrites (audit) depuis la vue Années ──
+# `scripts/audit_applied_years.py` rejoue le moteur corrigé sur les écritures du
+# journal et classe chaque année écrite : `confirme` (corroborée par une source
+# « première sortie »), `contredit` (**proposition** : le tag dit autre chose que
+# la première sortie), `a_revoir` (désaccord sans signature de réédition) et
+# `non_verifie` (aucune source « première sortie » ne parle). Le fichier
+# `data/year_audit.json` existait sans surface : il fallait lire du JSON à la
+# main pour voir qu'une réédition a été écrite comme année du morceau.
+#
+# La vue Années reçoit ici les items, et chaque décision de revue est PERSISTÉE
+# (`data/year_audit_review.json`) : « corriger » écrit l'année proposée tout de
+# suite (journal partagé, `source: "audit:revue"` → `apply_years.py --undo`
+# restaure), « garder » ne touche à rien mais sort l'item de la file — sinon la
+# revue remontrerait les mêmes 46 cas à chaque ouverture.
+
+YEAR_AUDIT_PATH = os.path.join(DATA_DIR, 'year_audit.json')
+YEAR_AUDIT_REVIEW_PATH = os.path.join(DATA_DIR, 'year_audit_review.json')
+
+# Classes de raison des `non_verifie` : les 339 items portent chacun une phrase
+# avec les sources et leurs années (donc tous différents) — la vue a besoin de
+# compte par CLASSE, pas de 339 phrases uniques.
+_AUDIT_REASON_CLASSES = (
+    ('seule une source', 'une seule source « édition » parle'),
+    ('aucune source concluante', 'candidats sans corroboration'),
+    ('aucune source', 'aucune source ne parle'),
+)
+
+
+def _audit_reason_class(reason):
+    low = (reason or '').strip().lower()
+    for prefix, label in _AUDIT_REASON_CLASSES:
+        if low.startswith(prefix):
+            return label
+    return (reason or 'raison inconnue')[:60]
+
+
+@app.route('/years/audit')
+def years_audit():
+    """Vue de l'audit des années déjà écrites (LECTURE SEULE) : items classés
+    par verdict, avec la décision de revue déjà prise s'il y en a une. Les
+    `non_verifie` (339) sont envoyés allégés — rien à écrire, la vue les montre
+    comme information."""
+    audit = load_json(YEAR_AUDIT_PATH, {})
+    review = load_json(YEAR_AUDIT_REVIEW_PATH, {})
+    # `counts` porte les verdicts ET les décisions : les décisions se comptent
+    # sous les noms d'ACTION (`corriger` / `garder`) — une seule vocabulaire du
+    # POST à la vue (un `garde` face à un `garder` ne se comptait pas, l'item
+    # gardé restait donc proposé : c'est le bug que cette clé unique évite).
+    counts = {'contredit': 0, 'a_revoir': 0, 'non_verifie': 0, 'confirme': 0,
+              'corriger': 0, 'garder': 0}
+    out = {'contredit': [], 'a_revoir': [], 'non_verifie': [], 'confirme': []}
+    raisons = {}
+    for path, rec in sorted(audit.items()):
+        if not isinstance(rec, dict):
+            continue
+        status = rec.get('status')
+        if status not in out:
+            continue
+        counts[status] += 1
+        decision = review.get(path)
+        if isinstance(decision, dict) and decision.get('decision') in ('corriger', 'garder'):
+            counts[decision['decision']] += 1
+        else:
+            decision = None
+        if status == 'non_verifie':
+            cls = _audit_reason_class(rec.get('reason'))
+            raisons[cls] = raisons.get(cls, 0) + 1
+            out[status].append({'path': path, 'filename': os.path.basename(path),
+                                'applied': rec.get('applied'), 'reason': rec.get('reason'),
+                                'classe': cls, 'decision': decision})
+            continue
+        out[status].append({
+            'path': path, 'filename': os.path.basename(path),
+            'applied': rec.get('applied'), 'proposed': rec.get('proposed'),
+            'candidates': rec.get('candidates') or [],
+            'sources': rec.get('sources') or {},
+            'reason': rec.get('reason'), 'variant': rec.get('variant'),
+            'evidence': (rec.get('evidence') or [])[:2],
+            'decision': decision,
+        })
+    return jsonify({'ok': True, 'files': len(audit), 'counts': counts,
+                    'raisons': raisons, **out})
+
+
+@app.route('/years/audit/review', methods=['POST'])
+def years_audit_review():
+    """Décision de revue sur un item d'audit : `corriger` écrit l'année (tout
+    de suite, journal partagé `source: "audit:revue"`, `old` conservé ⇒
+    `apply_years.py --undo` restaure) ; `garder` ne touche à rien. Les deux sont
+    persistées dans `data/year_audit_review.json`.
+
+    Body : {"decisions": [{"path": …, "action": "corriger"|"garder", "year": "1991"}]}.
+    Le chemin doit venir de l'audit (aucune cible arbitraire), l'année doit être
+    une proposition de l'audit (ou 4 chiffres explicites) ; le confinement aux
+    racines configurées s'applique comme partout."""
+    body = request.get_json(silent=True) or {}
+    decisions = body.get('decisions')
+    if not isinstance(decisions, list) or not decisions:
+        return jsonify({'ok': False, 'error': 'decisions (liste non vide) requise'}), 400
+    audit = load_json(YEAR_AUDIT_PATH, {})
+    if not audit:
+        return jsonify({'ok': False,
+                        'error': 'aucun audit — lancer scripts/audit_applied_years.py'}), 400
+    if not HAS_MUTAGEN:
+        return jsonify({'ok': False, 'error': 'mutagen indisponible'}), 500
+
+    active = get_active_config()
+    roots = [os.path.abspath(r) for r in
+             ([active.get('source_data') or ''] + list(active.get('epars_dirs') or [])) if r]
+    review = load_json(YEAR_AUDIT_REVIEW_PATH, {})
+    written, kept, deja, failed = [], [], [], []
+    now = datetime.now().isoformat(timespec='seconds')
+    for d in decisions:
+        if not isinstance(d, dict):
+            failed.append({'path': None, 'error': 'décision illisible'})
+            continue
+        raw = str(d.get('path') or '')
+        rec = audit.get(raw)
+        if not isinstance(rec, dict):
+            failed.append({'path': raw, 'error': "chemin hors de l'audit"})
+            continue
+        action = d.get('action')
+        if action == 'garder':
+            review[raw] = {'decision': 'garder', 'year': rec.get('applied'), 'at': now}
+            kept.append(raw)
+            continue
+        if action != 'corriger':
+            failed.append({'path': raw, 'error': f'action inconnue : {action!r}'})
+            continue
+        year = str(d.get('year') or rec.get('proposed') or '').strip()
+        if not (year.isdigit() and len(year) == 4):
+            failed.append({'path': raw, 'error': f'année invalide : {year!r}'})
+            continue
+        # Le DISQUE est la référence : déjà au bon millésime (audit calculé
+        # avant une correction) → le tag n'est pas réécrit pour rien, mais la
+        # décision est enregistrée pour que la revue ne le repropose pas.
+        on_disk = get_audio_meta(raw)[0] if os.path.isfile(raw) else None
+        if on_disk == year:
+            deja.append(raw)
+            review[raw] = {'decision': 'corriger', 'year': year, 'old': on_disk,
+                           'at': now, 'changed': False}
+            continue
+        res = _write_target(raw, year, 'year', YEAR_JOURNAL, 'audit:revue', roots)
+        if res.get('ok'):
+            written.append(res)
+            review[raw] = {'decision': 'corriger', 'year': year,
+                           'old': res.get('old'), 'at': now}
+        else:
+            failed.append({'path': raw, 'error': res.get('error') or 'écriture non relue'})
+    if written or kept or deja:
+        save_json(YEAR_AUDIT_REVIEW_PATH, review)
+    return jsonify({'ok': True, 'written': written, 'kept': kept, 'deja': deja,
+                    'failed': failed, 'reviewed': len(review)})
 
 
 def _journal_line(journal, entry):

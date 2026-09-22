@@ -3481,3 +3481,215 @@ def test_align_journal_restaure_par_le_script_undo(client, monkeypatch, tmp_path
     apply_styles.do_undo()
     assert apply_styles.current_genre(str(a)) == 'Techno'   # valeur d'avant restaurée
     assert apply_styles.current_genre(str(b)) is None        # frame retiré (old=None)
+
+
+# ── EPIC-040 (dernier maillon) : la revue des années DÉJÀ écrites ──────────
+# `scripts/audit_applied_years.py` produit `data/year_audit.json` depuis
+# toujours, mais il fallait ouvrir le JSON à la main pour voir qu'une réédition
+# avait été écrite comme année du morceau. La vue Années reçoit maintenant les
+# items (GET /years/audit, LECTURE SEULE) et chaque décision est PERSISTÉE
+# (POST /years/audit/review) : « corriger » écrit tout de suite via le journal
+# PARTAGÉ des scripts (`source: "audit:revue"`), « garder » sort l'item de la
+# file — sinon la revue remontrerait les mêmes cas à chaque ouverture.
+
+def _year_review_env(client, monkeypatch, tmp_path, audit=None):
+    """Monde minimal : un item `contredit` (réédition écrite comme année du
+    morceau) et un `non_verifie`. L'audit et la revue sont des fichiers du
+    tmp_path — jamais `data/` réel."""
+    src = tmp_path / 'src'
+    src.mkdir()
+    make_tagged_mp3(src / 'reissue.mp3', year='2024', genre='Techno')
+    make_tagged_mp3(src / 'other.mp3', year='1999')
+    client.post('/config', json=make_cfg(source_data=str(src)))
+    audit_path = tmp_path / 'year_audit.json'
+    review_path = tmp_path / 'year_audit_review.json'
+    year_journal = tmp_path / 'year_journal.jsonl'
+    audit_path.write_text(json.dumps(audit if audit is not None else {
+        str(src / 'reissue.mp3'): {
+            'status': 'contredit', 'applied': '2024', 'proposed': '1991',
+            'reason': 'une source « première sortie » dit 1991',
+            'candidates': ['1991', '1992'], 'variant': 'album',
+            'sources': {'discogs': '1991'},
+            'evidence': ['discogs: Inner Light (1991)', 'deezer: 2024'],
+        },
+        str(src / 'other.mp3'): {
+            'status': 'non_verifie', 'applied': '1999',
+            'reason': 'seule une source « édition » parle : musicbrainz 2010',
+        },
+    }))
+    monkeypatch.setattr('app.YEAR_AUDIT_PATH', str(audit_path))
+    monkeypatch.setattr('app.YEAR_AUDIT_REVIEW_PATH', str(review_path))
+    monkeypatch.setattr('app.YEAR_JOURNAL', str(year_journal))
+    return src, audit_path, review_path, year_journal
+
+
+def test_year_audit_view_classe_sans_toucher_au_disque(client, monkeypatch, tmp_path):
+    """L'aperçu classe par verdict, nomme ce qu'il faut décider, et n'écrit
+    RIEN (ni tag, ni journal, ni fichier de revue)."""
+    src, _, review_path, year_journal = _year_review_env(client, monkeypatch, tmp_path)
+    body = client.get('/years/audit').get_json()
+    assert body['ok'] is True and body['files'] == 2
+    assert body['counts'] == {'contredit': 1, 'a_revoir': 0, 'non_verifie': 1,
+                              'confirme': 0, 'corriger': 0, 'garder': 0}
+    item = body['contredit'][0]
+    assert item['path'] == str(src / 'reissue.mp3') and item['filename'] == 'reissue.mp3'
+    assert (item['applied'], item['proposed']) == ('2024', '1991')
+    assert item['candidates'] == ['1991', '1992'] and item['variant'] == 'album'
+    assert item['decision'] is None and len(item['evidence']) == 2
+    # les 339 `non_verifie` arrivent allégés et comptés par CLASSE (leurs
+    # raisons sont toutes uniques : 339 phrases ne servent à rien dans la vue)
+    assert [i['classe'] for i in body['non_verifie']] == ['une seule source « édition » parle']
+    assert body['raisons'] == {'une seule source « édition » parle': 1}
+    assert not year_journal.exists() and not review_path.exists()
+
+
+def test_year_audit_view_sans_audit_est_vide_et_le_dit(client, monkeypatch, tmp_path):
+    """Pas d'audit sur le disque : la vue est vide mais valide (l'app dit quoi
+    lancer), et la revue refuse explicitement."""
+    monkeypatch.setattr('app.YEAR_AUDIT_PATH', str(tmp_path / 'absent.json'))
+    monkeypatch.setattr('app.YEAR_AUDIT_REVIEW_PATH', str(tmp_path / 'revue.json'))
+    body = client.get('/years/audit').get_json()
+    assert body['ok'] is True and body['files'] == 0 and body['contredit'] == []
+    rv = client.post('/years/audit/review', json={'decisions': [{'path': '/x', 'action': 'garder'}]})
+    assert rv.status_code == 400
+    assert 'audit_applied_years.py' in rv.get_json()['error']
+
+
+def test_year_audit_review_corrige_ecrit_et_persiste(client, monkeypatch, tmp_path):
+    """« corriger » écrit l'année proposée TOUT DE SUITE (journal partagé,
+    source `audit:revue`), ne touche pas au genre, et sort l'item de la file."""
+    src, _, review_path, year_journal = _year_review_env(client, monkeypatch, tmp_path)
+    track = str(src / 'reissue.mp3')
+    body = client.post('/years/audit/review',
+                       json={'decisions': [{'path': track, 'action': 'corriger'}]}).get_json()
+    assert body['ok'] is True and body['failed'] == []
+    assert [w['path'] for w in body['written']] == [track]
+    assert (body['written'][0]['old'], body['written'][0]['year']) == ('2024', '1991')
+    assert body['reviewed'] == 1
+    assert get_audio_meta(track)[0] == '1991'
+    assert get_audio_meta(track)[3] == 'Techno'                # le genre est intact
+    lines = _journal_lines(year_journal)
+    assert len(lines) == 1 and 'ts' in lines[0]
+    assert {k: v for k, v in lines[0].items() if k != 'ts'} == {
+        'path': track, 'old': '2024', 'new': '1991', 'source': 'audit:revue',
+        'frame': 'TDRC', 'ok': True}
+    saved = json.loads(review_path.read_text())[track]
+    assert (saved['decision'], saved['year'], saved['old']) == ('corriger', '1991', '2024')
+    after = client.get('/years/audit').get_json()
+    assert after['counts']['corriger'] == 1
+    assert after['contredit'][0]['decision']['decision'] == 'corriger'
+
+
+def test_year_audit_review_annee_choisie_parmi_les_candidats(client, monkeypatch, tmp_path):
+    """La revue peut retenir un AUTRE candidat que la proposition (le tag doit
+    pouvoir afficher ce que l'humain tranche) — mais pas une valeur inventée."""
+    src, _, review_path, _ = _year_review_env(client, monkeypatch, tmp_path)
+    track = str(src / 'reissue.mp3')
+    body = client.post('/years/audit/review', json={
+        'decisions': [{'path': track, 'action': 'corriger', 'year': '1992'}]}).get_json()
+    assert body['written'][0]['year'] == '1992'
+    assert get_audio_meta(track)[0] == '1992'
+    assert json.loads(review_path.read_text())[track]['year'] == '1992'
+
+
+def test_year_audit_review_garder_ne_touche_rien_mais_sort_de_la_file(client, monkeypatch, tmp_path):
+    """« garder » : aucune écriture, aucun journal — et l'item reste visible
+    avec sa décision (il ne sera plus proposé à la prochaine ouverture)."""
+    src, _, review_path, year_journal = _year_review_env(client, monkeypatch, tmp_path)
+    track = str(src / 'reissue.mp3')
+    body = client.post('/years/audit/review',
+                       json={'decisions': [{'path': track, 'action': 'garder'}]}).get_json()
+    assert body['kept'] == [track] and body['written'] == [] and body['failed'] == []
+    assert get_audio_meta(track)[0] == '2024'
+    assert not year_journal.exists()
+    assert json.loads(review_path.read_text())[track]['decision'] == 'garder'
+    after = client.get('/years/audit').get_json()
+    # la décision SORT l'item de la file : comptée `garder`, et surtout portée
+    # par l'item (sinon la vue le reproposerait à chaque ouverture)
+    assert after['counts']['garder'] == 1 and after['counts']['contredit'] == 1
+    assert after['contredit'][0]['decision']['decision'] == 'garder'
+
+
+def test_year_audit_review_refus_nommes_le_lot_continue(client, monkeypatch, tmp_path):
+    """Chemin hors audit, année illisible, action inconnue : chaque refus est
+    NOMMÉ et la correction valide du même lot s'écrit quand même."""
+    src, _, _, year_journal = _year_review_env(client, monkeypatch, tmp_path)
+    track = str(src / 'reissue.mp3')
+    body = client.post('/years/audit/review', json={'decisions': [
+        {'path': str(tmp_path / 'ailleurs.mp3'), 'action': 'corriger', 'year': '1991'},
+        {'path': track, 'action': 'corriger', 'year': '19'},
+        {'path': track, 'action': 'supprimer'},
+        {'path': track, 'action': 'corriger', 'year': '1991'},
+    ]}).get_json()
+    assert [f['error'] for f in body['failed']] == [
+        "chemin hors de l'audit", "année invalide : '19'", "action inconnue : 'supprimer'"]
+    assert [w['path'] for w in body['written']] == [track]
+    assert get_audio_meta(track)[0] == '1991'
+    assert len(_journal_lines(year_journal)) == 1
+
+
+def test_year_audit_review_confine_aux_racines(client, monkeypatch, tmp_path):
+    """Un item de l'audit hors des racines configurées n'est pas écrit : même
+    garde que partout ailleurs, refus nommé, rien sur le disque."""
+    outside = tmp_path / 'hors.mp3'
+    make_tagged_mp3(outside, year='2024')
+    src, _, review_path, year_journal = _year_review_env(
+        client, monkeypatch, tmp_path,
+        audit={str(outside): {'status': 'contredit', 'applied': '2024', 'proposed': '1991'}})
+    body = client.post('/years/audit/review',
+                       json={'decisions': [{'path': str(outside), 'action': 'corriger'}]}).get_json()
+    assert body['failed'] == [{'path': str(outside), 'error': 'hors des racines configurées'}]
+    assert body['written'] == [] and body['reviewed'] == 0
+    assert get_audio_meta(str(outside))[0] == '2024'
+    assert not year_journal.exists() and not review_path.exists()
+
+
+def test_year_audit_review_deja_au_bon_millesime_n_reecrit_pas(client, monkeypatch, tmp_path):
+    """Audit calculé AVANT une correction (le disque porte déjà 1991) : le tag
+    n'est pas réécrit pour rien — aucune ligne de journal — mais la décision est
+    enregistrée pour que la revue ne le repropose plus."""
+    src, _, review_path, year_journal = _year_review_env(client, monkeypatch, tmp_path)
+    track = str(src / 'reissue.mp3')
+    make_tagged_mp3(src / 'reissue.mp3', year='1991')
+    body = client.post('/years/audit/review',
+                       json={'decisions': [{'path': track, 'action': 'corriger'}]}).get_json()
+    assert body['deja'] == [track] and body['written'] == []
+    assert not year_journal.exists()
+    saved = json.loads(review_path.read_text())[track]
+    assert (saved['decision'], saved['changed']) == ('corriger', False)
+
+
+def test_year_audit_review_valide_les_entrees(client, monkeypatch, tmp_path):
+    """Entrées invalides : refus explicites, disque intact."""
+    _year_review_env(client, monkeypatch, tmp_path)
+    assert client.post('/years/audit/review', json={}).status_code == 400
+    assert client.post('/years/audit/review',
+                       json={'decisions': []}).status_code == 400
+    rv = client.post('/years/audit/review', json={'decisions': ['x']})
+    assert rv.get_json()['failed'] == [{'path': None, 'error': 'décision illisible'}]
+
+
+def test_year_audit_review_sans_mutagen_500(client, monkeypatch, tmp_path):
+    _year_review_env(client, monkeypatch, tmp_path)
+    monkeypatch.setattr('app.HAS_MUTAGEN', False)
+    rv = client.post('/years/audit/review', json={'decisions': [{'path': '/x', 'action': 'garder'}]})
+    assert rv.status_code == 500 and rv.get_json()['error'] == 'mutagen indisponible'
+
+
+def test_year_audit_review_journal_restaure_par_le_script_undo(client, monkeypatch, tmp_path):
+    """Le journal de la revue est celui des scripts : `apply_years.py --undo`
+    rend au fichier son ANCIENNE année (2024), celle du journal — pas une
+    suppression."""
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scripts'))
+    import apply_years
+    if not apply_years.HAS_MUTAGEN:
+        pytest.skip('mutagen requis')
+    src, _, _, year_journal = _year_review_env(client, monkeypatch, tmp_path)
+    track = str(src / 'reissue.mp3')
+    body = client.post('/years/audit/review',
+                       json={'decisions': [{'path': track, 'action': 'corriger'}]}).get_json()
+    assert body['written'] and apply_years.current_year(track) == '1991'
+    monkeypatch.setattr(apply_years, 'JOURNAL', str(year_journal))
+    apply_years.do_undo()
+    assert apply_years.current_year(track) == '2024'

@@ -98,3 +98,28 @@
 }
 .years-export-input::placeholder { color: var(--text-muted); opacity: 0.6; }
 .years-export-input:focus { outline: none; border-color: var(--border-active); }
+
+/* ── Revue des années DÉJÀ écrites (EPIC-040, dernier maillon) ─────────────
+   Section ⟲ en TÊTE de page : c'est le seul bloc qui parle de tags déjà
+   posés (dont une réédition écrite comme année du morceau) — le placer après
+   les cartes le rendrait invisible. Les lignes sont des cartes comme les
+   autres (même boîte monospace, même ▶) : ce qui signale une correction, c'est
+   le badge « écrit 2024 → 1991 », pas un fond coloré. */
+.years-section.audit {
+  /* l'en-tête de l'audit n'est PAS une barre d'outils : le `:not(.ok)`
+     ci-dessus le rendrait collant (deux stickys concurrents) */
+  position: static;
+  background: none;
+  border-bottom: none;
+  padding: 12px 0 6px;
+}
+.years-card.years-audit { border-left: 3px solid var(--amber); margin-bottom: 6px; }
+.years-card.years-audit.contredit { border-left-color: #e5534b; }
+.years-reason {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-top: 3px;
+  word-break: break-word;
+}
+.years-btn.years-fix:hover,
+.years-btn.years-keep:hover { border-color: var(--led-green); color: var(--led-green); }
