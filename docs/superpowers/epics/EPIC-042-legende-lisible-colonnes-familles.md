@@ -1,4 +1,4 @@
-# EPIC-042 — Légende « ❓ Raccourcis & Légende » : 4 colonnes jamais étirées, une abscisse par section, familles de touches
+# EPIC-042 — Légende « ❓ Raccourcis & Légende » : lisibilité **mesurée** (colonnes jamais étirées, une abscisse par section, familles de touches)
 
 > **Statut** : 🟢 Livré
 > **Créée** : 2026-09-22 · **Dernière mise à jour** : 2026-09-22
@@ -91,30 +91,65 @@ serveur**. La mise en forme « nouvelle grammaire » des deux sections statiques
 **redémarrage de l'app** (le template est compilé au chargement) — ce n'est pas un défaut du
 code, mais une contrainte d'exploitation.
 
+### Régression 2 : la mise en page cassée par une table de colonnes figée
+
+Deuxième retour d'usage, le même jour : « la mise en page est cassée !!! c'est moche, l'UI n'est
+pas pratique ». Là encore, mesuré avant de discuter — et **le harnais reproduit la casse** dès
+qu'on le lance à une autre largeur que celle où il avait été calibré (`PROOF_WINDOW`) :
+
+| Largeur | Comportement (bundle d'alors) | Mesure |
+|---|---|---|
+| 1920 / 1600 px | 4 colonnes | 12/12 — c'est la largeur qui avait servi à valider |
+| **1366 px** | **3 colonnes de 391 px + une 4ᵉ jetée en dessous, pleine largeur (1 233 px)** | rangées `[3, 1]`, ratio de colonnes **2,32**, **1 182 px** de contenu dans 786, **29 libellés** sur 2 lignes, décrépitude de l'équilibre |
+| 1440 px | 4 colonnes de 304 px | **15 libellés** sur 2 lignes |
+| 1510 px | 4 colonnes | 3 libellés sur 2 lignes |
+
+Cause : la table de colonnes **écrite à la main** (4 groupes) ne peut pas s'adapter — le CSS
+laissait un `flex-wrap` à `min-width: 300px` décider, et à 1 366 px de fenêtre la boîte modale
+(1 284 px) n'en contenait que **3**. Un groupe de plus que de colonnes disponibles = **colonne
+orpheline**. Le harnais, lui, ne mesurait qu'une seule largeur : même angle mort que le template.
+
+Corrigé en **supprimant la table** : la feuille est un **flux multi-colonnes**
+(`#legend-grid { columns: 320px }`), donc le navigateur choisit le nombre de colonnes selon la
+largeur et les équilibre ; `break-inside: avoid` garde chaque section entière. Mesuré sur
+**7 largeurs**, 0 libellé coupé partout :
+
+| Largeur | Colonnes | Ratio d'équilibre | Défilement |
+|---|---|---|---|
+| 1920 / 1600 px | 4 (331 px) | 1,32 | aucun (668/668) |
+| 1440 → 1100 px | **2** (636 → 476 px) | **1,07** | 237 px (non exigé sous 1600 px) |
+| 900 px | 2 (389 px) | 1,07 | 237 px |
+| 700 px | 1 (808 px) | — | 1 186 px |
+
+Le 4ᵉ niveau (3 colonnes, largeurs 364–414 px) a été **mesuré puis écarté** : il ne coupait aucun
+libellé mais laissait une colonne courte et donc une feuille bancale (hauteurs 425/816/672,
+ratio **1,92** à 1 366 px, ce qui échoue le critère D). Entre défiler de 237 px et une colonne
+trouée, le choix est explicite : **défiler**.
+
 ## Tâches
 
-- [x] **4 colonnes explicites** (`LEGEND_COLUMNS`, `render/legend.ts`) au lieu du flux automatique : l'affectation des sections est écrite en dur et **choisie sur les comptes de lignes**, parce que c'est elle qui équilibre (une grille auto étirait les cellules).
+- [x] **Flux multi-colonnes** (`LEGEND_SECTIONS` + `columns: 320px`) : le nombre de colonnes est **choisi par le navigateur selon la largeur** et les colonnes sont équilibrées. La table de colonnes écrite à la main (8 sections placées en dur) est **supprimée** : elle avait produit la colonne orpheline de 1 366 px (cf. Régression 2).
 - [x] **Une abscisse par section** : la section est une grille 2 pistes `max-content minmax(0,1fr)`, chaque ligne s'y aligne en `grid-template-columns: subgrid` → l'abscisse du libellé ne dépend plus de la largeur des touches de la ligne.
 - [x] **Familles de touches** (`legendFamily` / `legendFamilyTitle` sur `CommandBinding`) : les bindings d'une même section partageant une famille sont rendus sur **une seule ligne**, leurs touches **côte à côte et dédoublonnées** (8× `Échap` → `Échap`), le texte étant celui du binding marqué titre. **12 familles** (`fermer` 8, `colonne` 3, + 10 familles de 2) → **31 bindings → 12 lignes** (−19 lignes).
 - [x] **Libellés raccourcis** dans `commands/*.ts` (`'Naviguer vers le bas (liste focusée)'` → `'Naviguer dans la liste'`, `'Seek audio −20 s (avec Shift)'` → `'Seek ±20 s (⇧ maintenu)'`, …) : le libellé tient sur la largeur d'une colonne, et le *pourquoi* vit dans l'EPIC, pas dans la légende.
 - [x] **Un marqueur par ligne** : `.legend-mark` (touches, pastille, badge) + `.legend-text` (le sens) — plus de libellé nu sans repère visuel ; un seul gabarit `<kbd>` pour toute la feuille (12 px, `--font-mono`, min-width 18 px).
 - [x] **Sections statiques déplacées, jamais recréées** : le HTML reste leur source de vérité (`data-legend-section="etats|cue"`), `renderKeyboardLegend()` les **déplace** dans leur colonne et préserve leur contenu ; rendu **idempotent** (double appel = identique).
 - [x] **Pied de modale** ramené à **1 note** (la pile de fermeture) : les deux autres notes décrivaient des bindings désormais présents dans les sections générées (`⇧+F10` dans Transverse, `Seek ±20 s (⇧ maintenu)` aussi) — zéro information perdue.
-- [x] **Responsive honest** : ≤ 1 400 px les 4 colonnes tomberaient sous 300 px (libellés recoupés, mesuré) → les colonnes **s'enroulent** (`flex-wrap`), quitte à faire défiler la feuille : mieux vaut défiler que lire des libellés coupés.
-- [x] **Harnais de mesure** `scripts/measure_legend.py` : ouverture par la touche **réelle** `?` (pas par le DOM), puis 10 vérifications sur la géométrie et le contraste **rendus** (canvas 1×1, composition alpha) — voir « Validation ». `proof_filter_chip.bootstrap(window)` accepte désormais une taille de fenêtre (les modales se mesurent dans une fenêtre réaliste).
+- [x] **Responsive mesuré** : 320 px est la largeur minimale de colonne sous laquelle un libellé se coupe (mesuré : 3 libellés à 303 px, 15 à 304 px) ; en dessous de 1 500 px on **plafonne à 2 colonnes** (1,07 d'équilibre) plutôt que d'accepter un 3ᵉ niveau bancal (1,92), et 1 colonne sous 760 px.
+- [x] **Harnais de mesure** `scripts/measure_legend.py` : ouverture par la touche **réelle** `?` (pas par le DOM), puis **12 vérifications** (dont **H** « aucune section vide » et **I** « colonnes de largeur homogène — aucune colonne orpheline ») sur la géométrie et le contraste **rendus** (canvas 1×1, composition alpha), **à toute largeur** (`PROOF_WINDOW`) — voir « Validation ». `proof_filter_chip.bootstrap(window)` accepte désormais une taille de fenêtre (les modales se mesurent dans une fenêtre réaliste).
 - [x] **Test de contrat** `render/legend.test.ts` porté à **7 tests** : bijection touche ↔ binding (par **séquence de chips**, robuste aux familles), aucun texte orphelin/dupliqué dans une section, familles fusionnées (exactement un `legendFamilyTitle`, aucune touche dupliquée, jamais une famille d'un seul binding), **nombre de lignes = bindings labellisés − bindings fusionnés**, 7 sections + statiques présentes, idempotence, modificateurs visibles.
 
 ## Fichiers impactés
 
 | Fichier | Rôle |
 |---|---|
-| `static/src/render/legend.ts` | Colonnes explicites (`LEGEND_COLUMNS`), `legendRows()` (familles), `renderRows()`, **contrat non destructif** (adoption par titre, conservation des sections inconnues) |
+| `static/src/render/legend.ts` | `LEGEND_SECTIONS` (ordre de lecture, plus de table de colonnes), `legendRows()` (familles), `renderRows()`, **contrat non destructif** (adoption par titre, conservation des sections inconnues) |
 | `static/src/commands/registry.ts` | `legendFamily` / `legendFamilyTitle` (affichage seul — le binding reste actif au clavier) |
 | `static/src/commands/*.ts` (11 modules) | Libellés raccourcis + familles déclarées (`audio`, `dups`, `menu`, `modals`, `navigation`, `playlist`, `rating`, `years`, `copy`, `filter`, `replace`, `style`) |
-| `static/styles/components.css` | `#modal-legend .modal-content` (1 460 px / 92 vh), `#legend-grid` en 4 colonnes flex **jamais étirées**, sections 2 pistes + `subgrid`, gabarit unique de `<kbd>`, pied de modale, replis responsive |
+| `static/styles/components.css` | `#modal-legend .modal-content` (1 460 px / 92 vh), `#legend-grid` en **flux multi-colonnes** (`columns: 320px`, 2 col. < 1 500 px, 1 < 760 px), sections 2 pistes + `subgrid`, gabarit unique de `<kbd>`, pied de modale |
 | `templates/index.html` | Sections statiques annotées `data-legend-section`, lignes normalisées en `.legend-mark` + `.legend-text`, pied ramené à 1 note |
 | `static/src/render/legend.test.ts` | Bijection + familles + comptage de lignes + **survie d'un HTML d'une autre version** |
-| `scripts/measure_legend.py` | Harnais de mesure (11 vérifications, captures) — dont **H « aucune section vide »** |
+| `scripts/measure_legend.py` | Harnais de mesure (12 vérifications, captures) — dont **H « aucune section vide »** et **I « colonnes homogènes »** ; mesurable à toute largeur |
 | `scripts/proof_filter_chip.py` | `bootstrap(window)` — fenêtre paramétrable pour les harnais qui mesurent une mise en page |
 
 ## Validation
@@ -122,7 +157,7 @@ code, mais une contrainte d'exploitation.
 ### Harnais headless — `python3 scripts/measure_legend.py /tmp/epic042_final`
 
 Fenêtre **1600×1000** (viewport 857 px), monde synthétique isolé, modale ouverte par la touche
-**réelle** `?`, **11/11** :
+**réelle** `?`, **12/12** :
 
 | Vérification | Mesure APRÈS |
 |---|---|
@@ -134,9 +169,10 @@ Fenêtre **1600×1000** (viewport 857 px), monde synthétique isolé, modale ouv
 | D · aucune section étirée | **7 px** au total, 1 px/section (avant : **2 385 px**) |
 | D · lignes de hauteur uniforme | **22/22/22 px**, écart **0** (avant : 19/39/141 px, écart 122) |
 | E · chaque ligne porte un marqueur | **0** ligne sans marqueur (avant : 1) |
-| F · la modale tient sans défilement | **scrollHeight 668 = clientHeight 668** (avant : 1 866 vs 684) |
+| F · la modale tient sans défilement (**exigé à partir de 1600 px de large**) | **scrollHeight 668 = clientHeight 668** (avant : 1 866 vs 684) |
 | G · contenu complet | **7 sections · 71 lignes** (avant : 89 lignes) |
 | H · aucune section vide | **7 sections, toutes remplies** (le monde à l'ancien bundle donnait *« section(s) VIDE(S) : États & pastilles, Cue editor »*) |
+| I · colonnes de largeur homogène | 4 colonnes de **331 px** (avant : `[391, 391, 391, 1233]` — la 4ᵉ prenait la largeur entière) |
 
 **Correction honnête du harnais** : la vérification C lisait la couleur de la **ligne**, pas du
 libellé. Après la refonte, la couleur vit sur `.legend-text`, donc la première version du harnais
@@ -166,7 +202,7 @@ Chaque mutation a été **exécutée** (build inclus), mesurée, puis le fichier
 - [x] Tests backend (`./venv/bin/python -m pytest -q`) — **335** (aucun fichier backend touché)
 - [x] Lint (`npm run lint`) — 0 erreur (108 fichiers)
 - [x] Build (`npm run build`) — ✅ validation passée
-- [x] Harnais headless — **11/11** (avant : 3/10)
+- [x] Harnais headless — **12/12** à 1920, 1600, 1440, 1366, 1100, 900 et 700 px (avant : 3/10 à 1600, et jusqu'à 3 colonnes en échec à 1366)
 
 ⚠ Le CSS **et** le JS sont bundlés : `npm run build` est **obligatoire** avant toute mesure
 navigateur (un harnais lancé sans rebuild mesure la version précédente).
@@ -178,6 +214,7 @@ navigateur (un harnais lancé sans rebuild mesure la version précédente).
 | `411433d` | Légende lisible : 4 colonnes jamais étirées, une abscisse par section (`subgrid`), familles de touches (8× `Échap` → 1 ligne), libellés raccourcis, harnais de mesure 10/10 (3/10 avant) |
 | `c96b90e` | Traçabilité de l'EPIC (commit ci-dessus) |
 | `8211f8b` | **Régression corrigée** : la légende des états ne peut plus être effacée par un template d'une autre version (adoption par titre + conservation `console.warn`), vérification H du harnais, test de contrat (1 145 vitest) |
+| _(ce commit)_ | **Régression 2 corrigée** : plus de table de colonnes (flux multi-colonnes adaptatif), vérification I du harnais, contrat F scoped aux largeurs où il est tenable — 12/12 sur 7 largeurs |
 
 ## Décisions
 
@@ -186,10 +223,19 @@ navigateur (un harnais lancé sans rebuild mesure la version précédente).
   **largeur des pistes** (262 px) et l'**étirement des cellules** : garder 13 px de texte et
   élargir les colonnes donne 0 libellé coupé **et** une lecture inchangée. La taille du texte
   reste celle de l'ancienne version (13 px), seuls les `<kbd>` sont normalisés (12 px, monospace).
-- **Quatre colonnes écrites en dur plutôt que déduites.** L'affectation
-  `[États+Doublons | Sync | Playlist+Années | Transverse+Cue editor]` est un choix **d'équilibre
-  mesuré** (1,32) ; la laisser au flux automatique reproduisait le défaut. Une section qui
-  grossit demande donc de revoir les rangs — assumé, et signalé en commentaire dans le code.
+- **Le nombre de colonnes appartient au navigateur, pas à une table.** Une table écrite à la
+  main est juste à la largeur où elle a été écrite et **fausse ailleurs** (colonne orpheline à
+  1 366 px). Le flux multi-colonnes déduit le nombre de colonnes de la largeur disponible, garde
+  les sections entières (`break-inside: avoid`) et les équilibre ; il reproduit exactement la
+  table d'origine à 1 600 px (`[États+Doublons] [Sync] [Playlist+Années] [Transverse+Cue editor]`,
+  mêmes hauteurs 425/500/425/563) — la table n'apportait donc rien qu'il ne fasse mieux.
+- **Deux colonnes plutôt que trois sous 1 500 px.** Le 3ᵉ niveau ne coupait aucun libellé mais
+  laissait une colonne courte (ratio 1,92) : une colonne trouée se lit comme une mise en page
+  cassée — c'est la plainte d'origine. On préfère 2 colonnes équilibrées (1,07) qui défilent de
+  237 px. Contrepartie **assumée et écrite dans le harnais** : le contrat F « la modale ne défile
+  pas » n'est exigé qu'à partir de 1 600 px de large (une feuille de 71 lignes ne peut pas tenir
+  sans couper un libellé sur un écran plus étroit) ; le harnais **affiche** le défilement (237 px)
+  au lieu de le taire.
 - **`subgrid` plutôt que des largeurs calculées.** L'abscisse commune vient de la section, pas
   d'un `min-width` en dur qui se périmerait au premier libellé long. Repli acceptable :
   `subgrid` non supporté → chaque ligne retrouve sa grille 2 pistes locale (lisible, juste
@@ -214,9 +260,11 @@ navigateur (un harnais lancé sans rebuild mesure la version précédente).
 
 - **Mesuré en headless, pas « à l'œil ».** Les preuves sont des rects et des contrastes rendus
   par le navigateur (`Range` sur le nœud texte + canvas 1×1), sur un monde synthétique isolé
-  (`data/` réel jamais touché). La **fenêtre de mesure est un paramètre** (`PROOF_WINDOW`) : à
-  1 280 px de large, la feuille passe en colonnes qui s'enroulent et **défile** — c'est le
-  comportement voulu, mais il n'a pas été mesuré finement (seul 1600×1000 l'a été).
+  (`data/` réel jamais touché). Depuis cette EPIC, la **fenêtre de mesure est un paramètre**
+  (`PROOF_WINDOW`) et la feuille est vérifiée à **7 largeurs** : une validation à une seule
+  largeur (1 600 px) a laissé passer la colonne orpheline de 1 366 px — c'était la **deuxième**
+  fois dans la même journée qu'un harnais calé sur un seul monde (un seul template, une seule
+  largeur) déclarait vert ce que l'usage réel voyait cassé.
 - **Le contraste du libellé est celui d'avant** : 12,02:1 est confortable, mais l'EPIC ne
   prétend pas l'avoir amélioré — la première version du harnais le surestimait (voir
   « Validation »). Leçon : un harnais qui lit la couleur d'un **conteneur** au lieu de l'élément

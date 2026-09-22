@@ -14,8 +14,14 @@ la lisibilité d'une feuille de raccourcis :
   D. remplissage : ratio hauteur max/min entre colonnes + espace vide en bas de
                    la grille (cellules de grille fantômes) ;
   E. uniformité  : lignes sans marqueur (ni touche, ni pastille, ni badge) ;
-  F. tenue       : la modale tient-elle sans défilement à 900 px de haut ?
-  G. compte      : sections, lignes, marqueurs — le contrat de contenu.
+  F. tenue       : la modale tient-elle sans défilement ? (exigé à partir de
+                   1600 px de large : en dessous, une feuille de 71 lignes ne
+                   peut pas tenir sans couper des libellés — mesuré)
+  G. compte      : sections, lignes, marqueurs — le contrat de contenu ;
+  H. silence     : sections VIDES (une légende muette sur un de ses états —
+                   régression live 2026-09-22 : template d'une autre version) ;
+  I. colonnes    : largeurs de colonnes homogènes (colonne orpheline pleine
+                   largeur = feuille bancale : mesuré à 1 366 px).
 
 Le contenu est GÉNÉRÉ depuis les bindings (render/legend.ts) : ce harnais mesure
 la mise en forme, pas la vérité des raccourcis (celle-ci est verrouillée par
@@ -40,7 +46,10 @@ from proof_filter_chip import bootstrap  # noqa: E402
 # PROOF_WINDOW permet de rejouer la mesure sur une autre taille d'écran —
 # 1600 est la cible de conception (feuille plafonnée à 1 460 px).
 WINDOW = os.environ.get('PROOF_WINDOW', '1600,1000')
+WINDOW_W = int(WINDOW.split(',')[0])
 WINDOW_H = WINDOW.split(',')[1]
+# Largeur à partir de laquelle la feuille DOIT tenir sans défilement.
+WINDOW_FULL = 1600
 
 # Sonde : géométrie + contraste réellement rendus par le navigateur.
 # Le LIBELLÉ est mesuré via un Range sur son nœud texte : la mesure ne dépend
@@ -150,6 +159,7 @@ PROBE = """(() => {
   const gridCols = [...grid.children].map(c => {
     const r = c.getBoundingClientRect();
     return { w: Math.round(r.width), h: Math.round(r.height), left: Math.round(r.left),
+             top: Math.round(r.top),
              sections: [...c.children].map(s => (s.querySelector('h4')?.textContent || '').trim()) };
   });
 
@@ -189,6 +199,30 @@ PROBE = """(() => {
     perSection,
   });
 })()"""
+
+
+def orphan_rows(m):
+    """Colonnes ORPHELINES, sans dépendre de la technique de mise en page
+    (flex, grille, multi-colonnes) : dans une feuille saine, toutes les colonnes
+    ont la même largeur. Dès qu'une colonne prend la largeur entière (défaut
+    constaté en live 2026-09-22 à 1366 px : 3 colonnes de 391 px + une 4ᵉ de
+    1233 px jetée en dessous), la feuille est bancale."""
+    widths = [c['w'] for c in m['grid']['cols']]
+    if len(widths) < 2:
+        return False
+    median = sorted(widths)[len(widths) // 2]
+    return max(widths) > 1.5 * median
+
+
+def orphans_detail(m):
+    widths = sorted(c['w'] for c in m['grid']['cols'])
+    if len(widths) < 2:
+        return f"une seule colonne de {widths[0] if widths else 0}px"
+    median = widths[len(widths) // 2]
+    if max(widths) > 1.5 * median:
+        return (f"largeurs {widths} — la plus large fait {max(widths)}px contre {median}px de "
+                f"médiane : une colonne prend la largeur entière (orpheline)")
+    return f"{len(widths)} colonnes homogènes (largeurs {widths[0]}–{widths[-1]}px, médiane {median}px)"
 
 
 def empty_detail(m):
@@ -361,14 +395,19 @@ def main():
              f"— écart {m['rowH']['max'] - m['rowH']['min']}px"),
             ('E chaque ligne porte un marqueur', m['noMark'] == 0,
              f"{m['noMark']} ligne(s) sans touche/pastille/badge"),
-            ('F la modale tient sans défilement',
-             m['modal']['scrollH'] <= m['modal']['clientH'] + 1,
+            (f'F la modale tient sans défilement (fenêtre ≥ {WINDOW_FULL}px de large)',
+             m['modal']['scrollH'] <= m['modal']['clientH'] + 1 or WINDOW_W < WINDOW_FULL,
              f"scrollHeight {m['modal']['scrollH']} vs clientHeight {m['modal']['clientH']} "
-             f"(fenêtre {WINDOW_H}px)"),
+             f"(fenêtre {WINDOW_W}×{WINDOW_H}px)"
+             + ('' if WINDOW_W >= WINDOW_FULL else
+                f" — non exigé sous {WINDOW_FULL}px : défile de "
+                f"{max(0, m['modal']['scrollH'] - m['modal']['clientH'])}px")),
             ('G contenu complet (sections et lignes de bindings)', m['sections'] == 7 and m['rows'] >= 64,
              f"{m['sections']} sections · {m['rows']} lignes"),
             ('H aucune section vide (une légende muette = une légende fausse)',
              not [s for s in m['perSection'] if s['rows'] == 0], empty_detail(m)),
+            ('I colonnes de largeur homogène (aucune colonne orpheline)',
+             not orphan_rows(m), orphans_detail(m)),
         ]
         for label, passed, detail in ok:
             checks.append((label, passed))

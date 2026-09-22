@@ -195,19 +195,19 @@
   max-height: 92vh;              /* laisser la feuille tenir sans défilement */
   padding: 18px 22px 14px;
 }
+/* Flux MULTI-COLONNES : le navigateur choisit le nombre de colonnes selon la
+   largeur (320 px minimum par colonne — sous ce seuil les libellés se coupent,
+   mesuré) et les équilibre. Aucune table de colonnes écrite à la main : elle
+   donnait 3 colonnes + 1 orpheline à 1 366 px (mesuré), et ses colonnes de
+   285 px coupaient les libellés. `break-inside: avoid` garde chaque section
+   entière (jamais coupée en deux colonnes). */
 #legend-grid {
-  display: flex;
-  align-items: flex-start;
-  gap: 30px;
-}
-.legend-col {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  columns: 320px;
+  column-gap: 30px;
 }
 .legend-section {
+  break-inside: avoid;
+  margin: 0 0 18px;
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   column-gap: 10px;
@@ -292,17 +292,17 @@
   border-top: 1px solid var(--border-panel);
 }
 #legend-footer .legend-text { font-size: 12px; color: var(--text-muted); }
-/* Sous ~1 400 px, 4 colonnes tomberaient sous 300 px de large : les libellés
-   repasseraient à la ligne (mesuré). On passe en colonnes qui s'enroulent :
-   moins de colonnes, plus larges, quitte à faire défiler la feuille — mieux
-   vaut défiler que lire des libellés coupés. */
-@media (max-width: 1400px) {
+/* 4 colonnes ne tiennent — sans couper un libellé — qu'à partir de ~1 500 px.
+   Entre 760 et 1 500 px, un 3ᵉ essai de colonne laissait une colonne courte et
+   donc une feuille bancale (mesuré à 1 366 px : hauteurs 425/816/672, ratio
+   1,92) : on préfère DEUX colonnes équilibrées (ratio 1,07), quitte à faire
+   défiler la feuille — défiler est moins laid qu'une colonne trouée. Sous
+   760 px, une seule colonne (mieux vaut défiler que couper un libellé). */
+@media (max-width: 1500px) { #legend-grid { column-count: 2; } }
+@media (max-width: 760px) {
   .modal-content.modal-xl { width: 94vw; }
-  #legend-grid { flex-wrap: wrap; }
-  .legend-col { flex: 1 1 300px; }
+  #legend-grid { column-count: 1; }
 }
-@media (max-width: 900px) { .legend-col { flex: 1 1 100%; } }
-@media (max-width: 640px)  { .legend-col { flex: 1 1 100%; } }
 
 /* ===== Journal (inside modal) ======================================== */
 #journal-content { font-size: 13px; max-height: 50vh; overflow-y: auto; }

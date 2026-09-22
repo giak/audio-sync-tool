@@ -41,24 +41,22 @@ interface SectionDef {
   title: string;
 }
 
-/** Colonnes de la feuille, dans l'ordre de lecture. L'affectation est
- *  explicite (et non laissée au flux) : c'est elle qui équilibre les hauteurs
- *  mesurées — une grille auto étirait les cellules et créait l'espace mort.
- *  Les rangs sont choisis sur les COMPTES de lignes par section. */
-export const LEGEND_COLUMNS: ReadonlyArray<ReadonlyArray<SectionDef>> = [
-  [
-    { id: 'etats', title: 'États & pastilles' },
-    { id: 'dups', title: 'Doublons' },
-  ],
-  [{ id: 'sync', title: 'Sync' }],
-  [
-    { id: 'playlist', title: 'Playlist' },
-    { id: 'years', title: 'Années' },
-  ],
-  [
-    { id: 'global', title: 'Transverse' },
-    { id: 'cue', title: 'Cue editor' },
-  ],
+/** Sections de la feuille, dans l'ordre de lecture. PAS de table de colonnes :
+ *  la feuille est un flux multi-colonnes (`columns: 320px`, CSS) qui choisit
+ *  lui-même son nombre de colonnes selon la largeur disponible et équilibre les
+ *  hauteurs. Une table écrite à la main (4 colonnes figées) donnait 3 colonnes
+ *  en haut et une 4ᵉ **orpheline** pleine largeur à 1 366 px (mesuré), et une
+ *  colonne de 285 px coupe les libellés. Le flux les regroupe comme la table le
+ *  faisait à 1 600 px ([États+Doublons], [Sync], [Playlist+Années],
+ *  [Transverse+Cue editor]) et se rééquilibre autrement quand ça ne tient pas. */
+export const LEGEND_SECTIONS: ReadonlyArray<SectionDef> = [
+  { id: 'etats', title: 'États & pastilles' },
+  { id: 'dups', title: 'Doublons' },
+  { id: 'sync', title: 'Sync' },
+  { id: 'playlist', title: 'Playlist' },
+  { id: 'years', title: 'Années' },
+  { id: 'global', title: 'Transverse' },
+  { id: 'cue', title: 'Cue editor' },
 ];
 
 const KEY_NAMES: Record<string, string> = {
@@ -177,24 +175,19 @@ export function renderKeyboardLegend(): void {
   }
 
   const rows = legendRows();
-  const columns: HTMLElement[] = [];
-  for (const column of LEGEND_COLUMNS) {
-    const col = document.createElement('div');
-    col.className = 'legend-col';
-    for (const def of column) {
-      const existing = statics.get(def.id);
-      if (existing) {
-        col.appendChild(existing);
-        continue;
-      }
-      const section = document.createElement('div');
-      section.className = 'legend-section';
-      section.dataset.legendSection = def.id;
-      section.dataset.origin = 'bindings';
-      section.innerHTML = `<h4>${def.title}</h4>${renderRows(rows.get(def.id) ?? [])}`;
-      col.appendChild(section);
+  const sections: HTMLElement[] = [];
+  for (const def of LEGEND_SECTIONS) {
+    const existing = statics.get(def.id);
+    if (existing) {
+      sections.push(existing);
+      continue;
     }
-    columns.push(col);
+    const section = document.createElement('div');
+    section.className = 'legend-section';
+    section.dataset.legendSection = def.id;
+    section.dataset.origin = 'bindings';
+    section.innerHTML = `<h4>${def.title}</h4>${renderRows(rows.get(def.id) ?? [])}`;
+    sections.push(section);
   }
 
   // Une section non reconnue est CONSERVÉE (visible) plutôt qu'effacée : mieux
@@ -203,8 +196,7 @@ export function renderKeyboardLegend(): void {
     console.warn(
       `légende : ${leftovers.length} section(s) non reconnue(s) conservée(s) en fin de grille — template et bundle de versions différentes ?`,
     );
-    const last = columns[columns.length - 1];
-    for (const el of leftovers) last.appendChild(el);
+    sections.push(...leftovers);
   }
-  grid.replaceChildren(...columns);
+  grid.replaceChildren(...sections);
 }
