@@ -2,35 +2,48 @@
 
 Outil web local pour cartographier des fichiers musicaux entre dossiers
 éparpillés et un dossier source organisé manuellement. Repère les fichiers
-manquants, les copie en un clic vers le bon sous-dossier, et intègre un
-**éditeur de cues/loops avec waveform** calé sur la collection **Traktor (NML)**
-(beatgrid, BPM, grille native, export de playlists).
+manquants, les copie en un clic vers le bon sous-dossier, complète les années
+manquantes, range par style, et intègre un **éditeur de cues/loops avec
+waveform** calé sur la collection **Traktor (NML)** (beatgrid, BPM, grille
+native, export de playlists).
+
+Stack : **Python 3.12 + Flask 3.1**, **TypeScript vanilla** bundlé par esbuild
+(aucun framework), **Vitest** (frontend) + **pytest** (backend), **mutagen**
+(tags), `data/` en JSON (git-ignoré).
 
 ## Fonctionnalités
 
 - **Sync** : scan des dossiers éparpillés, détection manquant/doublon (nom
   exact **et** homonymes probables — durée ±2 s + nom, LED ambre), copie en un
-  clic (F5) vers la bonne source, remplacement d'homonyme de moindre qualité
+  clic (F5) vers le bon sous-dossier, remplacement d'homonyme de moindre qualité
   (R — l'ancien part dans `_trash/<date>/`, jamais effacé).
-- **Filtre rapide** (chips intégrés au-dessus des colonnes Sync) : F7 ou /
-  focus le chip de la colonne focusée, filtre en direct insensible casse/accents
+- **Filtre rapide** (chips persistants au-dessus de chaque liste) : F7 ou /
+  focus le chip de la liste focusée, filtre en direct insensible casse/accents
   sur nom + **année** + codec, mémorisé par liste (changer de colonne/page le
   conserve), ✕/Backspace pour effacer. Sur les arbres source : **filtre à deux
   niveaux** — dossiers seuls par défaut (déplier montre TOUS les fichiers, pour
   vérifier un doublon), toggle 📄 fichiers pour chercher aussi par nom de fichier.
-- **Rangement assisté** (EPIC-034) : pastille « ⤷ déjà rangé » sur les fichiers éparpillés
+- **Rangement assisté** : pastille « ⤷ déjà rangé » sur les fichiers éparpillés
   dont le jumeau existe déjà dans le dossier visé par le filtre source (tooltip
   = chemin exact — copier créerait un doublon), et **auto-ouverture du dossier
   destination après F5** : la copie est visible immédiatement, sans re-déplier,
   focus épars conservé pour enchaîner.
-- **Lecture audio partout** : bouton ▶/⏹ sur les cartes Années et les membres
-  de groupe Doublons (réutilise le player global — écouter avant de trancher),
-  état « en lecture » re-marqué après chaque re-render.
+- **Rangement par style** (palette `G`) : le style se choisit dans une palette
+  clavier, la destination (`<style>_<tranche>`) **se calcule** depuis l'année, et
+  le **tag du fichier est écrit tout de suite** ; `A` aligne ensuite le **stock
+  déjà rangé** sur son arborescence — voir « Rangement par style ».
+- **Années manquantes** : page de revue des années douteuses (consolidation
+  multi-sources), avec filtre, écoute avant de trancher, et export des choix —
+  voir « Enrichissement des années ».
 - **Doublons** : vue dédiée des groupes de versions d'un même morceau (épars
   et/ou rangés) — arbitrage automatique par qualité (FLAC > 320 > 128), override
   au clic, application du plan (gagnant rangé à droite, perdants rangés → trash).
 - **Playlist** : création/édition de playlists, notation (0–100), export par
   hard links, badge d'importation NML (`✓ NML` / `≈ homonymes` / `✕ non importé`).
+- **Lecture audio partout** : bouton ▶/⏹ sur les cartes Années et les membres
+  de groupe Doublons — comme sur les listes — **un seul lecteur** (singleton
+  strict : une piste audible à la fois, quel que soit le point d'entrée), état
+  « en lecture » re-marqué après chaque re-render.
 - **Éditeur cues / loops (waveform)** : cues A–H (touches `1–8`), loops, zoom
   contrôlé (+/−, molette, « Fit », « 1 beat »), minimap synchronisée au zoom,
   waveform **3 bandes RGB** (low/mid/high standard DJ), renommage/recolorisation
@@ -42,44 +55,44 @@ manquants, les copie en un clic vers le bon sous-dossier, et intègre un
 - **Collection Traktor** : lecture de la collection NML, match par FILESIZE (Ko,
   convention Traktor), ajout des pistes absentes au collection, export NML
   configurable.
-- **Enrichissement des années** (scripts hors interface, EPIC-033) : compléter
-  les tags sans année via MusicBrainz → Deezer → Discogs, par vagues de
-  confiance (certaines appliquées en lot, ambiguës réservées à une revue),
-  jamais écraser une année existante — voir « Enrichissement des années » plus bas.
+- **Légende `?`** : feuille de raccourcis **générée depuis les bindings du code**
+  (bijection vérifiée par test) — impossible qu'elle décrive un raccourci qui
+  n'existe pas, ou l'inverse.
+- **Focus lisible** : une seule grammaire de curseur (boîte d'accent 2 px +
+  barre 4 px + fond teinté) pour les fichiers comme pour les dossiers, dans
+  toutes les listes.
 
 ## Installation
 
 ```bash
 python3 -m venv venv
-./venv/bin/pip install flask mutagen
-./venv/bin/pip install pytest          # pour les tests backend
+./venv/bin/pip install -r requirements.txt   # Flask 3.1.3, mutagen 1.47.0, pytest 9.1.1
+npm install                                  # frontend : esbuild, vitest, biome
 ```
 
 > **Analyse serveur (bouton 🔍 Analyser)** : utilise `ffmpeg` (binaire système) pour décoder
 > les mp3/flac/ogg. Les `.wav` fonctionnent sans (repli stdlib). Si ffmpeg est absent, seul le
 > décodage WAV + la détection client restent disponibles.
 
-```bash
-npm install                            # pour le frontend (vitest, biome, esbuild)
-```
-
 ## Utilisation
 
 ```bash
+npm start                    # tue le process sur 8765, rebuild, lance Flask
+# ou, sans rebuild :
 ./venv/bin/python app.py
 # → http://localhost:8765
 ```
 
-L'outil a **trois pages** accessibles depuis la toolbar, plus un **éditeur de
-cues** ouvert depuis la page Playlist (bouton « Cues » sur une ligne, ou menu
-clic droit) :
+Quatre pages accessibles depuis la toolbar, plus un **éditeur de cues** ouvert
+depuis la page Playlist (bouton « Cues » sur une ligne, ou menu clic droit) :
 
 | Page / Outil | Bouton | Fonction |
 |------|--------|----------|
 | **Sync** | 📦 Sync | Copier des fichiers éparpillés vers la source data (F5) |
 | **Playlist** | 🎵 Playlist | Créer des playlists, noter les morceaux, exporter |
 | **Doublons** | ↔ Doublons | Groupes de versions d'un même morceau, arbitrage qualité, perdants rangés → `_trash/` |
-| **Cue editor** | « Cues » (ligne playlist) | Éditer cues/loops, zoom waveform, beatgrid, grille NML |
+| **Années** | 📅 Années | Revue des années manquantes non corroborées (choisir / rejeter, export des choix) |
+| **Cue editor** | 🎛️ Cue Editor / « Cues » | Éditer cues/loops, zoom waveform, beatgrid, grille NML |
 
 Les **outils** (⚙️ Config, 🔄 Scan, 📋 Journal, ❓ Raccourcis) sont
 disponibles dans les pages.
@@ -87,40 +100,58 @@ disponibles dans les pages.
 > **Config** — renseigne aussi le chemin du `collection.nml` Traktor (champ
 > *Traktor NML path*), nécessaire pour le match NML et l'écriture de la grille.
 
+> ⚠ **Après toute modification de `templates/index.html`, redémarrer l'app**
+> (`npm start`). Flask compile le template au chargement (`debug` est éteint) :
+> le template est figé dans le process, alors que le JS/CSS repartent au simple
+> rafraîchissement (cache-buster par mtime). Sans redémarrage, le navigateur
+> exécute le nouveau bundle contre l'ancien HTML — deux sections de la légende
+> s'affichaient ainsi vides le 2026-09-22.
+
 ### Workflow de base
 
 1. **Config** — renseigne le dossier source data et les dossiers éparpillés.
 2. **Scan** — analyse tous les dossiers et extrait les métadonnées.
-3. **Navigation** — au clavier uniquement : Tab, ↑↓, F5, F7.
+3. **Navigation** — au clavier : Tab, ↑↓, F5, F7.
 4. **Playlist** — crée des playlists, sauvegarde, export par hard links.
 5. **Cues** — ouvre l'éditeur waveform depuis une ligne de playlist.
 
-### Raccourcis clavier (mode normal)
+## Raccourcis clavier
 
-| Touche | Panel gauche (Éparpillé) | Panel droit (Source Data) |
-|--------|--------------------------|---------------------------|
-| **↑ ↓** | Naviguer fichiers/dossiers | Naviguer dossiers |
-| **← →** | — | Colonne suivante/précédente (2 colonnes) |
-| **Shift + ← →** | Seek audio ±20s (pendant lecture) | |
-| **Tab** | ↔ basculer de panneau | |
-| **Entrée** | Jouer le fichier | Déplier/replier un dossier |
-| **Espace** | Sélectionner le fichier | Déplier/replier un dossier |
-| **F5** | Copier vers le dossier survolé (avec confirmation) — le dossier destination s'ouvre automatiquement (auto-expansion mémoire) | |
-| **F7** / **/** | Focus le chip de filtre de la colonne focusée — tape pour filtrer (nom, année, codec) ; ✕ ou Backspace champ vide pour effacer | Même comportement sur l'arbre (auto-dépliage des branches matchées) |
-| **Échap** | Sortir du chip / fermer modale / stopper l'audio | |
-| **N** | Noter le fichier focusé (0-100, clic sur la zone de note aussi possible) | |
-| **R** / double-clic | Remplacer l'homonyme (l'ancien rangé → `_trash/<date>/`) — seulement sur les lignes à LED ambre | |
-| **G** | Poser un **style** (palette : lettre = style, puis chiffre 1-9 = tranche si l'année manque) sur la ligne focusée ou la sélection (Espace / Ctrl-clic) — voir « Rangement par style » | |
-| **E** | Aperçu du rangement par style (copies groupées par dossier cible → confirmation) | |
+> La **référence** est la légende **`?`** de l'app : elle est **générée depuis les
+> bindings** (`static/src/commands/*.ts`) et un test de bijection garantit que
+> chaque raccourci labellisé y figure et qu'aucune ligne n'est orpheline. Les
+> tableaux ci-dessous ne gardent que les gestes du quotidien ; les modifier dans
+> le HTML ou ici ne changerait rien au comportement.
 
-### Raccourcis clavier (page Doublons)
+### Page Sync
 
 | Touche | Action |
 |--------|--------|
-| **↑ ↓** | Naviguer les groupes de versions |
+| **Tab** | Basculer de colonne (Éparpillé ↔ Source Data) |
+| **↑ ↓** | Naviguer dans la liste focusée |
+| **← →** | Colonne précédente / suivante (pendant une écoute : seek) |
+| **Entrée** | Jouer le fichier / déplier le dossier |
+| **Espace** | Sélectionner le fichier (multi-copie) |
+| **F5** | Copier vers le dossier surligné (confirmation ; le dossier destination s'ouvre et, si son nom déclare un style, le tag genre est écrit des deux côtés) |
+| **R** | Remplacer l'homonyme rangé (l'ancien → `_trash/<date>/`) |
+| **F7** / **/** | Afficher/masquer le filtre — taper pour filtrer (nom, année, codec) |
+| **G** | Palette de style (écrit le tag : voir « Rangement par style ») |
+| **E** | Aperçu du rangement par style (copies groupées par dossier cible) |
+| **A** | Aligner le genre des fichiers rangés sur leur dossier (aperçu, 2 modes) |
+| **⌫** | Aller au dossier parent · **Ctrl+L** : aller au fichier en lecture |
+| **Alt + ← →** | Historique de navigation |
+| **Shift + ← →** | Seek ±20 s pendant l'écoute |
+| **Shift + F10** | Menu contextuel clavier (↑↓ + Entrée) |
+| **?** | Ouvrir cette légende |
+
+### Page Doublons
+
+| Touche | Action |
+|--------|--------|
+| **↑ ↓** | Naviguer les paires de doublons |
 | **Clic sur un exemplaire** | Le désigner gagnant (override de l'arbitrage qualité) |
-| **▶ / ⏹ (bouton du membre)** | Écouter avant de trancher — ne désigne **jamais** le gagnant (clic isolé) |
-| **R** / bouton **✓ Appliquer** | Plan du groupe (confirmation) : gagnant rangé à droite, rangés perdants → `_trash/<date>/` |
+| **▶ / ⏹ (bouton du membre)** | Écouter avant de trancher — ne désigne **jamais** le gagnant |
+| **R** / bouton **✓ Appliquer** | Plan du groupe (confirmation) : gagnant rangé à droite, perdants → `_trash/<date>/` |
 | **Échap** / **📦 Sync** | Revenir à la page Sync |
 
 > **Arbitrage qualité** : score par paliers — lossless (FLAC/WAV/AIFF/ALAC) =
@@ -128,58 +159,77 @@ disponibles dans les pages.
 > Le tooltip et la colonne « codec » permettent de juger ; la détection est une
 > heuristique (revue humaine = confirmation obligatoire).
 
-### Raccourcis clavier (page Playlist)
+### Page Années
 
-| Touche | Panneau Source | Panneau Sidebar |
-|--------|----------------|-----------------|
-| **↑ ↓** | Naviguer fichiers/dossiers | Naviguer pistes |
-| **Tab** | ↔ basculer de panneau | |
-| **Entrée** | Jouer le fichier | — |
-| **Espace** | Ajouter/retirer le morceau | — |
-| **F7** / **/** | Filtrer les fichiers | — |
-| **Delete** / **Backspace** | — | Supprimer la piste |
-| **Ctrl + S** | Sauvegarder la playlist | |
-| **Ctrl + E** | Exporter la playlist | |
-| **Ctrl + ↑↓** | — | Réorganiser les pistes |
-| **N** | Noter le fichier focusé (0-100, clic sur la zone de note aussi possible) | — |
+| Touche | Action |
+|--------|--------|
+| **↑ ↓** | Naviguer les cartes (ordre **visible** : saute hors-filtre et rejetés) |
+| **F7** / **/** | Filtrer les cartes (artiste, titre, année) |
+| **Clic** | Choisir une année / rejeter la carte (session locale) |
+| **▶** | Écouter le fichier avant de trancher |
+| **E** | Exporter les choix (`apply_years.py --review`) |
+| **Échap** | Revenir à la page Sync |
+
+### Page Playlist
+
+| Touche | Action |
+|--------|--------|
+| **Tab** | Basculer source ↔ sidebar |
+| **↑ ↓** | Naviguer (source ou pistes), **Entrée** : jouer |
+| **Espace** | Ajouter / retirer le morceau |
+| **Suppr** / **⌫** | Retirer la piste du sidebar |
+| **Ctrl + ↑ ↓** | Réordonner les pistes · **Ctrl+S** sauvegarder · **Ctrl+E** exporter |
+| **← →** | Colonne précédente / suivante (seek pendant l'écoute) |
+| **N** | Noter le morceau ou la source (édit inline) |
 
 > **Note :** Échap ne quitte plus la page Playlist. Pour revenir à Sync,
 > cliquer sur **📦 Sync** dans la toolbar.
 
-### Raccourcis clavier (éditeur de cues)
+### Éditeur de cues
 
 | Touche | Action |
 |--------|--------|
-| **← →** | Seek audio ±5s |
+| **← →** | Seek audio ±5 s |
 | **+/−** | Zoom waveform (molette aussi : ×1,25) |
+| **Espace** | Lecture / pause |
 | **1–8** | Poser un cue sur les slots A–H |
 | **C** | Poser un cue au curseur (déplace l'existant si 8 pleins) |
-| **Ctrl + Z** / **Ctrl + Shift + Z** | Annuler / rétablir (undo/redo) |
+| **Ctrl + Z** / **Ctrl + Shift + Z** (ou **Ctrl + Y**) | Annuler / rétablir (undo/redo) |
+| **⟳ Loop / 🔁 Play** | Dessiner / lire une boucle |
 | **←/→ 1/4** | Calage manuel de la grille (nudge de phase ±1/4 beat) |
 | **◎ Beat 1** | Poser le premier beat |
 | **🔍 Analyser** | Analyse serveur de la basse/du kick (BPM + phase) |
 | **💾 Grille** | Écrire la grille (TEMPO + TYPE=4) dans le collection.nml |
 | **Suppr** / clic droit | Retirer / supprimer un cue |
 | **Double-clic** (slot ou région) | Renommer / recolorer le cue |
+| **Échap** | Fermer l'éditeur (ou quitter le plein écran) |
 
-### Badges
+### Transverse
 
-| Badge | Signification |
-|-------|--------------|
-| ● bleu | Nouveau — pas encore dans source data |
-| ○ gris | Doublon — existe déjà dans source data |
-| ● vert | Traité — déjà copié (journal) |
-| ● cyan | En cours de lecture |
-| ✅ | Dans la playlist active (mode Playlist) |
-| ✓ **NML** | Matché dans le collection.nml (sauvegardable) |
-| ≈ **homonymes** | Plusieurs entrées NML homonymes (sélecteur au clic « Cues ») |
-| ✕ **non importé** | Absent du collection.nml (visualisation seule) |
+`Échap` ferme dans l'ordre : **menu contextuel → modale → filtre → dossier
+déplié → stop audio** (pile de fermeture explicite, testée par invariant).
+`Shift+F10` ouvre le menu contextuel de l'élément surligné (`↑↓` + `Entrée`).
 
-### Métadonnées affichées
+### États & pastilles
 
-Chaque fichier affiche : **Année** — **Codec** — **Durée**
+| Marqueur | Signification |
+|----------|--------------|
+| LED bleue | Nouveau — hors Source Data |
+| LED grise | Doublon — nom identique |
+| LED ambre | Homonyme probable (durée + nom) |
+| LED verte | Traité — déjà copié |
+| LED cyan | En lecture (audio) |
+| LED bleue + fond | Sélectionné (multi-copie, Espace) |
+| Carré ambre pulsé | Jumeau du doublon surligné (colonne droite) |
+| Badge chiffré | Note personnelle (0-100) |
+| Badge ✅ | Dans la playlist active |
+| Badge ✓ NML | Matché dans la collection Traktor |
+| Badge ≈ homonymes | Plusieurs entrées Traktor |
+| Badge ✕ non importé | Absent de la collection Traktor |
 
-### Workflow F5
+**Métadonnées affichées** : chaque fichier montre **Année** — **Codec** — **Durée**.
+
+## Workflow F5
 
 1. Naviguer sur un fichier ● (panneau gauche) — la pastille « ⤷ déjà rangé »
    signale ceux dont le jumeau existe déjà dans le dossier filtré à droite
@@ -188,8 +238,11 @@ Chaque fichier affiche : **Année** — **Codec** — **Durée**
 4. **F5** → modale de confirmation (**Entrée** valide, **Échap** annule)
 5. Le dossier destination **s'ouvre automatiquement** et montre la copie —
    le focus reste sur l'épars pour enchaîner
+6. Si le dossier cible déclare un style (`<style>_<tranche>`), le **tag genre est
+   écrit des deux côtés** — épars et copie — et le statut le dit
+   (`· style « techno » écrit (epars + copie)`). L'année n'est **jamais** touchée.
 
-### Page Playlist
+## Page Playlist
 
 1. Cliquer **🎵 Playlist** dans la toolbar → deux panneaux : Source / Sidebar
 2. **Espace** sur un fichier → ajoute ✅ / retire
@@ -197,7 +250,7 @@ Chaque fichier affiche : **Année** — **Codec** — **Durée**
 4. **Ctrl + E** → export par hard links vers `source_data/_playlists/<nom>/`
 5. Revenir à Sync → cliquer **📦 Sync** dans la toolbar
 
-### Éditeur de cues & beatgrid
+## Éditeur de cues & beatgrid
 
 1. Dans la page Playlist, cliquer **« Cues »** sur une ligne (ou clic droit →
    *Cues / loops (waveform)*) → modale waveform de la piste.
@@ -212,83 +265,125 @@ Chaque fichier affiche : **Année** — **Codec** — **Durée**
    lance l'analyse serveur (BPM + phase, cache par piste) ; **💾 Grille** écrit
    TEMPO + TYPE=4 dans le `collection.nml`.
 
-### Notation (Ratings)
+## Notation (Ratings)
 
-Une note de 0 à 100 est visible sur **tous les fichiers** (mode Sync et
-Playlist), affichée à droite du row après la durée. La zone de note est
-cliquable (ouvre un edit inline en mode Playlist Source) et éditable au
-clavier via la touche **N**.
+Une note de 0 à 100 est **visible sur tous les fichiers** (pages Sync,
+Playlist, Années), affichée à droite du row après la durée. Elle est stockée
+globalement (pas par playlist) dans `data/ratings.json`, clé = chemin absolu.
 
-Les notes sont stockées globalement (pas par playlist) dans
-`data/ratings.json`, avec la clé = chemin absolu du fichier.
+| Action | Raccourci / Gestuelle | Où |
+|--------|----------------------|-----|
+| **Éditer la note** | **N** sur l'élément focusé (sidebar ou arbre source) | Page Playlist |
+| **Éditer la note** | **Clic** sur la zone de note (`.file-rating`) | Page Playlist (panneau Source) |
+| **Valider** | **Entrée** → sauvegarde immédiate | — |
+| **Annuler** | **Échap** → note précédente | — |
+| **Effacer** | Champ vide + **Entrée** | — |
+| **Valider auto** | **Blur** → sauvegarde automatique | — |
 
-| Action | Raccourci / Gestuelle |
-|--------|----------------------|
-| **Éditer la note** | **N** sur fichier focusé (Sync ou Playlist) → input inline |
-| **Éditer la note** | **Clic** sur la zone de note (`.file-rating`) → input inline |
-| **Valider** | **Entrée** → sauvegarde immédiate |
-| **Annuler** | **Échap** → retour à la note précédente |
-| **Effacer** | Champ vide + **Entrée** → suppression de la note |
-| **Valider auto** | **Blur** → sauvegarde automatique |
+> **Hors Playlist**, la cellule de note n'est pas éditable : sur la page Sync,
+> `N` ne déclenche rien (cellule de matrice « sync: n sans playlist = rien ») et
+> le clic ne fait que surligner la ligne. Limite connue, consignée dans
+> « Limites connues ».
 
-**Affichage :**
-- `85` — note en chiffres tabulaires
-- *vide* — pas encore noté
-- Dans le sidebar Playlist : `—` si pas noté
+**Implémentation :** fonction partagée `_startInlineRatingEdit()` dans
+`render/ratingEdit.ts`, avec deux points d'entrée `startRatingEdit()` (sidebar
+Playlist) et `startSourceRatingEdit()` (arbre source Playlist).
 
-**Implémentation :** fonction partagée `_startInlineRatingEdit()` dans render.ts,
-avec deux points d'entrée `startRatingEdit()` (sidebar tracks) et
-`startSourceRatingEdit()` (file-rows dans l'arbre source).
+## Rangement par style (`G`)
 
-## Rangement par style (EPIC-035, P1)
+Les dossiers de Source Data suivent la grammaire `<style>_<tranche>` (tranche =
+palier de 5 ans : `techno_acid_1990`) ou `<style>` seul pour les styles hors
+temps (`italo_disco`). La **taxonomie est dérivée des dossiers existants**
+(aucune liste à maintenir) ; le style est la seule décision humaine, la tranche
+se déduit de l'année du tag, le dossier cible est calculé.
 
-Les dossiers de Source Data suivent la grammaire `<style>_<tranche>` (tranche = palier de
-5 ans : `techno_acid_1990`) ou `<style>` seul pour les styles hors temps (`italo_disco`).
-La **taxonomie est dérivée des dossiers existants** (aucune liste à maintenir) ; le style est
-la seule décision humaine, la tranche se déduit de l'année du tag, le dossier cible est
-calculé.
+1. **G** sur la ligne surlignée — **Éparpillé ou Source Data** (un fichier prime
+   sur un dossier, le panneau actif arbitre) → la palette s'ouvre : **lettre** =
+   style, **4 chiffres** = année, **Entrée** = accepter la suggestion locale.
+   La grille des styles est défilante et **les 57 années réelles (1970→2026)**
+   sont toujours proposées en entier.
+2. **Le tag est écrit immédiatement** — `TCON`/`GENRE`/`©gen` pour le style,
+   `TDRC`/`TYER`/`DATE`/`©day` pour l'année — via `POST /styles/apply` et
+   `POST /years/apply` (validation → confinement aux racines configurées →
+   journal `old` → écriture du frame natif → **relecture** de la valeur). Le
+   journal est **celui des scripts** (`data/style_apply_journal.jsonl`,
+   `data/year_apply_journal.jsonl`, `source: "palette"`) : `apply_styles.py
+   --undo` / `apply_years.py --undo` annulent indifféremment l'écriture faite par
+   la palette ou par le script.
+3. **E** → aperçu groupé par dossier cible (fichiers sans année et jumeaux déjà
+   rangés exclus et listés) → **Appliquer** = copies enchaînées via le flux F5
+   (journal, auto-expansion du dossier, pastille « déjà rangé »). Le choix de
+   session reste **épars-only** : taguer une piste déjà rangée corrige la
+   métadonnée, ça ne planifie aucune copie.
 
-1. Colonne gauche : focus une ligne (ou sélectionne un lot : **F7** `_schranz` puis
-   **Espace** / Ctrl-clic) → **G** → lettre du style (affichée dans la palette) → si un
-   fichier n'a pas d'année : chiffre **1-9** = tranche (`1985 … 2025`), **Entrée** = style
-   seul. **Échap** annule, **⌫** retire le style. La colonne « Style » montre le choix et
-   la destination en tooltip (`→ techno_acid_1990`, `→ ➕ … (sera créé)`, `année manquante`).
-2. **E** → aperçu groupé par dossier cible (fichiers sans année et jumeaux déjà rangés
-   exclus et listés) → **Appliquer** = copies enchaînées via le flux F5 (journal,
-   auto-expansion du dossier, pastille « déjà rangé »). Les choix sont de **session**
-   (perdus au rechargement) ; rien n'est copié sans l'aperçu ; **aucune écriture ID3 en P1**.
+La colonne « Style » montre le choix, la suggestion (`chip` à confiance > seuil,
+issue de 4 signaux pondérés : segment du chemin épars (0,50), voisinage artiste
+dans la source (0,40), historique de session du sous-dossier épars (0,20), genre
+ID3 aliasé (0,15) — suggestion retenue si la confiance ≥ 0,30) et la destination en
+tooltip (`→ techno_acid_1990`, `→ ➕ … (sera créé)`, `année manquante`).
+Le filtre de la colonne gauche matche aussi le **sous-dossier** épars
+(`_techno`, `2008_08`).
 
-Le filtre de la colonne gauche matche aussi le **sous-dossier** épars (`_techno`, `2008_08`).
+4. **F5 (et tout ce qui copie) écrit le style aussi** — le nom du dossier de
+   destination est la déclaration de style, donc une copie vers `techno_acid_1990`
+   met le tag genre à `techno_acid` **sur l'épars et sur la copie** (jamais
+   l'année). Pas de validation contre la taxonomie : un dossier neuf marche du
+   premier coup. Un dossier hors grammaire (`_trash`, `2008_08`, capitalisé)
+   n'écrit rien, et un échec de tag est **rapporté sans bloquer la copie**.
+   Journal partagé (`source: "copy-f5"`), comme la palette.
+5. **A (page Sync) aligne le STOCK sur les dossiers** — les fichiers **déjà
+   rangés** dont le genre ne dit pas ce que le dossier déclare (mesuré : 1 023
+   contredisent leur dossier, 258 n'ont pas de genre). **A** ouvre un aperçu
+   (aucune écriture) puis propose deux modes : *corriger + remplir* ou *remplir
+   seulement les vides*. Le disque tranche fichier par fichier (un cache périmé
+   n'écrase jamais un genre existant en mode « vides »), l'année n'est pas
+   touchée, les lignes sont journalisées (`source: "align"`) — `apply_styles.py
+   --undo` restaure, comme pour la palette et les copies. Les **épars** sont hors
+   périmètre : leur genre est un indice de suggestion, pas un rangement.
 
-## Enrichissement des années (EPIC-033)
+⚠ L'écriture est **immédiate et définitive** pour le fichier : la sortie est le
+journal (`--undo`), pas une annulation dans la palette (Échap annule *avant*
+écriture).
+
+## Enrichissement des années
 
 À l'origine : **3 704 / 6 522 fichiers sans année (57 %)**. Pipeline **gratuit et sans compte**
 (mise à part l'option Discogs) : MusicBrainz (1ʳᵉ sortie du morceau, 1 req/s) → Deezer (sans
 clé) → Discogs (60 req/min, token dans `data/discogs_token`, git-ignoré chmod 600).
 Les résultats sont **mis en cache** (`data/year_cache.jsonl`, `data/discogs_cache.jsonl`,
 `data/itunes_cache.jsonl`, `data/discogs_reform_cache.jsonl`, `data/discogs_reform2_cache.jsonl`,
-`data/youtube_topic_cache.jsonl` — git-ignorés) : les clés déjà
+`data/beatport_cache.jsonl`, `data/youtube_topic_cache.jsonl` — git-ignorés) : les clés déjà
 collectées ne sont **jamais re-interrogées** ; une relance de collecte ne traite que
 l'incrément (reprise JSONL, erreurs re-jetables).
 
-**État au 2026-09-18 — EPIC CLÔTURÉE** : vague « certaines » **appliquée** (1 349 écritures
+**Règle de corroboration (EPIC-040)** : aucune année n'est écrite sur la foi d'une seule
+source quand elle contredit les autres. La clé artiste/titre est construite en orientations
+multiples (tags du fichier → nom → nom inversé, une garde de tokens tranche), Deezer est
+sommé de respecter artiste **et** titre, `release_date` d'album n'est plus prise pour une
+première sortie — et **deux providers indépendants concordants** sont exigés (Discogs en
+3ᵉ provider) ; sinon la ligne part en **revue humaine**. Motif : 408 écritures Deezer dont
+**173 ≥ 2015 (42,4 %)** pour des morceaux des années 90. Audit des années déjà écrites :
+`scripts/audit_applied_years.py` (classe `confirme` / `contredit` / `a_revoir` /
+`non_verifie`, dry-run par défaut) — premier passage appliqué : **2 corrections 2024 → 1991**
+(Phantasia), journal `audit:deezer+discogs`.
+
+**État au 2026-09-18 — EPIC-033 clôturée** : vague « certaines » **appliquée** (1 349 écritures
 OK, journal = backup `data/year_apply_journal.jsonl`, `--undo` idempotent) — consolidation
 7 sources : **1 443 certaines / 782 à revue / 1 473 introuvables** (+6 non parsables), dont les
 apports **reformulé** (`collect_discogs_reform.py` : +15 certaines / +127 à revue) et
 **junk-artiste numérique** (`collect_discogs_reform2.py` : +1 certaine / +12 à revue sur
-les 556 artistes numériques/symboles — `#07 enzyme x`, `204`, `2006 prodigy`) — intégré au
-consolidé (`scripts/report_years.py` + `/years/preview`) en dernier rideau, sans
-chevauchement avec les sources amont. La passe **YouTube « - Topic »** a été **exécutée
-sans trouvaille (0/84)** : les chaînes Topic sont fusionnées depuis 2025-2026 dans les
-profils artiste — le garde-fou reste en place pour les relances futures (7ᵉ rideau).
+les 556 artistes numériques/symboles — `#07 enzyme x`, `204`, `2006 prodigy`). La passe
+**YouTube « - Topic »** a été **exécutée sans trouvaille (0/84)** : les chaînes Topic sont
+fusionnées depuis 2025-2026 dans les profils artiste — le garde-fou reste en place.
 
-**Revue industrialisée (P2)** : dans la vue Années, **F7** ou **/** filtre les cartes
+**Revue industrialisée** : dans la vue Années, **F7** ou **/** filtre les cartes
 (artiste, titre, année — terme mémorisé), choisissez/rejetez puis **e** (ou bouton 💾) → les
 choix sont persistés (`data/year_review.json`) ; le chip filtre et la barre d'export se
 collent en haut pendant le scroll ; chaque carte porte un bouton **▶** pour écouter le
 fichier avant de trancher (player global, état conservé à travers les re-renders) ;
-`apply_years.py --review --apply` applique le lot — un
-choix humain OVERRIDE toujours la consolidation, journal + `--undo` inchangés.
+`apply_years.py --review --apply` applique le lot — un choix humain OVERRIDE toujours la
+consolidation, journal + `--undo` inchangés. **Aucune écriture ne part de l'interface** hors
+les routes `/years/apply` et `/styles/apply` décrites plus haut.
 
 **Passe Beatport** (techno digitale 2004+, complément des sources vinyle) : Beatport
 n'ouvre pas la création d'apps OAuth au public — méthode éprouvée (celle de beets-beatport4) :
@@ -297,13 +392,6 @@ copier la réponse JSON du POST `/v4/auth/o/token/` dans `data/beatport_token.js
 (chmod 600, git-ignoré). Le token expire (~1 h) : recommencer la copie quand le script le
 demande.
 
-**Passe YouTube « - Topic »** (dernier rideau, sans compte) : `collect_youtube_topic.py`
-cible les clés `none` plausibles ≥ 2015 (année dans le chemin des dossiers), et exige la
-chaîne « - Topic », tous les tokens artiste + titre dans le titre vidéo, la durée ± 15 s
-d'un fichier de la clé et la `release_date` (l'upload_date n'est jamais utilisé).
-Exécutée le 2026-09-18 : **0/84** — YouTube fusionne les chaînes Topic dans les profils
-artiste depuis 2025-2026 ; le garde-fou reste utile aux relances futures.
-
 ```bash
 # Collecte (incrémentale — inutile tant qu'aucun nouveau fichier n'arrive)
 ./venv/bin/python scripts/collect_years.py --report        # MB → Deezer (1 req/s)
@@ -311,22 +399,27 @@ artiste depuis 2025-2026 ; le garde-fou reste utile aux relances futures.
 ./venv/bin/python scripts/collect_itunes.py --report       # iTunes sans clé (~20 req/min)
 ./venv/bin/python scripts/collect_discogs_reform.py        # Discogs requêtes reformulées
 ./venv/bin/python scripts/collect_discogs_reform2.py --go  # junk-artiste numérique (aperçu sans --go)
-./venv/bin/python scripts/collect_beatport.py              # Beatport (EN PAUSE — token portail requis)
-./venv/bin/python scripts/collect_youtube_topic.py         # YouTube « - Topic » (exécutée : 0/84, relançable)
-./venv/bin/python scripts/collect_youtube_topic.py --go --verified  # tier chaînes vérifiées (tout en lax)
+./venv/bin/python scripts/collect_beatport.py              # Beatport (token portail requis)
+./venv/bin/python scripts/collect_youtube_topic.py         # YouTube « - Topic » (0/84, relançable)
 
 # Rapport consolidé (toutes sources, sans double comptage)
 ./venv/bin/python scripts/report_years.py --files
 
 # Application de la vague « certaines »
 ./venv/bin/python scripts/apply_years.py            # dry-run : rien n'écrit
-./venv/bin/python scripts/apply_years.py --apply    # écrit les tags (~5-10 min)
+./venv/bin/python scripts/apply_years.py --apply    # écrit les tags
 ./venv/bin/python scripts/apply_years.py --review   # + choix humains de la vue Années
 ./venv/bin/python scripts/apply_years.py --report   # résumé du journal
 ./venv/bin/python scripts/apply_years.py --undo     # annule (idempotent)
+
+# Rangement par style (mêmes garanties, côté genre)
+./venv/bin/python scripts/apply_styles.py --undo     # annule les TCON écrits
+
+# Audit des années déjà écrites (EPIC-040)
+./venv/bin/python scripts/audit_applied_years.py     # dry-run ; --apply --yes pour agir
 ```
 
-**Garanties** (testées dans `test_apply_years.py`, 10 tests) :
+**Garanties** (testées dans `test_apply_years.py` / `test_apply_styles.py`) :
 
 - **Jamais écraser** : chaque fichier est re-vérifié sur disque juste avant écriture ;
   une année apparue depuis le scan → fichier sauté.
@@ -341,94 +434,139 @@ artiste depuis 2025-2026 ; le garde-fou reste utile aux relances futures.
 **Clôture de la revue (2026-09-18)** : 692 choix exportés (633 années + 59 rejets) — les
 782 à-revue sont **toutes soldées** (713 taggées, 59 rejetées, 9 échecs structurels
 connus, 1 fanfare tranchée → 1980) ; `apply_years --review --apply` final : ok=1,
-skip=2 152, idempotence vérifiée. Couverture finale au périmètre du scan : **76 %**
-(4 970 / 6 508, contre 43 % à l'ouverture) ; ~3 551 fichiers nouveaux sans année depuis
-le scan attendent un re-scan (collectes incrémentales, prêtes à relancer).
+skip=2 152, idempotence vérifiée. Couverture au périmètre du scan du 2026-09-18 : **76 %**
+(4 970 / 6 508, contre 43 % à l'ouverture).
 
-Historique complet, chiffres détaillés et bilan de clôture : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md).
+**Re-scan du 2026-09-21 (état courant)** : le scan a été relancé — **6 696 fichiers scannés**
+(1 604 Source Data + 5 092 épars), **5 141 avec année (76,8 %)**, **1 555 sans**. Le rapport
+consolidé ne propose plus que **3 fichiers « certaines » / 54 en revue / 1 492 introuvables**
+(6 non parsables) et `apply_years.py` en dry-run ne trouve **0 candidat** — plus rien à écrire.
+L'audit des années déjà écrites a traité son premier cas (Phantasia « Inner Light » : 2024 écrit
+par Deezer → **1991** sur corroboration Discogs, journal `audit:deezer+discogs`, `--undo`
+disponible) ; l'audit **complet** des 408 écritures Deezer et la re-collecte moteur v2
+(EPIC-040 🟡) restent à lancer.
+
+Historique complet, chiffres détaillés et bilan de clôture : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md)
+· corroboration : [EPIC-040](docs/superpowers/epics/EPIC-040-annees-corroboration-2-sources.md).
 
 ## Structure
 
 ```
 audio-sync-tool/
-├── app.py                 # Serveur Flask (port 8765, routes REST)
-├── analysis.py            # Analyse serveur kick/phase (DSP pur Python, beatgrid P3)
+├── app.py                 # Serveur Flask (port 8765, routes REST + écriture des tags)
+├── analysis.py            # Analyse serveur kick/phase (DSP pur Python, beatgrid)
 ├── nml.py                 # Parser/écriture collection Traktor (NML) : match, add, export, grille
-├── templates/index.html   # Interface utilisateur
+├── templates/index.html   # Interface utilisateur (structure des modales incluse)
 ├── static/
-│   ├── style.css          # Thème SCADA (JetBrains Mono, LED glow)
-│   ├── src/               # Sources TypeScript (42 modules)
-│   │   ├── commands/      # Command Pattern (10 modules)
-│   │   ├── render/        # Component factories (11 modules — fileRow, cueEditor, playlistUI, dupsUI…)
-│   │   ├── router.ts      # Routeur de pages (sync | playlist | dups)
+│   ├── styles/            # CSS EN COUCHES : tokens, base, components + pages/*.css (11 fichiers)
+│   │   └── pages/index.css  # agrège les @import — l'ordre fait la cascade, ne pas réordonner
+│   ├── src/               # TypeScript : 58 modules + 50 fichiers de test
+│   │   ├── commands/      # Command Registry (13 modules) : navigation, audio, filter, style…
+│   │   │                  #   + keyboardMatrix.test.ts (matrice touches × contextes)
+│   │   ├── render/        # Component factories (fileRow, sourceTree, cueEditor, legend…)
+│   │   ├── core/          # Helpers partagés : format, feedback, subscribe, dom
+│   │   ├── router.ts      # state.page : sync | playlist | dups | years
+│   │   ├── styleSuggest.ts# suggestions de style (chemin, voisinage artiste, genre ID3)
 │   │   ├── dupDetect.ts   # Détection doublons (durée ±2 s + nom fuzzy)
 │   │   ├── dupGroups.ts   # Groupes de versions + arbitrage qualité
-│   │   ├── script.ts      # Orchestrateur (~160 lignes)
-│   │   ├── state.ts       # Proxy + EventEmitter + RAF batcher
-│   │   └── *.test.ts      # 34 fichiers de test (vitest)
-│   └── dist/              # Compilés par esbuild (gitignored)
-├── data/                  # Config, journal, cache, playlists, ratings, beatgrids (gitignored)
-├── docs/superpowers/      # Specs + plans d'implémentation
+│   │   └── script.ts / state.ts / api.ts / audio.ts / focus.ts / ui.ts
+│   └── dist/              # script.js + script.css bundlés par esbuild (gitignored)
+├── data/                  # Config, journal, caches, playlists, ratings, beatgrids (gitignored)
+├── docs/superpowers/      # Specs + plans + rapports
 │   └── epics/             # ⭐ Registre des EPICs (traçabilité de toute évolution)
-├── scripts/               # Outils Node (build, validation) + enrichissement années (collect_years, collect_discogs, apply_years — Python)
-├── .github/workflows/     # CI : typecheck + lint + vitest + pytest
-├── biome.json             # Linter + formateur Biome
-├── vitest.config.js       # Tests frontend + coverage
-├── tsconfig.json          # TypeScript config
-├── package.json           # Dépendances JS
-├── test_app.py            # Tests backend API (pytest)
-├── test_analysis.py       # Tests DSP analyse kick/phase (pytest)
-├── test_nml.py            # Tests parser/writer NML (pytest)
+├── build.js · scripts/validate-build.js · scripts/audit-css.mjs   # bundle esbuild + validation
+├── scripts/               # enrichissement Python : collect_*, apply_years, apply_styles,
+│   │                      #   report_years, audit_applied_years ; capture_ui / perf_ui
+│   └── proof_*.py · measure_*.py   # harnais de preuve headless (Chrome CDP)
+├── tests/fixtures/        # échantillons (nml-sample.xml)
+├── docs/refactoring/ · docs/TESTING-GUIDE.md   # bilan de refactoring, guide de test
+├── .github/workflows/     # CI : typecheck + lint + vitest + shuffle + pytest
+├── biome.json · vitest.config.js · tsconfig.json · package.json · requirements.txt
+├── test_app.py            # Tests backend API (164 tests)
+├── test_analysis.py · test_nml.py · test_apply_*.py · test_collect_*.py · test_report_years.py
 └── README.md
 ```
 
-Routes REST principales : `/scan`, `/copy`, `/move`, `/config`, `/journal`,
-`/ratings`, `/playlists[/<name>]`, `/mkdir`, `/api/nml/status`, `/api/track/match`,
-`/api/track/add`, `/api/track/cues`, `/api/track/grid`, `/api/beatgrid`,
-`/api/track/analyze`.
+Routes REST principales : `/config`, `/scan`, `/scan-progress`, `/load`, `/ping`,
+`/copy`, `/move`, `/delete`, `/mkdir`, `/journal` (GET/DELETE), `/audio`,
+`/ratings`, `/playlists` (+ `/<name>`, `/export`), `/years/preview`,
+`/years/review`, `/years/apply`, `/styles/review`, `/styles/apply`,
+`/api/nml/status`, `/api/track/match`, `/api/track/add`, `/api/track/cues`,
+`/api/track/grid`, `/api/beatgrid`, `/api/track/analyze`.
+
+`/styles/apply` et `/years/apply` sont les **seules** routes qui écrivent des tags
+depuis l'interface (validation → confinement aux racines configurées → journal
+`old` → écriture → relecture).
 
 ## Développement
 
-Tout le code frontend est en **TypeScript**. Les fichiers `.js` sont des
-artefacts de build (gitignorés) générés par esbuild.
+Tout le code frontend est en **TypeScript** ; les fichiers `.js` de `static/dist/`
+sont des artefacts de build (gitignorés) générés par esbuild.
 
 ```bash
-npm run build              # Compilation unique .ts → .js
-npm run dev                # Watch mode (compilation automatique)
-npm run typecheck          # Vérification des types (tsc)
-npm run lint               # Vérification Biome (0 erreurs — vérifié)
-npm run lint:write         # Correction auto des problèmes
-npm run format             # Formatage Biome
-npm test                   # 811 tests, 34 fichiers
-npm run test:shuffle       # Même suite en --sequence.shuffle (stabilité)
+npm start                  # tue le process 8765, build, lance Flask (le plus sûr)
+npm run dev                # Watch mode (rebuild à chaque changement)
+npm run build              # Build + validation du bundle (script.js parsable, invariants)
+npm run typecheck          # tsc --noEmit
+npm run lint               # biome check static/src/
+npm test                   # vitest run — 1 145 tests, 50 fichiers
+npm run test:shuffle       # ordre aléatoire (détecte les fuites d'état entre tests)
+npm run test:shuffle:gate   # 3 graines FIXES (un échec de shuffle redevient reproductible)
+npm run coverage           # clean → vitest --coverage → build
+npm run audit:css          # classes CSS mortes (rapport seul, vérification manuelle)
+./venv/bin/python -m pytest -q    # 335 tests backend
 ```
 
-> **CI** : un workflow GitHub Actions (`.github/workflows/ci.yml`) vérifie
-> typecheck, lint, vitest, pytest et le build sur chaque push/PR.
+> **CI** (`.github/workflows/ci.yml`, chaque push/PR) : typecheck, lint, `npm test`, `test:shuffle` (graine aléatoire) puis `test:shuffle:gate` (3 graines fixes : un échec de shuffle redevient reproductible) et pytest.
 
-### Tests
+> ⚠ **Le CSS et le JS sont bundlés** : `npm run build` est **obligatoire avant toute
+> mesure dans le navigateur** (et `npm start` après une modification de template).
+> Un harnais lancé sans rebuild mesure la version précédente.
 
-#### Backend (pytest)
+**Preuves headless** — plusieurs décisions d'UI sont tranchées par la mesure, pas à
+l'œil : `scripts/measure_legend.py` (légende : alignement, libellés coupés, contraste
+calculé comme le navigateur le rend, tenue de la modale — 13 vérifications, rejouable à
+toute largeur avec `PROOF_WINDOW=2560,1400`), `measure_focus_visibility.py` (contraste du
+focus), `proof_filter_chip.py`, `proof_style_palette.py` (tags relus **sur disque**).
 
-```bash
-./venv/bin/python -m pytest -q
-```
-
-#### Frontend (vitest)
-
-```bash
-npm test                   # 811 tests, 34 fichiers
-npm run coverage           # Clean → test → rapport (~91% lignes)
-```
-
-### Couverture
+### Couverture (mesurée le 2026-09-22)
 
 | Suite | Tests | Couverture |
 |-------|-------|------------|
-| Pytest | 190 | — |
-| Vitest | 811 | 90.98% lignes/statements, 81.87% branches, 87.43% fonctions (mesure EPIC-021 — à rafraîchir) |
+| Pytest | **351** (12 fichiers) | — |
+| Vitest | **1 171** (51 fichiers) | **94,39 %** lignes/statements, **84,24 %** branches, **90,55 %** fonctions |
 
-### Évolutions & traçabilité
+## Limites connues
+
+- **Notation hors Playlist** : la note est *visible* partout, mais éditable seulement en page
+  Playlist (`N`, ou clic en panneau Source). Sur Sync, `N` ne fait rien et le clic ne fait que
+  surligner la ligne (documenté par une cellule de la matrice clavier).
+- **Le tag suit le rangement** : une copie vers un dossier qui « ment » (`techno` dans un
+  dossier `hardcore_1990`) écrit un tag faux — c'est cohérent avec la déclaration du dossier, et
+  `apply_styles.py --undo` revient en arrière (journal `source: "copy-f5"`). L'année, elle,
+  n'est jamais écrite par une copie. L'alignement **A** remplace à dessein des genres externes
+  (`Electronic`, `Dance`…) par le style du dossier : c'est l'objectif, et le journal les garde.
+- **Template ≠ bundle** : après une modification de `templates/index.html`, redémarrer l'app
+  (voir l'avertissement en tête de « Utilisation »). Le code tolère un HTML d'une autre version
+  (sections statiques adoptées par leur titre, jamais effacées) mais garde alors l'ancienne mise
+  en forme.
+- **Légende sous 1 850 px** : la feuille passe de 4 à 2 colonnes (équilibre mesuré 1,07) et fait
+  alors **1 061 px** de haut — un peu de défilement sur une fenêtre courte. Le palier 3 colonnes a
+  été **écarté** après mesure (inéquilibrable avec ces sept sections : 410 px contre 770 px).
+  Harnais rejoué à 2 560 / 1 600 / 1 366 px : **13/13**.
+- **Colonne Source Data** : le filtre des arbres teste les **noms de dossiers** par défaut
+  (toggle 📄 fichiers pour les noms de fichiers) — décision assumée, EPIC-037.
+- **Années** : le re-scan du 2026-09-21 laisse **1 555 fichiers sans année sur 6 696 (76,8 %
+  couverts)** ; le rapport consolidé ne propose plus que 3 fichiers « certaines » / 54 en revue /
+  1 492 introuvables (6 non parsables) et `apply_years.py` en dry-run ne trouve **0 candidat**.
+  L'audit complet des années déjà écrites (408 Deezer) et la re-collecte moteur v2 restent à
+  lancer (EPIC-040 🟡) ; les années « à revue » non tranchées restent hors application automatique.
+- **`data/` en JSON** : config, journal, caches, playlists, ratings, beatgrids, journaux
+  d'écriture (`year_apply_journal.jsonl`, `style_apply_journal.jsonl` — créés à la première
+  écriture). Jamais supprimés par l'outil ; le trash (`<source>/_trash/<date>/`) remplace
+  toute suppression de fichier audio.
+
+## Évolutions & traçabilité
 
 Toute évolution/amélioration du projet est tracée dans une **EPIC**
 (`docs/superpowers/epics/`) : registre central `README.md` + un fichier par
@@ -436,28 +574,43 @@ Toute évolution/amélioration du projet est tracée dans une **EPIC**
 Créer une nouvelle EPIC = copier `_template.md` + l'ajouter à l'index.
 Statuts : ⚪ Backlog → 🔵 En cours → 🟢 Livré | 🟠 Bloqué | 🔴 Abandonné.
 
-## Architecture (v0.2)
+Dernières EPICs : **040** (années corroborées : 2 providers concordants exigés),
+**041** (palette `G` : le tag s'écrit tout de suite, cible Éparpillé *ou* Source Data),
+**042** (légende : mise en forme mesurée — une seule abscisse de libellé, familles de
+touches, flux multi-colonnes ; deux régressions d'usage corrigées et verrouillées par
+des vérifications de harnais),
+**043** (F5 range **et** tague : le style du dossier cible est écrit sur l'épars et
+sur la copie, journal partagé des scripts, année jamais touchée),
+**044** (le stock de genres rejoint l'arborescence : aperçu, deux modes, disque
+autoritaire, `--undo`).
 
-Le frontend utilise le **Command Pattern** pour router les entrées clavier.
-Un `CommandRegistry` déclaratif remplace l'ancien handler monolithique
-de 593 lignes. Les touches sont dispatchées vers 10 modules de commandes
-(`registry`, `navigation`, `audio`, `copy`, `filter`, `rating`, `playlist`,
-`modals`, `replace`, `dups`), scopés par page via `router.ts`
-(`state.page` = sync | playlist | dups).
+## Architecture
+
+Le frontend utilise le **Command Pattern** pour router les entrées clavier : un
+`CommandRegistry` déclaratif remplace l'ancien handler monolithique. Les touches
+sont réparties dans **13 modules de commandes** (`registry`, `navigation`,
+`audio`, `copy`, `filter`, `rating`, `playlist`, `modals`, `replace`, `dups`,
+`menu`, `style`, `years`), scopées par page (`state.page`), par contexte
+(`page`, `activePanel`, `playlistMode`, `activeModal`, `isContextMenuOpen`…).
+
+Points de contrat à connaître avant de toucher l'existant :
+
+- **Raccourcis** : ils se déclarent **dans** `commands/*.ts` (`label`, `group`,
+  `legendFamily`), jamais dans le HTML ni dans le README. La légende `?` en est la
+  projection, et `commands/keyboardMatrix.test.ts` (matrice touches × contextes)
+  fait échouer la CI sur un binding mort ou shadowé.
+- **CSS** : une nouvelle règle va dans le fichier de sa page, une règle transversale
+  dans `components.css`, une nouvelle variable **uniquement** dans `tokens.css`
+  (jamais deux déclarations du même token). `npm run audit:css` signale le CSS mort.
+- **Journal des écritures** : toute écriture de tag passe par un journal additif
+  partagé avec les scripts, seule voie d'annulation (`--undo`).
+- **Trash** : `_trash/<date>/` sous la source, jamais d'effacement.
 
 ```
-script.ts (~160 lignes, orchestrateur)
-  └─▶ commands/ (8 modules, CommandRegistry)
-state.ts (Proxy + EventEmitter + RAF batcher)
-  └─▶ render/ (component factories — fileRow, sourceTree, playlistUI, cueEditor, index)
-actions.ts (mutations state pures)
+script.ts (orchestrateur) → commands/ (CommandRegistry) → state.ts (Proxy + EventEmitter)
+                          → render/ (component factories) → core/ (format, feedback, subscribe, dom)
+actions.ts (mutations d'état) · api.ts (fetch + retry) · audio.ts (lecteur singleton)
 ```
-
-L'éditeur de cues (`render/cueEditor.ts`) pilote wavesurfer (waveform,
-minimap, régions cues/loops) et conserve ses métadonnées dans des sources de
-vérité internes (`_cueMeta`, `_displOrders`) pour un round-trip NML complet ;
-la beatgrid s'appuie sur `bands.ts` (FFT fenêtrée, 3 bandes RGB) et le backend
-(`analysis.py` + cache `data/beatgrids.json`).
 
 **Tags git :**
 - `v0.1-functional` — appli fonctionnelle (291 tests à l'époque)

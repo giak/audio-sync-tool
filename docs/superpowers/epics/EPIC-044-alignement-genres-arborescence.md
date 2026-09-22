@@ -81,7 +81,7 @@ du même mensonge.
 
 | Commit | Message |
 |---|---|
-| `…` | `feat: EPIC-044 — le tag genre des rangés rejoint l'arborescence (aperçu, modes, journal, --undo)` |
+| `22be2bc` | `feat: EPIC-044 — le tag genre des rangés rejoint l'arborescence` |
 
 ## Décisions
 
