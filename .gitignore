@@ -8,3 +8,6 @@ __pycache__/
 
 # Build artifacts — .ts sources compile to .js in dist/
 static/dist/
+
+# Artefacts d'outils locaux (harnais, coverage)
+coverage/
