@@ -76,3 +76,22 @@ ce qu'il vise.
 | Commit | Message |
 |---|---|
 | `6edf56c` | `feat: EPIC-051+052 — la copie se lit d'un coup d'œil, g écrit la paire, un clic ne scrolle plus` |
+| `…` | `fix: EPIC-053 — le focus du dossier source survit au re-render après copie` |
+
+## Complément EPIC-053 (signalement du 2026-09-23, même workflow)
+
+> « je sélectionne un fichier éparpillé, F5, … je navigue avec TAB pour passer
+> d'une colonne à l'autre, et je perds le focus du dossier "source data" quand
+> je passe à "éparpillé ». flèche bas sur éparpillé → je perds le focus du
+> dossier à droite. Il faut garder ce focus : sélectionner à gauche, F5,
+> flèche bas, j'écoute, F5, etc. — je range plus vite comme ça. »
+
+**Cause racine** : chaque copie re-rend la colonne droite
+(`sourceFiles:changed` → `renderSource`) et le rebuild effaçait `.focused`
+**sans restaurer `sourceFocusPath`** (seul `eparsFocusPath` l'était).
+Tab retombait donc sur le premier dossier, ↑↓ ne se souvenait plus de la
+destination.
+
+**Correctif** : `renderSource` restaure `state.sourceFocusPath` après le
+rebuild (restauration silencieuse — preventScroll, EPIC-052 : le scroll de la
+colonne ne bouge pas). Deux tests de non-régression dans sourceTree.test.ts.

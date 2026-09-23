@@ -639,6 +639,16 @@ export function renderSource(): void {
     if (state.eparsFocusPath) focusItemByPath(eparsContainer, state.eparsFocusPath);
   }
 
+  // EPIC-053 : le rebuild ci-dessus efface AUSSI .focused de la colonne
+  // source (chaque copie re-rend le panneau via sourceFiles:changed). Sans
+  // restauration, le focus du dossier de droite DISPARAISSAIT — Tab repartait
+  // du premier dossier et ↑↓ ne se souvenait plus de la destination : le
+  // cycle « F5 → Tab → ↑↓ → F5 » perdait son repère. Restauration silencieuse
+  // (preventScroll, EPIC-052) : le scroll de la colonne ne bouge pas.
+  if (state.sourceFocusPath) {
+    focusItemByPath(container, state.sourceFocusPath);
+  }
+
   const { allTrees, totalCount } = buildSourceTrees(state.sourceFiles);
 
   // État vide (EPIC-014) : rien à afficher → guidance visuelle au lieu d'un panneau muet.

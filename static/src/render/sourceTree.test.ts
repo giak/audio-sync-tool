@@ -10,6 +10,7 @@ import { state } from '../state.js';
 
 const {
   focusItemByElement,
+  focusItemByPath,
   setActivePanel,
   showContextMenu,
   confirmDialog,
@@ -24,6 +25,7 @@ const {
   setBatchCopy,
 } = vi.hoisted(() => ({
   focusItemByElement: vi.fn(),
+  focusItemByPath: vi.fn(),
   setActivePanel: vi.fn(),
   showContextMenu: vi.fn(),
   confirmDialog: vi.fn((_msg: string, onConfirm: () => void) => {
@@ -47,7 +49,13 @@ const {
 
 // ── Module mocks ──────────────────────────────────────────────────────────
 
-vi.mock('../focus.js', () => ({ focusItemByElement, setActivePanel }));
+vi.mock('../focus.js', () => ({
+  focusItemByElement,
+  setActivePanel,
+  // EPIC-053 : renderSource restaure désormais le focus source après rebuild.
+  focusItemByPath,
+  revalidateFocus: vi.fn(),
+}));
 vi.mock('../ui.js', () => ({ showContextMenu, confirmDialog, showError }));
 vi.mock('../api.js', () => ({ api }));
 vi.mock('../playlist.js', () => ({ getActivePlaylistName, getPendingTracks }));
@@ -542,6 +550,45 @@ describe('render/sourceTree', () => {
       const dirs = c.querySelectorAll('.directory');
       expect(dirs.length).toBe(1);
       expect((dirs[0] as HTMLElement).dataset.dirpath).toBe('/base/Music');
+    });
+
+    // ── EPIC-053 : le focus de la colonne source survit au re-render ────────
+    // Signalement (2026-09-23) : « F5 → Tab → ↑↓ → F5 » — chaque copie
+    // re-rend la colonne droite (sourceFiles:changed) et le .focused y était
+    // EFFACÉ sans restauration : Tab repartait du 1ᵉʳ dossier, ↑↓ perdait la
+    // destination. Le cycle de rangement rapide exige que le focus reste.
+    it('EPIC-053 : sourceFocusPath est restauré après re-render (le focus du dossier survit à la copie)', () => {
+      setupContainer();
+      state.sourceFiles = {
+        '/base': {
+          'a.mp3': { path: 'Rock/a.mp3', year: null, duration: null, codec: null },
+          'b.mp3': { path: 'Techno/b.mp3', year: null, duration: null, codec: null },
+        },
+      };
+      state.sourceFocusPath = '/base/Techno';
+      state.eparsFocusPath = null; // la restauration épars ne doit pas interférer
+
+      renderSource();
+
+      // focusItemByPath est mocké (contrat DOM testé dans focus.test.ts) — on
+      // asserte la RESTAURATION elle-même : container + chemin persisté.
+      expect(focusItemByPath).toHaveBeenCalledWith(
+        document.getElementById('source-container'),
+        '/base/Techno',
+      );
+    });
+
+    it('EPIC-053 : sans sourceFocusPath, pas de restauration (premier lancement)', () => {
+      setupContainer();
+      state.sourceFiles = {
+        '/base': { 'a.mp3': { path: 'Rock/a.mp3', year: null, duration: null, codec: null } },
+      };
+      state.sourceFocusPath = null;
+      state.eparsFocusPath = null;
+
+      renderSource();
+
+      expect(focusItemByPath).not.toHaveBeenCalled();
     });
 
     it('renders multiple source directories', () => {
