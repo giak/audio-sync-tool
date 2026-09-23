@@ -30,6 +30,13 @@ Providers interrogés (EPIC-040) : MusicBrainz + Deezer + Discogs **toujours**
   web n'a pas le niveau de preuve d'une API de disques. Brave Search, payant et
   jamais configuré ici, a été retiré.
 - Résultats incrémentaux : data/year_cache.jsonl (reprise : clés v≥2 déjà présentes sautées).
+- Clés depuis les TAGS (--keys-from-tags) : l'univers de clés est construit
+  depuis les tags (artiste/titre sûrs) au lieu du nom — 1 102 clés jamais
+  interrogées sur les fichiers sans année (ex. `Gb - Maddix, Fēlēs - My
+  Gasoline…` : `gb / my gasoline (extended mix)` par le nom, `maddix / …`
+  par les tags). L'application doit alors matcher pareil :
+  apply_years.py --apply --keys-from-tags. Les enregistrements portent
+  `key_source: 'tags'`.
 - Rapport : ./venv/bin/python scripts/collect_years.py --report
 - Diagnostic d'une clé : ./venv/bin/python scripts/collect_years.py \
       --probe='artiste|titre' [--durs=337] [--youtube]
@@ -244,6 +251,43 @@ def load_keys():
                     keys[k].setdefault('remix', credit['tokens'])
                     keys[k].setdefault('remix_label', credit['label'])
     return total_files, noyear, keys
+
+
+def load_keys_from_tags():
+    """Même agrégat que load_keys(), mais la clé est construite depuis les
+    TAGS (tags_artist_title — l'ordre artiste/titre y est sûr) au lieu du nom.
+    Fond (README « La vraie cause du chiffre ») : sur les 1 555 fichiers sans
+    année, 1 204 portent artiste et titre dans leurs tags et 1 102 ont une clé
+    de tags jamais interrogée — ex. `Gb - Maddix, Fēlēs - My Gasoline…` donne
+    `gb / my gasoline (extended mix)` par le nom contre `maddix / …` par les
+    tags.    Les fichiers SANS tags complets restent dans les clés-nom (aucune
+    perte) : un fichier peut donc apparaître des deux côtés — la reprise par
+    clé rend ça idempotent, le fichier est servi par sa meilleure clé.
+    Les enregistrements écrits en mode tags portent `key_source: 'tags'`."""
+    keys = defaultdict(lambda: {'n': 0, 'durs': set(), 'source': 'tags'})
+    total_files, noyear, tagged = 0, 0, 0
+    with open(CACHE) as f:
+        cache = json.load(f)
+    for side in ('source', 'epars'):
+        for base, files in cache.get(side, {}).items():
+            for fn, meta in files.items():
+                total_files += 1
+                if meta.get('year'):
+                    continue
+                noyear += 1
+                ta, tt = tags_artist_title(os.path.join(base, meta['path']))
+                if not tt or not ta:
+                    continue
+                tagged += 1
+                k = f'{ta}\t{tt}'
+                keys[k]['n'] += 1
+                if meta.get('duration'):
+                    keys[k]['durs'].add(meta['duration'])
+                credit = remix_mod.remix_credit(fn)
+                if credit['kind'] == 'remix':
+                    keys[k].setdefault('remix', credit['tokens'])
+                    keys[k].setdefault('remix_label', credit['label'])
+    return total_files, noyear, tagged, keys
 
 
 def done_keys(min_version=ENGINE_VERSION):
@@ -525,13 +569,19 @@ def lookup(a, t, durs, pacer, alt=None, youtube=False, web=True, require=(),
             'variant': None, 'v': ENGINE_VERSION}
 
 
-def run(max_seconds=None, youtube=False, web=True, only=None):
+def run(max_seconds=None, youtube=False, web=True, only=None,
+        keys_from_tags=False):
     """Collecte reprenable. `only='unresolved'` ne retraite que les clés dont
     l'enregistrement v2 n'est ni `found` ni `none` (single/conflict) — c'est là
     que YouTube (coûteux) et la recherche web servent à quelque chose : apporter
-    la 2ᵉ voix manquante (ou confirmer le désaccord)."""
+    la 2ᵉ voix manquante (ou confirmer le désaccord).
+    `keys_from_tags=True` : l'univers de clés vient des TAGS (load_keys_from_tags)
+    au lieu du nom — les enregistrements portent `source: 'tags'`."""
     t0 = time.monotonic()
-    total, noyear, keys = load_keys()
+    if keys_from_tags:
+        total, noyear, _tagged, keys = load_keys_from_tags()
+    else:
+        total, noyear, keys = load_keys()
     done = done_keys()
     if only == 'unresolved':
         todo = [k for k, r in done.items()
@@ -545,7 +595,8 @@ def run(max_seconds=None, youtube=False, web=True, only=None):
         todo = [k for k in keys if k not in done]
     print(f'fichiers={total} sans_annee={noyear} cles={len(keys)} '
           f'deja_faites={len(done)} a_traiter={len(todo)} '
-          f'youtube={youtube} web={web} only={only}', flush=True)
+          f'youtube={youtube} web={web} only={only} '
+          f'cles_source={"tags" if keys_from_tags else "nom"}', flush=True)
     pacer = Pacer(1.05)
     with open(PROG, 'a') as out:
         for i, k in enumerate(todo):
@@ -557,7 +608,8 @@ def run(max_seconds=None, youtube=False, web=True, only=None):
             res = lookup(a, t, meta['durs'], pacer, youtube=youtube, web=web,
                          require=tuple(meta.get('remix') or ()),
                          remix_label=meta.get('remix_label'))
-            rec = {'key': k, 'artist': a, 'title': t, 'n_files': meta['n'], **res}
+            rec = {'key': k, 'artist': a, 'title': t, 'n_files': meta['n'],
+                   'key_source': 'tags', **res}
             out.write(json.dumps(rec, ensure_ascii=False) + '\n')
             out.flush()
             if (i + 1) % 50 == 0:
@@ -757,4 +809,5 @@ if __name__ == '__main__':
             elif arg.startswith('--only='):
                 only = arg.split('=', 1)[1]
         run(mx, youtube='--youtube' in args,
-            web='--no-web' not in args, only=only)
+            web='--no-web' not in args, only=only,
+            keys_from_tags='--keys-from-tags' in args)

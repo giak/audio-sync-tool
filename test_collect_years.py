@@ -385,3 +385,82 @@ def test_done_keys_ignore_le_moteur_v1(tmp_path, monkeypatch):
     done = cy.done_keys()
     assert 'a\tb' not in done        # v1 (Deezer sans garde) → à re-collecter
     assert done['c\td']['year'] == '1999'
+
+
+# ─── 6. clés construites depuis les TAGS (chantier 1 102 clés) ─────────────
+
+def _write_scan_cache(tmp_path, monkeypatch, files):
+    """data/cache.json minimal : files = [(side, base, fn, meta)]."""
+    cache = {'source': {}, 'epars': {}}
+    for side, base, fn, meta in files:
+        cache[side].setdefault(base, {})[fn] = meta
+    (tmp_path / 'cache.json').write_text(json.dumps(cache))
+    monkeypatch.setattr(cy, 'CACHE', str(tmp_path / 'cache.json'))
+
+
+def test_load_keys_from_tags_cle_depuis_les_tags(tmp_path, monkeypatch):
+    """Le nom ment sur l'ordre (`Gb - Maddix, Fēlēs - My Gasoline…` → clé
+    `gb / my gasoline (extended mix)`) ; les tags disent la vérité. La clé
+    tags est `maddix\tmy gasoline (extended mix)` — la vraie requête."""
+    d = tmp_path / 'e'
+    d.mkdir()
+    from mutagen.id3 import ID3, TIT2, TPE1
+    tags = ID3()
+    tags.add(TIT2(encoding=1, text='My Gasoline (Extended Mix)'))   # UTF-16 : Fēlēs
+    tags.add(TPE1(encoding=1, text='Maddix, Fēlēs'))
+    tags.save(d / 'Gb - Maddix, Feles - My Gasoline (Extended Mix).mp3', v2_version=4)
+    with open(d / 'Gb - Maddix, Feles - My Gasoline (Extended Mix).mp3', 'ab') as f:
+        for _ in range(3):
+            f.write(b'\xff\xfb\x90\x00' + b'\x00' * 413)
+    _write_scan_cache(tmp_path, monkeypatch, [
+        ('epars', str(d), 'Gb - Maddix, Feles - My Gasoline (Extended Mix).mp3',
+         {'path': 'Gb - Maddix, Feles - My Gasoline (Extended Mix).mp3',
+          'duration': 161}),
+    ])
+    total, noyear, tagged, keys = cy.load_keys_from_tags()
+    assert total == noyear == 1 and tagged == 1
+    assert 'Maddix, Fēlēs\tMy Gasoline (Extended Mix)' in keys
+    assert keys['Maddix, Fēlēs\tMy Gasoline (Extended Mix)']['source'] == 'tags'
+    assert keys['Maddix, Fēlēs\tMy Gasoline (Extended Mix)']['durs'] == {161}
+
+
+def test_load_keys_from_tags_sans_tags_complets_aucune_cle(tmp_path, monkeypatch):
+    """Un fichier sans tags complets ne produit PAS de clé-tags (il reste
+    servi par sa clé-nom — aucune perte par rapport au pipeline existant)."""
+    d = tmp_path / 'e'
+    d.mkdir()
+    make_mp3(d / 'x.mp3')                      # aucun tag
+    make_flac(d / 'y.flac', title='seulement un titre')
+    _write_scan_cache(tmp_path, monkeypatch, [
+        ('epars', str(d), 'x.mp3', {'path': 'x.mp3'}),
+        ('epars', str(d), 'y.flac', {'path': 'y.flac'}),
+    ])
+    _total, _noyear, tagged, keys = cy.load_keys_from_tags()
+    assert tagged == 0 and keys == {}
+
+
+def test_run_keys_from_tags_marque_l_enregistrement(tmp_path, monkeypatch):
+    """La collecte en mode tags écrit `key_source: 'tags'` sur ses lignes —
+    l'origine de la clé est traçable dans year_cache.jsonl (le champ `source`
+    d'un found porte déjà les providers)."""
+    d = tmp_path / 'e'
+    d.mkdir()
+    make_mp3(d / 'a.mp3', artist='Phantasia', title='Inner Light')
+    _write_scan_cache(tmp_path, monkeypatch, [
+        ('epars', str(d), 'a.mp3', {'path': 'a.mp3'}),
+    ])
+    monkeypatch.setattr(cy, 'PROG', str(tmp_path / 'year_cache.jsonl'))
+    monkeypatch.setattr(cy, 'mb_lookup', lambda a, t, durs, p, require=():
+                        ('found', '1991', ['1991']))
+    monkeypatch.setattr(cy, 'dz_lookup', lambda a, t, durs, req=(): {
+        'status': 'none', 'year': None, 'years': [], 'evidence': []})
+    monkeypatch.setattr(cy, 'discogs_vote', lambda a, t, durs: {
+        'status': 'found', 'year': '1991', 'years': ['1991']})
+    monkeypatch.setattr(cy, 'web_vote', lambda a, t, extra='': {
+        'status': 'none', 'web_candidates': [], 'web_proposed': None,
+        'evidence': []})
+    cy.run(keys_from_tags=True)
+    rec = json.loads((tmp_path / 'year_cache.jsonl').read_text().splitlines()[0])
+    assert rec['key'] == 'Phantasia\tInner Light'
+    assert rec['key_source'] == 'tags'
+    assert rec['status'] == 'found' and rec['year'] == '1991'

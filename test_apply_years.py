@@ -331,4 +331,48 @@ def test_dryrun_necrit_rien(env, capsys):
     items, stats = apply_years.build_worklist()
     apply_years.do_dryrun(items, stats)
     assert (music / 't2.flac').read_bytes() == before
+
+
+def test_worklist_keys_from_tags(env, monkeypatch):
+    """Un fichier dont la clé-TAGS est corroborée mais dont la clé-NOM est
+    une impasse est matché par les tags (collecte --keys-from-tags). Sans le
+    flag, le même fichier reste no_match : le mode tags ne peut pas faire
+    écrire PLUS que le mode nom (aucune extension de périmètre)."""
+    _, music = env
+    p = str(music / 't1.mp3')          # fixture env : clé-nom = '\tt1' (found 1990)
+    # La clé-nom de t1.mp3 est déjà servie ; on crée un fichier dont le NOM
+    # est un collage non parsable mais dont les tags portent artiste/titre,
+    # avec la clé-tags corroborée dans year_cache.jsonl (v≥2).
+    name = 'inner lightphantasia.mp3'   # artist_title(fn) ne peut pas trancher
+    (music / name).write_bytes(b'')
+    from mutagen.id3 import ID3, TIT2, TPE1
+    tags = ID3()
+    tags.add(TIT2(encoding=0, text='Inner Light'))
+    tags.add(TPE1(encoding=0, text='Phantasia'))
+    tags.save(music / name, v2_version=4)
+    # mutagen exige une synchro MPEG (3 frames) — sinon MP3(easy=True) lève et
+    # tags_artist_title retombe sur (None, None).
+    with open(music / name, 'ab') as f:
+        for _ in range(3):
+            f.write(b'\xff\xfb\x90\x00' + b'\x00' * 413)
+    # build_worklist itère data/cache.json : le fichier y est inscrit.
+    with open(apply_years.CACHE) as f:
+        cache = json.load(f)
+    cache['source'][str(music)][name] = {'path': name}
+    with open(apply_years.CACHE, 'w') as f:
+        json.dump(cache, f)
+    with open(apply_years.YEAR_CACHE, 'a') as f:
+        f.write(json.dumps({'key': 'Phantasia\tInner Light', 'status': 'found',
+                            'year': '1991', 'v': 2,
+                            'sources': {'musicbrainz': '1991', 'discogs': '1991'},
+                            'key_source': 'tags'}) + '\n')
+
+    # Sans le flag : la clé-nom est une impasse → no_match.
+    items, stats = apply_years.build_worklist()
+    assert all(it['path'] != os.path.join(music, name) for it in items)
+
+    # Avec le flag : matché par les tags, écriture de la même règle (2 sources).
+    items, stats = apply_years.build_worklist(keys_from_tags=True)
+    hit = [it for it in items if it['path'] == os.path.join(music, name)]
+    assert hit and hit[0]['year'] == '1991'
     assert not os.path.exists(apply_years.JOURNAL)

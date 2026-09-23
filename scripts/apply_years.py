@@ -38,7 +38,7 @@ import time
 from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from collect_years import artist_title
+from collect_years import artist_title, tags_artist_title
 
 try:
     from mutagen.flac import FLAC
@@ -211,11 +211,16 @@ def load_review():
     return {k: v for k, v in data.items() if v}
 
 
-def build_worklist(limit=None, review=None):
+def build_worklist(limit=None, review=None, keys_from_tags=False):
     """Fichiers sans année dont la clé a une année certaine.
     review : {key: 'YYYY'} des choix humains (vue Années → /years/review) —
     OVERRIDE de la consolidation : un choix explicite bat toute source.
-    Retourne (items, stats) ; item = {path, year, source}."""
+    keys_from_tags : chaque fichier est matché par la clé construite depuis
+    ses TAGS (ordre artiste/titre sûr) D'ABORD, puis par la clé-nom — les
+    enregistrements de la collecte `--keys-from-tags` ne serviraient à rien
+    sans ça (leurs clés ne sont pas des clés-nom). Aucune écriture de plus :
+    la règle des 2 sources s'applique au résultat de la clé, quelle que soit
+    son origine. Retourne (items, stats) ; item = {path, year, source}."""
     found = load_found()
     for k, y in (review or {}).items():
         if y:
@@ -229,11 +234,17 @@ def build_worklist(limit=None, review=None):
             for fn, meta in files.items():
                 if meta.get('year'):
                     continue
-                a, t = artist_title(fn)
-                if not t:
-                    stats['parse_fail'] += 1
-                    continue
-                key = (a or '') + '\t' + t
+                key = None
+                if keys_from_tags:
+                    ta, tt = tags_artist_title(os.path.join(base, meta['path']))
+                    if tt and ta and (f'{ta}\t{tt}') in found:
+                        key = f'{ta}\t{tt}'
+                if key is None:
+                    a, t = artist_title(fn)
+                    if not t:
+                        stats['parse_fail'] += 1
+                        continue
+                    key = (a or '') + '\t' + t
                 if key not in found:
                     stats['no_match'] += 1
                     continue
@@ -459,6 +470,9 @@ def main():
                     help='resume du journal')
     ap.add_argument('--review', action='store_true',
                     help='injecter les choix de la vue Années (year_review.json)')
+    ap.add_argument('--keys-from-tags', action='store_true',
+                    help='matcher les fichiers par la clé de leurs TAGS '
+                         '(collecte --keys-from-tags)')
     ap.add_argument('--limit', type=int, default=None)
     args = ap.parse_args()
     if args.report:
@@ -470,7 +484,8 @@ def main():
     review = load_review() if args.review else None
     if args.review:
         print('choix de revue charges : %d' % len(review))
-    items, stats = build_worklist(args.limit, review)
+    items, stats = build_worklist(args.limit, review,
+                                  keys_from_tags=args.keys_from_tags)
     if args.apply:
         do_apply(items)
     else:

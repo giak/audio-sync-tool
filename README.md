@@ -467,6 +467,7 @@ recherche.
 ./venv/bin/python scripts/collect_discogs_reform2.py --go  # junk-artiste numérique (aperçu sans --go)
 ./venv/bin/python scripts/collect_youtube_topic.py         # YouTube « - Topic » (0/84, relançable)
 ./venv/bin/python scripts/collect_years.py --only=remix    # re-collecte des SEULES clés de remix
+./venv/bin/python scripts/collect_years.py --keys-from-tags  # clés construites depuis les TAGS (EPIC-054)
 
 # Diagnostic d'une clé (réseau réel, record complet)
 ./venv/bin/python scripts/collect_years.py "--probe=age of love|the age of love" \
@@ -479,6 +480,7 @@ recherche.
 ./venv/bin/python scripts/apply_years.py            # dry-run : rien n'écrit
 ./venv/bin/python scripts/apply_years.py --apply    # écrit les tags
 ./venv/bin/python scripts/apply_years.py --review   # + choix humains de la vue Années
+./venv/bin/python scripts/apply_years.py --keys-from-tags   # match par tags (collecte EPIC-054)
 ./venv/bin/python scripts/apply_years.py --report   # résumé du journal
 ./venv/bin/python scripts/apply_years.py --undo     # annule (idempotent)
 
@@ -524,14 +526,16 @@ interrogées (0 restante) → **1 416 `none`** (aucune source ne connaît le mor
 d'**avant** EPIC-040 sur des clés **depuis résolues** : les compter comme du travail restant
 était une erreur de lecture (lignes ≠ clés).
 
-**La vraie cause du chiffre, elle, est structurelle et non corrigée** : `load_keys()` construit
+**La vraie cause du chiffre, elle, est structurelle — corrigée (EPIC-054)** : `load_keys()` construit
 la clé de recherche **depuis le nom de fichier**, alors que la fonction qui lit les tags existe
 (`tags_artist_title()`, utilisée par `--probe` et par l'audit). Sur les 1 555 fichiers sans
-année, **1 204** portent artiste **et** titre dans leurs tags et **1 102 (71 %)** ont une clé
-de tags **jamais interrogée** — et ce ne sont pas des nuances de casse : `Gb - Maddix, Fēlēs -
+année, **1 204** portent artiste **et** titre dans leurs tags et **1 144** clés de tags
+**jamais interrogées** — et ce ne sont pas des nuances de casse : `Gb - Maddix, Fēlēs -
 My Gasoline (Extended Mix).mp3` donne `gb / my gasoline (extended mix)` par le nom contre
-`maddix / …` par les tags. C'est le prochain chantier, borné (~1 100 clés ≈ 1 h, reprenable,
-additionnel) et mesurable (combien des 1 102 se résolvent).
+`maddix / …` par les tags. `collect_years.py --keys-from-tags` interroge cet univers de clés
+(moteur inchangé : 2 providers concordants, garde remix), `apply_years.py --keys-from-tags`
+matche ensuite les fichiers par tags d'abord (nom en fallback) — les enregistrements portent
+`key_source: 'tags'`.
 
 Historique complet, chiffres détaillés et bilan de clôture : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md)
 · corroboration : [EPIC-040](docs/superpowers/epics/EPIC-040-annees-corroboration-2-sources.md).
@@ -656,13 +660,13 @@ focus), `proof_filter_chip.py`, `proof_style_palette.py` (tags relus **sur disqu
 - **Années** : le re-scan du 2026-09-21 laisse **1 555 fichiers sans année sur 6 696 (76,8 %
   couverts)** ; le rapport consolidé ne propose plus que 3 fichiers « certaines » / 54 en revue /
   1 492 introuvables (6 non parsables) et `apply_years.py` en dry-run ne trouve **0 candidat**.
-  L'audit des années déjà écrites est **exécuté** (408 entrées · 38 contredites · 8 à revoir) et
-  **tranchable** dans la vue Années (section ⟲, EPIC-045) — les corrections ne partent que d'un
-  clic, jamais en lot automatique. La re-collecte moteur est **terminée** (1 448 clés, 0
-  restante) avec un rendement quasi nul (1 416 `none`, **1** `found`) ; le gisement suivant est
-  la clé construite depuis les **tags** (1 102 clés jamais interrogées sur les 1 555 fichiers
-  sans année — non corrigé à ce jour) ; les années « à revue » non tranchées restent hors
-  application automatique.
+L'audit des années déjà écrites est **exécuté** (408 entrées · 38 contredites · 8 à revoir) et
+**tranchable** dans la vue Années (section ⟲, EPIC-045) — les corrections ne partent que d'un
+clic, jamais en lot automatique. La re-collecte moteur est **terminée** (1 448 clés, 0
+restante) avec un rendement quasi nul (1 416 `none`, **1** `found`) ; le gisement suivant est
+la clé construite depuis les **tags** — **corrigé et lancé** (EPIC-054 : 1 144 clés jamais
+interrogées, collecte du 2026-09-23) ; les années « à revue » non tranchées restent hors
+application automatique.
 - **`data/` en JSON** : config, journal, caches, playlists, ratings, beatgrids, journaux
   d'écriture (`year_apply_journal.jsonl`, `style_apply_journal.jsonl` — créés à la première
   écriture). Jamais supprimés par l'outil ; le trash (`<source>/_trash/<date>/`) remplace
@@ -698,7 +702,9 @@ troncature, dossier plus auto-déplié, `g` écrit la **paire complète** et le 
 deux côtés),
 **052** (un clic ne fait jamais bouger le scroll),
 **053** (le focus du dossier destination survit au re-render après copie — le cycle
-F5 → ↑↓ → F5 sans re-viser le dossier).
+F5 → ↑↓ → F5 sans re-viser le dossier),
+**054** (les clés d'années sont construites depuis les **tags** — 1 144 clés jamais
+interrogées, moteur inchangé, match par tags à l'application).
 
 ## Architecture
 
