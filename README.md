@@ -422,14 +422,19 @@ l'année tout de suite (journal partagé, `source: "audit:revue"` → `apply_yea
 journal) et un échec est nommé sans interrompre le lot. Les **339 non vérifiées** sont seulement
 comptées par classe : rien à trancher sans nouvelles sources.
 
-**État au 2026-09-18 — EPIC-033 clôturée** : vague « certaines » **appliquée** (1 349 écritures
-OK, journal = backup `data/year_apply_journal.jsonl`, `--undo` idempotent) — consolidation
-7 sources : **1 443 certaines / 782 à revue / 1 473 introuvables** (+6 non parsables), dont les
-apports **reformulé** (`collect_discogs_reform.py` : +15 certaines / +127 à revue) et
-**junk-artiste numérique** (`collect_discogs_reform2.py` : +1 certaine / +12 à revue sur
-les 556 artistes numériques/symboles — `#07 enzyme x`, `204`, `2006 prodigy`). La passe
-**YouTube « - Topic »** a été **exécutée sans trouvaille (0/84)** : les chaînes Topic sont
-fusionnées depuis 2025-2026 dans les profils artiste — le garde-fou reste en place.
+**État courant (2026-09-23)** : couverture **76,8 %** (5 141 / 6 696, re-scan du
+2026-09-21 — 1 604 Source Data + 5 092 épars) ; l'audit des années déjà écrites
+est **exécuté et soldé côté humain** (408 entrées : les 38 contredites sont
+toutes corrigées sur disque via la revue ⟲, journal `audit:*`, `--undo
+disponible ; 8 a_revoir et 339 non vérifiées restent consultables). La
+re-collecte moteur est **terminée à rendement nul** (1 448 clés du nom toutes
+interrogées : 1 416 `none`, 1 `found`) — le gisement était dans la **clé**, pas
+dans les providers : EPIC-054 interroge désormais les clés construites depuis
+les **tags** (`--keys-from-tags`, 1 144 clés / 1 197 fichiers). Les récits
+détaillés vivent dans les EPICs : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md)
+(clôture, 2 161 écritures) · [EPIC-040](docs/superpowers/epics/EPIC-040-annees-corroboration-2-sources.md)
+(corroboration) · [EPIC-054](docs/superpowers/epics/EPIC-054-cles-annees-depuis-tags.md)
+(clés-tags).
 
 **Revue industrialisée** : dans la vue Années, **F7** ou **/** filtre les cartes
 (artiste, titre, année — terme mémorisé), choisissez/rejetez puis **e** (ou bouton 💾) → les
@@ -440,23 +445,15 @@ fichier avant de trancher (player global, état conservé à travers les re-rend
 consolidation, journal + `--undo` inchangés. **Aucune écriture ne part de l'interface** hors
 les routes `/years/apply` et `/styles/apply` décrites plus haut.
 
-**Passe Beatport — retirée du pipeline (EPIC-049)** : elle n'a **jamais tourné**
-(`data/beatport_cache.jsonl` n'a jamais existé, aucun tag ne vient d'elle) et son
-token devait être recopié à la main toutes les heures depuis l'onglet Réseau du
-portail — friction refusée deux fois. Elle était annoncée dans l'ordre de priorité
-comme une source active : elle n'en était pas une. `scripts/collect_beatport.py` et
-ses tests sont supprimés, et l'app ne la lit plus.
-
-**Recherche web — locale et gratuite (EPIC-049)** : l'ancien provider (Brave,
-`BRAVE_API_KEY`) était **payant et jamais configuré** : il ne produisait rien.
-Le moteur interroge désormais le **DuckDuckGo local** (serveur MCP `search`,
-`http://localhost:8010/mcp` — `data/search_mcp.json` ou `SEARCH_MCP_URL` pour le
-changer) avec repli sur l'endpoint HTML public, **sans clé ni compte**.
-`GET /years/web-status` **sonde** le provider (1 s) et la vue Années peut dire
-« recherche web indisponible » au lieu de laisser croire qu'elle l'est. Les
-années trouvées par le web restent des **candidats** (`web_candidates`) : elles
-ne votent jamais — la règle des 2 sources ne se contourne pas avec un moteur de
-recherche.
+**Sources retirées (EPIC-049)** : Beatport (jamais lancée — token à recopier à la main,
+friction refusée deux fois ; script et tests supprimés) et Brave (payant, jamais
+configuré) ne font plus partie du pipeline. **Recherche web locale et gratuite** : le
+moteur interroge le **DuckDuckGo local** (serveur MCP `search`, `http://localhost:8010/mcp`
+— `data/search_mcp.json` ou `SEARCH_MCP_URL` pour le changer) avec repli sur l'endpoint
+HTML public, **sans clé ni compte**. `GET /years/web-status` **sonde** le provider (1 s) et
+la vue Années peut dire « recherche web indisponible » au lieu de laisser croire qu'elle
+l'est. Les années trouvées par le web restent des **candidats** (`web_candidates`) : elles
+ne votent jamais — la règle des 2 sources ne se contourne pas avec un moteur de recherche.
 
 ```bash
 # Collecte (incrémentale — inutile tant qu'aucun nouveau fichier n'arrive)
@@ -503,42 +500,31 @@ recherche.
   exclu (non relu par `get_audio_meta`).
 - Dry-run par défaut, `--limit N` pour un échantillon de contrôle.
 
-**Clôture de la revue (2026-09-18)** : 692 choix exportés (633 années + 59 rejets) — les
-782 à-revue sont **toutes soldées** (713 taggées, 59 rejetées, 9 échecs structurels
-connus, 1 fanfare tranchée → 1980) ; `apply_years --review --apply` final : ok=1,
-skip=2 152, idempotence vérifiée. Couverture au périmètre du scan du 2026-09-18 : **76 %**
-(4 970 / 6 508, contre 43 % à l'ouverture).
+**État courant (2026-09-23)** — le détail par étape vit dans les EPICs, cette section
+ne répète plus les bilans de session :
 
-**Re-scan du 2026-09-21 (état courant)** : le scan a été relancé — **6 696 fichiers scannés**
-(1 604 Source Data + 5 092 épars), **5 141 avec année (76,8 %)**, **1 555 sans**. Le rapport
-consolidé ne propose plus que **3 fichiers « certaines » / 54 en revue / 1 492 introuvables**
-(6 non parsables) et `apply_years.py` en dry-run ne trouve **0 candidat** — plus rien à écrire.
-L'audit des années déjà écrites a traité son premier cas (Phantasia « Inner Light » : 2024 écrit
-par Deezer → **1991** sur corroboration Discogs, journal `audit:deezer+discogs`, `--undo`
-disponible) puis a été **exécuté en entier** (408 entrées : 23 confirmées / **38 contredites** /
-8 à revoir / 339 non vérifiées) — ces 46 cas sont maintenant **tranchables dans la vue Années**
-(section ⟲, EPIC-045), aucune correction automatique n'a été appliquée.
+- **Couverture** : **76,8 %** (5 141 / 6 696, re-scan du 2026-09-21) contre 43 %
+  à l'ouverture ; revue humaine soldée (692 choix exportés, apply final
+  idempotent, 2 161 écritures au journal, `--undo` idempotent) — EPIC-033.
+- **Audit des années déjà écrites** : exécuté (408 entrées) et **soldé côté
+  humain** — les 38 contredites sont toutes corrigées sur disque via la revue
+  ⟲ (journal `audit:*`, `--undo` restaure) ; 8 `a_revoir` et 339 non
+  vérifiées restent consultables dans la vue Années — EPIC-040/045.
+- **Re-collecte moteur (clés du NOM)** : terminée à rendement nul (1 448 clés
+  toutes interrogées : 1 416 `none`, 1 `found`) — le gisement était dans la
+  **clé**, pas dans les providers.
+- **Clés depuis les TAGS (EPIC-054)** : `load_keys()` cherchait
+  `gb / my gasoline (extended mix)` là où les tags disent `maddix / …` —
+  1 204 des 1 555 fichiers sans année portent artiste **et** titre dans leurs
+  tags, **1 144 clés** n'avaient jamais été interrogées.
+  `collect_years.py --keys-from-tags` les interroge (moteur inchangé : 2
+  providers concordants, garde remix), `apply_years.py --keys-from-tags`
+  matche les fichiers par tags d'abord (nom en fallback) ; les enregistrements
+  portent `key_source: 'tags'`.
 
-**La re-collecte moteur n'est pas « à 30 % » : elle est TERMINÉE, et son rendement est nul.**
-Mesure (2026-09-22) : les 1 555 fichiers sans année font **1 448 clés uniques**, **toutes**
-interrogées (0 restante) → **1 416 `none`** (aucune source ne connaît le morceau), 29 `single`,
-15 `ambiguous`, 3 `conflict`, **1 `found`**. Les 3 331 lignes « v1 » du cache sont la passe
-d'**avant** EPIC-040 sur des clés **depuis résolues** : les compter comme du travail restant
-était une erreur de lecture (lignes ≠ clés).
-
-**La vraie cause du chiffre, elle, est structurelle — corrigée (EPIC-054)** : `load_keys()` construit
-la clé de recherche **depuis le nom de fichier**, alors que la fonction qui lit les tags existe
-(`tags_artist_title()`, utilisée par `--probe` et par l'audit). Sur les 1 555 fichiers sans
-année, **1 204** portent artiste **et** titre dans leurs tags et **1 144** clés de tags
-**jamais interrogées** — et ce ne sont pas des nuances de casse : `Gb - Maddix, Fēlēs -
-My Gasoline (Extended Mix).mp3` donne `gb / my gasoline (extended mix)` par le nom contre
-`maddix / …` par les tags. `collect_years.py --keys-from-tags` interroge cet univers de clés
-(moteur inchangé : 2 providers concordants, garde remix), `apply_years.py --keys-from-tags`
-matche ensuite les fichiers par tags d'abord (nom en fallback) — les enregistrements portent
-`key_source: 'tags'`.
-
-Historique complet, chiffres détaillés et bilan de clôture : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md)
-· corroboration : [EPIC-040](docs/superpowers/epics/EPIC-040-annees-corroboration-2-sources.md).
+Récits et chiffres détaillés : [EPIC-033](docs/superpowers/epics/EPIC-033-enrichissement-annees-id3.md)
+· corroboration : [EPIC-040](docs/superpowers/epics/EPIC-040-annees-corroboration-2-sources.md)
+· clés-tags : [EPIC-054](docs/superpowers/epics/EPIC-054-cles-annees-depuis-tags.md).
 
 ## Structure
 

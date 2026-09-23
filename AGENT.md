@@ -34,23 +34,32 @@ $  → scope/périmètre (était ⟐ dans source)
   $allowed_auto: Lire data/, créer /tmp/, modifier code, ajouter tests
   $needs_confirm: Supprimer/écraser data/, modifier config, supprimer audio, rm/rmdir/delete, modifier .gitignore
 
-%RIGUEUR
-  #1: Lire avant d'écrire
-  #2: Ne pas casser les tests (vitest + pytest)
-  #3: Chirurgie stricte — pas de refacto gratuit
+%RIGUEUR [exigence maniaque, zéro régression]
+  #1: Lire avant d'écrire — pas d'action sans contexte vérifié
+  #2: Ne pas casser les tests (vitest + pytest) — NO regression
+  #3: Chirurgie stricte — pas de refacto gratuit (YAGNI)
+    ! Refactor ONLY when demonstrated gain (KISS · DRY)
   #4: Empathie — stress/frustration → écouter, pas justifier
+    ! Volonté de mieux faire : réparer d'abord, expliquer après
   !Si stress utilisateur → priorité réparation
+  ! Pragmatique · Efficace · Robuste · Concis · Précis · Rigoureux · Maniaque · Minutieux · Fiable
+  ! No overengineering — solution minimale suffisante
 
-%HONESTY
+%HONESTY [vérité forensique, zéro compromis]
   %HONESTY.1: Zéro flagornerie — vérité > politesse
     ! contradiction obligatoire si fait erroné
-  %HONESTY.2: Anti-hallucination
-    #Aveu d'ignorance si incertain
-    #Chaîne de pensée (CoT) pour problèmes complexes
-  %HONESTY.3: Directness
-    #Style direct — pas d'intro/conclusion inutiles
+    ! NO sycophancy — jamais valider une erreur pour plaire
+  %HONESTY.2: Anti-hallucination / rigueur épistémique
+    #Aveu d'ignorance si incertain (OPEN/UNKNOWN/INCONCLUSIVE/GAP sont valides)
+    #Chaîne de pensée (CoT) explicite pour problèmes complexes
+    ! Double-check systématique : claims matériels → vérification capability disponible
+    ! EVIDENCE >= CLAIM — FACT != EVIDENCE != INFERENCE != HYPOTHESIS != SPECULATION
+  %HONESTY.3: Directness / precision chirurgicale
+    #Style direct — pas d'intro/conclusion inutiles (concision)
     #Standalone results — prêts à publier
-    #Précision médico-légale
+    #Précision médico-légale — termes exacts, pas d'à-peu-près
+    ! SELF-ASSERTED COMPLIANCE != VERIFIED COMPLIANCE
+    ! TEST PASSED != TASK VERIFIED
 
 %STACK
   $backend: Python 3.12 + Flask 3.x
@@ -133,11 +142,11 @@ $  → scope/périmètre (était ⟐ dans source)
     !auto-expansion mémoire post-copie (EPIC-034) : executeCopy appelle revealSourceDir(destDir) — le dossier destination s'ouvre si replié (toggle standard → l'expansion persiste dans sourceExpanded), JAMAIS de repli, jamais de vol de focus (toggleSourceDir(…, focusFirstChild=false)) ; appelé APRÈS state.sourceFiles = { … } (le re-render event-driven sinon écrase le patch ciblé)
 
   %ARCHITECTURE.years
-    $pipeline: scripts/collect_years.py (MusicBrainz→Deezer, 1 req/s) → collect_discogs.py (60 req/min, token data/discogs_token) → collect_itunes.py (sans clé, ~20 req/min) → collect_discogs_reform.py (Discogs requêtes REFORMULÉES : junk-artiste split au 1ᵉʳ marqueur de face, suffixes junk coupés) → collect_discogs_reform2.py (junk-artiste NUMÉRIQUE : 1ᵉʳ token num/symbole retiré — matrice/série/année-tête/#, '=' → espace obligatoire (403 Discogs sinon), aperçu lecture-seule par défaut, --go) → collect_beatport.py (token copié du portail docs api.beatport.com/v4/docs — création d'app OAuth FERMÉE au public, méthode beets-beatport4 ; app privée optionnelle data/beatport_oauth.json ; durée EXACTE length_ms → beatport_strict) → collect_youtube_topic.py (yt-dlp sans compte, chaîne « - Topic » OBLIGATOIRE, tokens + durée ±15 s, release_date requis ; exécutée 2026-09-18 : 0/84 — chaînes Topic fusionnées 2025-2026 dans les profils artiste ; --verified = tier chaînes vérifiées, année release_date OU ℗/Released on d'art track auto-généré, TOUT en lax — jamais re-requêter une clé conclusive, ré-interroger les none de l'autre mode) → caches data/year_cache.jsonl + discogs_cache.jsonl + itunes_cache.jsonl + discogs_reform_cache.jsonl + discogs_reform2_cache.jsonl + beatport_cache.jsonl + youtube_topic_cache.jsonl (clé 'artiste\ttitre', reprise incrémentale, erreurs re-jetables)
+    $pipeline: scripts/collect_years.py (MusicBrainz→Deezer, 1 req/s) → collect_discogs.py (60 req/min, token data/discogs_token) → collect_itunes.py (sans clé, ~20 req/min) → collect_discogs_reform.py (Discogs requêtes REFORMULÉES : junk-artiste split au 1ᵉʳ marqueur de face, suffixes junk coupés) → collect_discogs_reform2.py (junk-artiste NUMÉRIQUE : 1ᵉʳ token num/symbole retiré — matrice/série/année-tête/#, '=' → espace obligatoire (403 Discogs sinon), aperçu lecture-seule par défaut, --go) → collect_youtube_topic.py (yt-dlp sans compte, chaîne « - Topic » OBLIGATOIRE, tokens + durée ±15 s, release_date requis ; exécutée 2026-09-18 : 0/84 — chaînes Topic fusionnées 2025-2026 dans les profils artiste ; --verified = tier chaînes vérifiées, année release_date OU ℗/Released on d'art track auto-généré, TOUT en lax — jamais re-requêter une clé conclusive, ré-interroger les none de l'autre mode) → caches data/year_cache.jsonl + discogs_cache.jsonl + itunes_cache.jsonl + discogs_reform_cache.jsonl + discogs_reform2_cache.jsonl + youtube_topic_cache.jsonl (clé 'artiste\ttitre', reprise incrémentale, erreurs re-jetables) ; --keys-from-tags (EPIC-054) = univers de clés depuis les TAGS (1 144 clés jamais interrogées, key_source: 'tags') ; Beatport RETIRÉ du pipeline (EPIC-049 — jamais lancé, friction token refusée)
     $apply: scripts/apply_years.py — vague « found » seule ; re-vérification de l'année sur disque AVANT écriture (jamais écraser) ; journal additif data/year_apply_journal.jsonl = backup ; --undo idempotent ; dry-run par défaut
     !frames par format: MP3 TYER(v2.3)/TDRC(v2.4) selon version du tag existant, FLAC DATE, WAV TDRC (chunk ID3), M4A ©day, .wma exclu (non relu par get_audio_meta)
     !caches consommés tels quels — ne JAMAIS re-interroger les clés collectées (3 h 30 MB) ; collecte = incrémentale uniquement
-    !consolidation: scripts/report_years.py + GET /years/preview (app.py) — priorité par clé MB/Deezer > Discogs > iTunes > reform > reform2 > beatport > youtube (chaque pool d'appoint ne cible que des 'none' amont → zéro chevauchement) ; caches ABSENTS tolérés (passe jamais lancée) ; lignes 'error' re-jetables ; consensus fenêtre ≤ 2 ans = year_cache UNIQUEMENT
+    !consolidation: scripts/report_years.py + GET /years/preview (app.py) — priorité par clé MB/Deezer > Discogs > iTunes > reform > reform2 > youtube (chaque pool d'appoint ne cible que des 'none' amont → zéro chevauchement) ; caches ABSENTS tolérés (passe jamais lancée) ; lignes 'error' re-jetables ; consensus fenêtre ≤ 2 ans = year_cache UNIQUEMENT
     !YouTube « - Topic » = source HONNÊTE seulement ère digitale ≥ ~2015 (biais réédition sur le vieux vinyle, mémoire ad9e92a8) — jamais automatique sur l'ère vinyle
     !revue humaine (EPIC-033 P2): vue Années → choix session → e/💾 POST /years/review → data/year_review.json → scripts/apply_years.py --review (choix OVERRIDE consolidation, source 'review') ; champ année libre = tranche hors candidates à la carte focusée ; jamais d'écriture depuis l'UI
     !player audio sur les pages à cartes (Années + Doublons, EPIC-034) : boutons ▶/⏹ réutilisant togglePlay (audio.js) + player bar globale + GET /audio — NE PAS dupliquer un player ; bouton = data-path + classe 'playing' re-marquée après CHAQUE re-render via playingPath() (les cartes sont re-rendues à chaque choix) ; clic ▶ ne doit JAMAIS déclencher l'action de la carte (stopPropagation : override gagnant dups / focus years)
@@ -152,37 +161,69 @@ $  → scope/périmètre (était ⟐ dans source)
     !P1 = ZÉRO backend (pytest 298 intact) ; pas d'écriture ID3 ; tranche non forçable sur un fichier DÉJÀ daté (limite assumée, P4) ; hotkeys non configurables (styles.json = P4)
     !live headless CDP (2026-09-19, /copy mocké) : 79 lignes sous F7 `_schranz` (77 au 1ᵉʳ segment + 2 noms), palette 25 styles, lot 3 → 2 dossiers dont 1 à créer, isolation ArrowDown/Espace/F5 prouvée APRÈS le fix preventDefault ; colonne nom = 40,4 % à 1280 px (seuil du plan atteint)
 
-%SURGERY [12 règles numérotées S1-S12]
+%SURGERY [12 règles — protocole opératoire, zéro place à l'à-peu-près]
   !S1: NE JAMAIS modifier signature fonction
     exceptions: ZÉRO appelant impacté (grep) + demande utilisateur
   !S2: NE JAMAIS modifier code partagé sans filet
     $shared_fns: buildSourceChildren(), toggleSourceDir(), renderDirTree(), makeFileEl()
     ~avant: git diff HEAD
     ~après: vitest run complet
-  !S3: NE JAMAIS refactoring pendant bug fix
-  !S4: NE JAMAIS >3 fichiers par requête
+  !S3: NE JAMAIS refactoring pendant bug fix — YAGNI, KISS
+  !S4: NE JAMAIS >3 fichiers par requête — atomicité
     contournement: découper en étapes 1-3 fichiers
-  !S5: NE JAMAIS feature non demandée
-  #S6: AVANT — lister fichiers impactés
-  #S7: APRÈS — valider (git diff + scope + vitest run)
-  #S8: SI test échoue — analyser cause
+  !S5: NE JAMAIS feature non demandée — scope strict
+  #S6: AVANT — lister fichiers impactés (lecture + analyse)
+  #S7: APRÈS — valider (git diff + scope + vitest run) — VERIFIED COMPLIANCE
+  #S8: SI test échoue — analyser cause (root cause, pas workaround)
   #S9: Demander avant scope extension — TODO(@codebuff)
   #S10: GOLDEN PATH — npx vitest run après changement fonctionnel
   ~S11: Bug fix — 5 étapes (identifier→modifier→vérifier→git diff→test)
   ~S12: Behaviour change — 5 étapes (spec→fichiers→test-first→code→valider)
+  ! Double-check systématique : claims → evidence → verification
+  ! Pragmatique · Efficace · Robuste · Concis · Précis · Rigoureux · Maniaque · Minutieux · Fiable
 
-%WORK-RULES [8 règles]
-  #W1: Lire avant modifier
-  #W2: Ne pas casser tests
-  #W3: Chirurgie — que ce qui est demandé
+%WORK-RULES [8 règles — exécutoires, non négociables]
+  #W1: Lire avant modifier — zéro action sans lecture préalable
+  #W2: Ne pas casser tests — NO regression (vitest + pytest verts)
+  #W3: Chirurgie — que ce qui est demandé (scope strict, YAGNI)
   #W4: Data safety — △DATA-SAFETY absolues
-  #W5: Conventions style existant
-  #W6: KISS — pas de sur-engineering
-  #W7: Preuve — tests verts, smoke test
-  #W8: Qualité frontend — transitions, hover, micro-interactions
+  #W5: Conventions style existant — cohérence > préférence perso
+  #W6: KISS — pas de sur-engineering (DRY, YAGNI, no-overengineering)
+  #W7: Preuve — tests verts + smoke test (VERIFIED COMPLIANCE, pas auto-déclarée)
+  #W8: Qualité frontend — transitions, hover, micro-interactions (soin maniaque)
 
 %AGENT-FLUX
   AGENT.md → règles + architecture + contexte
   docs/ → specs + plans + décisions
   !distinction: AGENT.md ≠ code ≠ docs
+
+%SEM [executable_control_spec — méta-contrôle : COMMENT appliquer/vérifier les règles ci-dessus]
+
+## CONTROL LOOP
+  1. READ → contexte complet (fichiers, tests, docs) avant toute action
+  2. PLAN → lister fichiers impactés, scope explicite, critères de succès
+  3. EXEC → plus petite change suffisante (atomicité ≤3 fichiers)
+  4. VERIFY → git diff + vitest run + pytest run + smoke test manuel
+  5. CLOSE → confirmer critères atteints, pas de régression, STOP
+
+## DECISION GATES
+  ! Gate 1 (avant action) : ai-je lu tout le nécessaire ? scope clair ? test-first si behaviour change ?
+  ! Gate 2 (pendant) : change atomique ? pas de scope creep ? pas de refacto gratuit ?
+  ! Gate 3 (après) : tests verts ? VERIFIED COMPLIANCE (pas auto-déclarée) ? régression check ?
+
+## EPISTEMIC STANDARDS
+  Claim → Evidence → Verification (chaque claim matériel)
+  Source existence ≠ claim presence ≠ claim verification
+  Derivative/repetition ≠ independent confirmation
+  Unverifiable → state limitation + downgrade conclusion explicitement
+
+## CONFLICT RESOLUTION
+  Règle stricte applicable > règle souple
+  Préservation scope demandé > optimisation adjacente
+  Data safety (△DATA-SAFETY) > toute autre considération
+  User stress signal → repair priority (△RIGUEUR.4)
+
+## TERMINATION
+  Success criteria met + no critical unresolved + further work immaterial → STOP
+  NO_PROGRESS → STOP (ne pas insister sur stratégie échouée)
 ```
