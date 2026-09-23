@@ -123,9 +123,7 @@ modale, suppression d'appels, extension de cibles + affichage.
 
 | Commit | Message |
 |---|---|
-| `…` | `feat: EPIC-051 P1 — la modale de copie montre fichier → destination` |
-| `…` | `feat: EPIC-051 P2 — le dossier destination reste plié après copie` |
-| `…` | `feat: EPIC-051 P3 — g écrit la paire, le style se voit des deux côtés` |
+| `6edf56c` | `feat: EPIC-051+052 — la copie se lit d'un coup d'œil, g écrit la paire, un clic ne scrolle plus` (P1+P2+P3) |
 
 ## Livré (P1+P2, 2026-09-23)
 

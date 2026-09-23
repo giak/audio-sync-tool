@@ -70,3 +70,9 @@ ce qu'il vise.
   inutiles quand la ligne suivante est déjà visible.
 - La restauration `scrollTop` de `beginRender/restore` (core/dom.ts) est
   inchangée et complémentaire : elle couvre le wipe/rebuild des conteneurs.
+
+## Traçabilité (commits)
+
+| Commit | Message |
+|---|---|
+| `6edf56c` | `feat: EPIC-051+052 — la copie se lit d'un coup d'œil, g écrit la paire, un clic ne scrolle plus` |
