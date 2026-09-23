@@ -64,11 +64,7 @@ function onEparsFocusChanged(): void {
  *  `silent` = pas de scroll du conteneur jumeau (clic, re-render) ; au clavier
  *  (navigateFocus/Column, preventScroll:false) le hint amène la vue — pendant
  *  5 ans ça a été le SEUL moyen de voir où est le jumeau en naviguant. */
-function syncTwinHint(
-  container: HTMLElement,
-  path: string | null | undefined,
-  opts?: { silent?: boolean },
-): void {
+function syncTwinHint(container: HTMLElement, path: string | null | undefined, opts?: { silent?: boolean }): void {
   if (container.id === 'epars-container') updateTwinHint(path, opts);
   else clearTwinHint();
 }
@@ -115,11 +111,7 @@ export function getItems(container: HTMLElement): NodeListOf<Element> {
  *  historique — par défaut le focus est restauré SANS faire bouger le scroll
  *  (preventScroll). Le clavier (navigateFocus/Column/History) passe
  *  preventScroll:false pour amener la vue, comme avant. */
-export function focusItemByPath(
-  container: HTMLElement,
-  path: string | null,
-  opts?: { preventScroll?: boolean },
-): void {
+export function focusItemByPath(container: HTMLElement, path: string | null, opts?: { preventScroll?: boolean }): void {
   const silent = opts?.preventScroll ?? true;
   const items = getItems(container);
   for (const el of container.querySelectorAll('.focused')) el.classList.remove('focused');

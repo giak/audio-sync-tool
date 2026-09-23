@@ -697,7 +697,7 @@ describe('actions', () => {
       expect(spec.groups[0].filenames).toEqual(['f.mp3']);
       expect(spec.groups[0].destCreated).toBe(true);
       // Discret (revue du 2026-09-23) : consentement CONDENSÉ une ligne.
-      expect(spec.notes[0]).toBe('Style « techno » écrit sur l\'épars et la copie · année intacte');
+      expect(spec.notes[0]).toBe("Style « techno » écrit sur l'épars et la copie · année intacte");
     });
   });
 

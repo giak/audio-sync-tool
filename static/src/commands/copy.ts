@@ -11,7 +11,7 @@ registry.bind({
   page: 'sync',
   isInput: false,
   activeModal: null,
-  label: 'Copier → dossier surligné',
+  label: 'Copier (+ style) → dossier surligné',
   group: 'sync',
   handler: () => executeCopy(),
 });

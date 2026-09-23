@@ -126,7 +126,10 @@ registry.bind({
   isInput: false,
   activeModal: null,
   isContextMenuOpen: false,
-  label: 'Style : écrit celui du dossier (rangé) ou ouvre la palette (épars)',
+  // Libellé COURT (contrainte mesurée, EPIC-044 : ~40 caractères max à 4
+  // colonnes, vérification B du harnais) et à jour d'EPIC-051 P3 : `g` écrit
+  // la paire complète (épars + jumeau rangé, style et année).
+  label: 'Style : écrit la paire complète',
   group: 'sync',
   handler: openPaletteOnFocus,
 });

@@ -572,10 +572,7 @@ describe('render/sourceTree', () => {
 
       // focusItemByPath est mocké (contrat DOM testé dans focus.test.ts) — on
       // asserte la RESTAURATION elle-même : container + chemin persisté.
-      expect(focusItemByPath).toHaveBeenCalledWith(
-        document.getElementById('source-container'),
-        '/base/Techno',
-      );
+      expect(focusItemByPath).toHaveBeenCalledWith(document.getElementById('source-container'), '/base/Techno');
     });
 
     it('EPIC-053 : sans sourceFocusPath, pas de restauration (premier lancement)', () => {

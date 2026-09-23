@@ -332,9 +332,9 @@ describe('EPIC-052 : clic = scroll immobile', () => {
 
   it('revalidateFocus / focusItemByPath (restaurations) : tout est silencieux', () => {
     revalidateFocus();
-    expect(
-      spy.mock.calls.every((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === true),
-    ).toBe(true);
+    expect(spy.mock.calls.every((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === true)).toBe(
+      true,
+    );
   });
 
   it('le CLAVIER amène toujours la vue (navigateFocus, navigateColumn)', () => {
@@ -343,23 +343,23 @@ describe('EPIC-052 : clic = scroll immobile', () => {
     row.classList.add('focused');
     navigateFocus(container, 1);
     navigateColumn(container, 1);
-    expect(
-      spy.mock.calls.some((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === false),
-    ).toBe(true);
+    expect(spy.mock.calls.some((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === false)).toBe(
+      true,
+    );
   });
 
   it('setActivePanel(silentScroll) : restauration silencieuse du panneau activé', () => {
     setActivePanel('source', { silentScroll: true });
-    expect(
-      spy.mock.calls.every((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === true),
-    ).toBe(true);
+    expect(spy.mock.calls.every((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === true)).toBe(
+      true,
+    );
   });
 
   it('setActivePanel (clavier Tab) : la vue est amenée (comportement inchangé)', () => {
     setActivePanel('source'); // sans silentScroll : Tab = geste volontaire
-    expect(
-      spy.mock.calls.some((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === false),
-    ).toBe(true);
+    expect(spy.mock.calls.some((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === false)).toBe(
+      true,
+    );
   });
 });
 

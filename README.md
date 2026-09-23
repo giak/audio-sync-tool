@@ -25,9 +25,11 @@ Stack : **Python 3.12 + Flask 3.1**, **TypeScript vanilla** bundlé par esbuild
   vérifier un doublon), toggle 📄 fichiers pour chercher aussi par nom de fichier.
 - **Rangement assisté** : pastille « ⤷ déjà rangé » sur les fichiers éparpillés
   dont le jumeau existe déjà dans le dossier visé par le filtre source (tooltip
-  = chemin exact — copier créerait un doublon), et **auto-ouverture du dossier
-  destination après F5** : la copie est visible immédiatement, sans re-déplier,
-  focus épars conservé pour enchaîner.
+  = chemin exact — copier créerait un doublon). Le dossier destination **reste
+  plié** après F5 (clic ou Entrée déplient) mais **garde son focus** à travers
+  les re-renders (EPIC-053) — le cycle F5 → ↑↓ → F5 se parcourt sans re-viser
+  le dossier ; un **clic ne fait jamais bouger le scroll** (EPIC-052, seul le
+  clavier amène la vue).
 - **Rangement par style** (palette `G`) : le style se choisit dans une palette
   clavier, la destination (`<style>_<tranche>`) **se calcule** depuis l'année, et
   le **tag du fichier est écrit tout de suite** ; `A` aligne ensuite le **stock
@@ -135,10 +137,10 @@ disponibles dans les pages.
 | **← →** | Colonne précédente / suivante (pendant une écoute : seek) |
 | **Entrée** | Jouer le fichier / déplier le dossier |
 | **Espace** | Sélectionner le fichier (multi-copie) |
-| **F5** | Copier vers le dossier surligné (confirmation ; le dossier destination s'ouvre et, si son nom déclare un style, le tag genre est écrit des deux côtés) |
+| **F5** | Copier vers le dossier surligné — modale « fichier → destination » ; si le dossier déclare un style, le tag genre est écrit des deux côtés (le dossier reste plié) |
 | **R** | Remplacer l'homonyme rangé (l'ancien → `_trash/<date>/`) |
 | **F7** / **/** | Afficher/masquer le filtre — taper pour filtrer (nom, année, codec) |
-| **G** | Palette de style (écrit le tag : voir « Rangement par style ») |
+| **G** | Style : écrit la **paire complète** (épars + jumeau rangé, genre et année) — palette si épars (voir « Rangement par style ») |
 | **E** | Aperçu du rangement par style (copies groupées par dossier cible) |
 | **A** | Aligner le genre des fichiers rangés sur leur dossier (aperçu, 2 modes) |
 | **⌫** | Aller au dossier parent · **Ctrl+L** : aller au fichier en lecture |
@@ -238,9 +240,11 @@ déplié → stop audio** (pile de fermeture explicite, testée par invariant).
    signale ceux dont le jumeau existe déjà dans le dossier filtré à droite
 2. **Tab** → panneau droit
 3. **↑↓** sur un dossier de destination
-4. **F5** → modale de confirmation (**Entrée** valide, **Échap** annule)
-5. Le dossier destination **s'ouvre automatiquement** et montre la copie —
-   le focus reste sur l'épars pour enchaîner
+4. **F5** → modale « fichier → destination » (**Entrée** valide, **Échap**
+   annule) : le morceau, le dossier cible et le consentement style s'y lisent
+   d'un coup d'œil
+5. Le dossier destination **reste plié** (clic ou Entrée déplient) et **garde
+   son focus** — le focus épars reste en place pour enchaîner
 6. Si le dossier cible déclare un style (`<style>_<tranche>`), le **tag genre est
    écrit des deux côtés** — épars et copie — et le statut le dit
    (`· style « techno » écrit (epars + copie)`). L'année n'est **jamais** touchée.
@@ -322,10 +326,13 @@ se déduit de l'année du tag, le dossier cible est calculé.
    journal est **celui des scripts** (`data/style_apply_journal.jsonl`,
    `data/year_apply_journal.jsonl`, `source: "palette"`) : `apply_styles.py
    --undo` / `apply_years.py --undo` annulent indifféremment l'écriture faite par
-   la palette ou par le script.
+   la palette ou par le script. **`g` écrit la paire complète** (EPIC-051) :
+   un épars ciblé étend l'écriture à son jumeau rangé — style **et** année, en
+   une seule requête ; un rangé ciblé directement ne s'étend pas (la divergence
+   reste visible `≠` et corrigeable via `a`).
 3. **E** → aperçu groupé par dossier cible (fichiers sans année et jumeaux déjà
    rangés exclus et listés) → **Appliquer** = copies enchaînées via le flux F5
-   (journal, auto-expansion du dossier, pastille « déjà rangé »). Le choix de
+   (journal, pastille « déjà rangé »). Le choix de
    session reste **épars-only** : taguer une piste déjà rangée corrige la
    métadonnée, ça ne planifie aucune copie.
 
@@ -333,7 +340,9 @@ La colonne « Style » montre le choix, la suggestion (`chip` à confiance > seu
 issue de 4 signaux pondérés : segment du chemin épars (0,50), voisinage artiste
 dans la source (0,40), historique de session du sous-dossier épars (0,20), genre
 ID3 aliasé (0,15) — suggestion retenue si la confiance ≥ 0,30) et la destination en
-tooltip (`→ techno_acid_1990`, `→ ➕ … (sera créé)`, `année manquante`).
+tooltip (`→ techno_acid_1990`, `→ ➕ … (sera créé)`, `année manquante`). Sans
+choix de session mais avec un genre écrit (copie F5), la cellule montre un
+**chip neutre** — le tag écrit est le réel (EPIC-051).
 Le filtre de la colonne gauche matche aussi le **sous-dossier** épars
 (`_techno`, `2008_08`).
 
@@ -538,7 +547,7 @@ audio-sync-tool/
 ├── static/
 │   ├── styles/            # CSS EN COUCHES : tokens, base, components + pages/*.css (11 fichiers)
 │   │   └── pages/index.css  # agrège les @import — l'ordre fait la cascade, ne pas réordonner
-│   ├── src/               # TypeScript : 58 modules + 50 fichiers de test
+│   ├── src/               # TypeScript : 61 modules + 53 fichiers de test
 │   │   ├── commands/      # Command Registry (13 modules) : navigation, audio, filter, style…
 │   │   │                  #   + keyboardMatrix.test.ts (matrice touches × contextes)
 │   │   ├── render/        # Component factories (fileRow, sourceTree, cueEditor, legend…)
@@ -595,12 +604,12 @@ npm run dev                # Watch mode (rebuild à chaque changement)
 npm run build              # Build + validation du bundle (script.js parsable, invariants)
 npm run typecheck          # tsc --noEmit
 npm run lint               # biome check static/src/
-npm test                   # vitest run — 1 145 tests, 50 fichiers
+npm test                   # vitest run — 1 230 tests, 53 fichiers
 npm run test:shuffle       # ordre aléatoire (détecte les fuites d'état entre tests)
 npm run test:shuffle:gate   # 3 graines FIXES (un échec de shuffle redevient reproductible)
 npm run coverage           # clean → vitest --coverage → build
 npm run audit:css          # classes CSS mortes (rapport seul, vérification manuelle)
-./venv/bin/python -m pytest -q    # 335 tests backend
+./venv/bin/python -m pytest -q    # 367 tests backend
 ```
 
 > **CI** (`.github/workflows/ci.yml`, chaque push/PR) : typecheck, lint, `npm test`, `test:shuffle` (graine aléatoire) puis `test:shuffle:gate` (3 graines fixes : un échec de shuffle redevient reproductible) et pytest.
@@ -615,12 +624,12 @@ calculé comme le navigateur le rend, tenue de la modale — 13 vérifications, 
 toute largeur avec `PROOF_WINDOW=2560,1400`), `measure_focus_visibility.py` (contraste du
 focus), `proof_filter_chip.py`, `proof_style_palette.py` (tags relus **sur disque**).
 
-### Couverture (mesurée le 2026-09-22)
+### Couverture (mesurée le 2026-09-23)
 
 | Suite | Tests | Couverture |
 |-------|-------|------------|
-| Pytest | **351** (12 fichiers) | — |
-| Vitest | **1 171** (51 fichiers) | **94,39 %** lignes/statements, **84,24 %** branches, **90,55 %** fonctions |
+| Pytest | **367** (12 fichiers) | — |
+| Vitest | **1 230** (53 fichiers) | **94,72 %** lignes/statements, **83,96 %** branches, **91,18 %** fonctions |
 
 ## Limites connues
 
@@ -632,6 +641,8 @@ focus), `proof_filter_chip.py`, `proof_style_palette.py` (tags relus **sur disqu
   `apply_styles.py --undo` revient en arrière (journal `source: "copy-f5"`). L'année, elle,
   n'est jamais écrite par une copie. L'alignement **A** remplace à dessein des genres externes
   (`Electronic`, `Dance`…) par le style du dossier : c'est l'objectif, et le journal les garde.
+  Depuis EPIC-051, `g` étend l'écriture au **jumeau rangé** même si son dossier
+  contredit — la divergence reste visible (`≠`) et corrigeable via `a`.
 - **Template ≠ bundle** : après une modification de `templates/index.html`, redémarrer l'app
   (voir l'avertissement en tête de « Utilisation »). Le code tolère un HTML d'une autre version
   (sections statiques adoptées par leur titre, jamais effacées) mais garde alors l'ancienne mise
@@ -681,7 +692,13 @@ autoritaire, `--undo`),
 piste web le cherche avec lui),
 **049** (recherche web **locale** DuckDuckGo sans clé, Brave et Beatport retirés du pipeline),
 **050** (l'écriture met l'index à jour, les slashes de racine sont pliés, `G` sur un rangé écrit
-le style de son dossier).
+le style de son dossier),
+**051** (la copie se lit d'un coup d'œil : modale « fichier → destination » élargie sans
+troncature, dossier plus auto-déplié, `g` écrit la **paire complète** et le style se voit des
+deux côtés),
+**052** (un clic ne fait jamais bouger le scroll),
+**053** (le focus du dossier destination survit au re-render après copie — le cycle
+F5 → ↑↓ → F5 sans re-viser le dossier).
 
 ## Architecture
 
