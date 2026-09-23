@@ -1,6 +1,13 @@
 // ─── DOM-based spatial navigation (↑↓←→ Tab) ────────────────────────────
 import { on, state } from './state.js';
 
+/** `preventScroll` fait partie de ScrollIntoViewOptions dans la spec WHATWG
+ *  mais manque au lib DOM (ScrollIntoViewOptions étend ScrollOptions sans
+ *  l'énoncer) — cast centralisé ici, les comportements restent typés. */
+type SilentScrollOptions = ScrollIntoViewOptions & { preventScroll?: boolean };
+const scrollNearest = (el: Element, preventScroll: boolean): void =>
+  el.scrollIntoView({ block: 'nearest', preventScroll } as SilentScrollOptions);
+
 // ── Twin-hint (EPIC-028 P1) : auto-highlight du jumeau rangé ────────────
 // Quand le focus arrive sur une ligne épars matchée (Map dupMatches), la
 // ligne source correspondante reçoit .twin-hint (halo ambre pulsé) et se
@@ -13,7 +20,7 @@ function clearTwinHint(): void {
   }
 }
 
-function updateTwinHint(focusedEparsPath: string | null | undefined): void {
+function updateTwinHint(focusedEparsPath: string | null | undefined, opts?: { silent?: boolean }): void {
   clearTwinHint();
   if (!focusedEparsPath) return;
   const match = state.dupMatches.get(focusedEparsPath);
@@ -23,7 +30,10 @@ function updateTwinHint(focusedEparsPath: string | null | undefined): void {
   for (const row of document.querySelectorAll('#source-container .file-row')) {
     if ((row as HTMLElement).dataset.focuspath === match.sourceFullPath) {
       row.classList.add('twin-hint');
-      row.scrollIntoView({ block: 'nearest' });
+      // EPIC-052 : au CLIC (silent), le hint ne doit PAS faire bouger le scroll
+      // de la colonne source — le halo est visible si la ligne l'est déjà, et
+      // sinon il attend un geste (clavier) qui amène la vue volontairement.
+      scrollNearest(row, opts?.silent ?? false);
       return;
     }
   }
@@ -41,7 +51,7 @@ function updateTwinHint(focusedEparsPath: string | null | undefined): void {
   }
   if (bestDir) {
     bestDir.classList.add('twin-hint');
-    bestDir.scrollIntoView({ block: 'nearest' });
+    scrollNearest(bestDir, opts?.silent ?? false);
   }
 }
 
@@ -50,9 +60,16 @@ function onEparsFocusChanged(): void {
 }
 
 /** Point d'entrée unique pour les trois chemins de focus (élément, path,
- *  event) : epars → hint sur le jumeau, tout autre container → cleanup. */
-function syncTwinHint(container: HTMLElement, path: string | null | undefined): void {
-  if (container.id === 'epars-container') updateTwinHint(path);
+ *  event) : epars → hint sur le jumeau, tout autre container → cleanup.
+ *  `silent` = pas de scroll du conteneur jumeau (clic, re-render) ; au clavier
+ *  (navigateFocus/Column, preventScroll:false) le hint amène la vue — pendant
+ *  5 ans ça a été le SEUL moyen de voir où est le jumeau en naviguant. */
+function syncTwinHint(
+  container: HTMLElement,
+  path: string | null | undefined,
+  opts?: { silent?: boolean },
+): void {
+  if (container.id === 'epars-container') updateTwinHint(path, opts);
   else clearTwinHint();
 }
 
@@ -94,29 +111,38 @@ export function getItems(container: HTMLElement): NodeListOf<Element> {
   return container.querySelectorAll('.directory, .file-row');
 }
 
-export function focusItemByPath(container: HTMLElement, path: string | null): void {
+/** Restaurations SILENCIEUSES (EPIC-052) : re-render, changement de panneau,
+ *  historique — par défaut le focus est restauré SANS faire bouger le scroll
+ *  (preventScroll). Le clavier (navigateFocus/Column/History) passe
+ *  preventScroll:false pour amener la vue, comme avant. */
+export function focusItemByPath(
+  container: HTMLElement,
+  path: string | null,
+  opts?: { preventScroll?: boolean },
+): void {
+  const silent = opts?.preventScroll ?? true;
   const items = getItems(container);
   for (const el of container.querySelectorAll('.focused')) el.classList.remove('focused');
   if (!path) {
     if (items.length > 0) {
       items[0].classList.add('focused');
-      items[0].scrollIntoView({ block: 'nearest' });
-      syncTwinHint(container, (items[0] as HTMLElement).dataset.focuspath);
+      scrollNearest(items[0], silent);
+      syncTwinHint(container, (items[0] as HTMLElement).dataset.focuspath, { silent });
     }
     return;
   }
   for (const el of items) {
     if ((el as HTMLElement).dataset.focuspath === path) {
       el.classList.add('focused');
-      el.scrollIntoView({ block: 'nearest' });
-      syncTwinHint(container, path);
+      scrollNearest(el, silent);
+      syncTwinHint(container, path, { silent });
       return;
     }
   }
   if (items.length > 0) {
     items[0].classList.add('focused');
-    items[0].scrollIntoView({ block: 'nearest' });
-    syncTwinHint(container, (items[0] as HTMLElement).dataset.focuspath);
+    scrollNearest(items[0], silent);
+    syncTwinHint(container, (items[0] as HTMLElement).dataset.focuspath, { silent });
   }
 }
 
@@ -124,17 +150,26 @@ export function getFocusedItem(container: HTMLElement): Element | null {
   return container.querySelector('.focused');
 }
 
-export function focusItemByElement(container: HTMLElement, el: Element, opts?: { noHistory?: boolean }): void {
+export function focusItemByElement(
+  container: HTMLElement,
+  el: Element,
+  opts?: { noHistory?: boolean; preventScroll?: boolean },
+): void {
   const focusPath = (el as HTMLElement).dataset.focuspath || null;
   for (const el of container.querySelectorAll('.focused')) el.classList.remove('focused');
   el.classList.add('focused');
-  el.scrollIntoView({ block: 'nearest' });
+  // EPIC-052 : un CLIC ne doit jamais faire bouger le scroll du conteneur —
+  // l'utilisateur voit déjà la ligne qu'il vise. preventScroll par défaut,
+  // opt-in pour les navigations clavier (navigateFocus/Column/History).
+  const silent = opts?.preventScroll ?? true;
+  scrollNearest(el, silent);
   setFocusPath(container, focusPath);
 
   // Twin-hint : mis à jour directement pour les navigations intra-container
   // (le event `eparsFocusPath:changed` n'est émis que si la valeur change).
-  // Idempotent et bon marché.
-  syncTwinHint(container, focusPath);
+  // Idempotent et bon marché. Silencieux au clic (le scroll ne bouge PAS) —
+  // au clavier (preventScroll:false) il amène la vue sur le jumeau, comme avant.
+  syncTwinHint(container, focusPath, { silent });
 
   // Push to nav history (A12) — skip when restoring from history
   if (!opts?.noHistory && focusPath) {
@@ -173,7 +208,7 @@ export function navigateHistory(direction: number): void {
   }
 
   const container = getActiveContainer();
-  if (container) focusItemByPath(container, entry.focusPath);
+  if (container) focusItemByPath(container, entry.focusPath, { preventScroll: false }); // clavier : amène la vue
 }
 
 export function navigateFocus(container: HTMLElement, direction: number): void {
@@ -189,7 +224,7 @@ export function navigateFocus(container: HTMLElement, direction: number): void {
   }
   if (!current) idx = direction > 0 ? -1 : items.length;
   const newIdx = Math.max(0, Math.min(items.length - 1, idx + direction));
-  focusItemByElement(container, items[newIdx]);
+  focusItemByElement(container, items[newIdx], { preventScroll: false }); // clavier : amène la vue
 }
 
 export function navigateColumn(container: HTMLElement, direction: number): void {
@@ -212,19 +247,22 @@ export function navigateColumn(container: HTMLElement, direction: number): void 
       best = el;
     }
   }
-  if (best) focusItemByElement(container, best);
+  if (best) focusItemByElement(container, best, { preventScroll: false }); // clavier : amène la vue
 }
 
-export function setActivePanel(panel: 'epars' | 'source'): void {
+/** `silentScroll` (EPIC-052) : un CLIC dans un panneau non actif ne doit pas
+ *  faire bouger son scroll (le focus est restauré sur place) — le clavier
+ *  (Tab) garde le comportement d'origine, qui amène la vue. */
+export function setActivePanel(panel: 'epars' | 'source', opts?: { silentScroll?: boolean }): void {
   state.activePanel = panel;
   state.focusListId = panel as 'epars' | 'source';
   for (const el of document.querySelectorAll('.panel-active')) el.classList.remove('panel-active');
   getActivePanelEl()?.classList.add('panel-active');
   const container = getActiveContainer();
-  if (container) focusItemByPath(container, getFocusPath());
+  if (container) focusItemByPath(container, getFocusPath(), { preventScroll: opts?.silentScroll ?? false });
 }
 
 export function revalidateFocus(): void {
   const container = getActiveContainer();
-  if (container) focusItemByPath(container, getFocusPath());
+  if (container) focusItemByPath(container, getFocusPath()); // silencieux par défaut
 }

@@ -198,6 +198,14 @@ header h1 {
 .style-chip.pending-year { border-style: dashed; opacity: 0.8; }
 .style-chip.suggested { border-style: dotted; opacity: 0.55; color: var(--text-secondary, #999); border-color: var(--text-secondary, #999); background: none; }
 .style-chip.written { color: var(--accent-green); border-color: var(--accent-green); background: color-mix(in srgb, var(--accent-green) 14%, transparent); }
+/* EPIC-051 (D4) — genre écrit SANS choix de session (F5 direct, ou choix retiré
+   après copie) : le réel plutôt que l'intention, vert atténué pour ne pas
+   concurrencer le « choisi » ni le ✓ plein. Pas de couleur nouvelle. */
+.style-chip.written-neutral {
+  color: color-mix(in srgb, var(--accent-green) 60%, var(--text-dim));
+  border-color: color-mix(in srgb, var(--accent-green) 45%, transparent);
+  background: none;
+}
 /* EPIC-046 — colonne Style de Source Data : le dossier est la référence.
    `≠` (tag != dossier) reste en AMBRE — la couleur d'un chip de style dans
    l'app — et `?` (tag vide) en tirets atténués : aucune couleur nouvelle. */

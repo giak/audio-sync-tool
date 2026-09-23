@@ -8,12 +8,12 @@ import { detectDuplicates } from './dupDetect.js';
 import { durationCompatible, type VersionGroup } from './dupGroups.js';
 import { revalidateFocus, setActivePanel } from './focus.js';
 import { loadRatings } from './ratings.js';
-import { revealSourceDir } from './render/sourceTree.js';
+import { buildCopyDialogSpec } from './render/copyDialog.js';
 import { refreshStyleCell } from './render/styleCell.js';
 import { getBatchCopy } from './render.js';
 import { type FileIndex, state } from './state.js';
 import { parseFolderName } from './styles.js';
-import { closeAllModals, confirmDialog, openModal, promptDialog, showError } from './ui.js';
+import { confirmCopyDialog, confirmDialog, promptDialog, showError } from './ui.js';
 
 // ── Config types ───────────────────────────────────────────────────────────
 
@@ -253,6 +253,15 @@ export function styleConsentLine(destDir: string): string {
     : '';
 }
 
+/** Consentement CONDENSÉ pour la modale structurée (revue du 2026-09-23) : une
+ *  ligne, sans wrap — le détail complet reste dans styleConsentLine (tests,
+ *  journal) et le texte intégral est au tooltip de la ligne discrète. null si
+ *  la destination ne déclare rien. */
+export function styleConsentShort(destDir: string): string | null {
+  const style = styleOfDestDir(destDir);
+  return style ? `Style « ${style} » écrit sur l'épars et la copie · année intacte` : null;
+}
+
 /** Note de statut de l'écriture de style ('' si rien à signaler). Un échec est
  *  RAPPORTÉ, jamais bloquant : la copie a réussi, le tag est un effet de bord. */
 export function styleNoteOf(res: CopyResponse): string {
@@ -277,7 +286,7 @@ function applyCopyStyle(fullSrc: string, eparDir: string, filename: string, res:
   const epars = (res.style_writes ?? []).find(w => w.role === 'epars');
   const entry = state.eparsFiles[eparDir]?.[filename];
   if (entry && epars?.ok) entry.genre = epars.style ?? res.style ?? null;
-  refreshStyleCell(fullSrc);
+  refreshStyleCell(fullSrc); // EPIC-051 (D4) : le chip neutre suit `entry.genre` mis à jour
 }
 
 /** Copie `files` (épars) vers `destDir`, patch l'index + le DOM, recharge le
@@ -336,11 +345,30 @@ export async function copyFilesTo(
   state.sourceFiles = { ...state.sourceFiles };
   state.journal = await api('/journal');
   state.selectedEparsFiles = new Map();
-  // Auto-expansion mémoire : le dossier destination s'ouvre (s'il était
-  // replié) pour montrer la copie — l'expansion persiste ensuite.
-  revealSourceDir(destDir);
+  // EPIC-051 : l'expansion automatique du dossier destination est RETIRÉE —
+  // le dossier reste plié (le dépliage est un geste explicite : clic ou Enter).
   requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
   return { copied, styleNote: [...notes].join('') };
+}
+
+/** Le dossier destination existe-t-il déjà ? Index scanné (dossiers implicites
+ *  dans les `path` relatifs) + dossiers ➕ (extra_dirs). Slashes PLIÉS pour la
+ *  comparaison (forme réelle `…/style//dossier` quand la config porte un slash
+ *  final — EPIC-050 : on plie au moment de comparer, jamais dans les données).
+ *  false → /copy créera le dossier (os.makedirs) : la modale porte le badge ➕. */
+function destExists(destDir: string): boolean {
+  const dest = destDir.replace(/\/+/g, '/').replace(/\/+$/, '');
+  for (const extra of state.sourceExtraDirs) {
+    if (extra.replace(/\/+/g, '/').replace(/\/+$/, '') === dest) return true;
+  }
+  for (const [root, files] of Object.entries(state.sourceFiles)) {
+    const r = root.replace(/\/+$/, '').replace(/\/+/g, '/');
+    if (dest === r) return true;
+    if (!dest.startsWith(`${r}/`)) continue;
+    const rel = dest.slice(r.length + 1);
+    return Object.values(files).some(f => f.path.startsWith(`${rel}/`));
+  }
+  return false;
 }
 
 export function executeCopy(): void {
@@ -349,29 +377,26 @@ export function executeCopy(): void {
   if (batch.target && batch.files.length > 0) {
     const destDir = batch.target;
     const files = batch.files;
-    const dialogMsg = document.getElementById('dialog-msg');
-    if (dialogMsg) {
-      const base =
-        files.length === 1
-          ? `Copier "${files[0].filename}" vers "${destDir}" ?`
-          : `Copier ${files.length} fichiers vers "${destDir}" ?`;
-      const consent = styleConsentLine(destDir);
-      dialogMsg.textContent = consent ? `${base}\n${consent}` : base;
-    }
-    openModal('dialog');
-    const confirmBtn = document.getElementById('dialog-confirm');
-    const cancelBtn = document.getElementById('dialog-cancel');
-    if (confirmBtn) {
-      confirmBtn.onclick = async () => {
-        closeAllModals();
-        const { copied, styleNote } = await copyFilesTo(destDir, files);
-        const n = copied.length;
-        setStatus(
-          `✓ ${n}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}${styleNote}`,
-        );
-      };
-    }
-    if (cancelBtn) cancelBtn.onclick = () => closeAllModals();
+    // EPIC-051 : modale structurée — fichier → destination en évidence,
+    // consentement style + notes en discret.
+    const spec = buildCopyDialogSpec(
+      [
+        {
+          destName: destDir.split('/').filter(Boolean).pop() || destDir,
+          destCreated: !destExists(destDir),
+          filenames: files.map(f => f.filename),
+          destDir,
+        },
+      ],
+      { styleConsent: styleConsentShort(destDir) ?? undefined },
+    );
+    confirmCopyDialog(spec, async () => {
+      const { copied, styleNote } = await copyFilesTo(destDir, files);
+      const n = copied.length;
+      setStatus(
+        `✓ ${n}/${files.length} fichier${files.length > 1 ? 's' : ''} copié${files.length > 1 ? 's' : ''} vers ${destDir}${styleNote}`,
+      );
+    });
     return;
   }
 
@@ -406,63 +431,59 @@ export function executeCopy(): void {
   const fullSrc = `${eparDir}/${relPath}`;
   const destDir = rightFocus.dataset.dirpath || '';
 
-  const dialogMsg = document.getElementById('dialog-msg');
-  if (dialogMsg) {
-    const base = `Copier "${filename}" vers "${destDir}" ?`;
-    const consent = styleConsentLine(destDir);
-    dialogMsg.textContent = consent ? `${base}\n${consent}` : base;
-  }
-  openModal('dialog');
-
-  const confirmBtn = document.getElementById('dialog-confirm');
-  const cancelBtn = document.getElementById('dialog-cancel');
-
-  if (confirmBtn) {
-    confirmBtn.onclick = async () => {
-      closeAllModals();
-      try {
-        const res = await api<CopyResponse>('/copy', {
-          method: 'POST',
-          body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename }),
-        });
-        state.journal = await api('/journal');
-        let relPathNew = filename;
-        const sourceDir = Object.keys(state.sourceFiles).find(dir => destDir === dir || destDir.startsWith(`${dir}/`));
-        if (sourceDir && destDir.startsWith(sourceDir)) {
-          const rel = destDir.substring(sourceDir.length).replace(/^\/+/, '');
-          relPathNew = rel ? `${rel}/${filename}` : filename;
-          if (!state.sourceFiles[sourceDir]) state.sourceFiles[sourceDir] = {};
-          state.sourceFiles[sourceDir][filename] = {
-            path: relPathNew,
-            year: res.year ?? null,
-            duration: res.duration ?? null,
-            codec: res.codec ?? null,
-            genre: res.genre ?? null,
-          };
-        }
-        patchEparsFileAfterCopy(filename, eparDir);
-        patchSourceFileAfterCopy(destDir, filename, {
+  // EPIC-051 : modale structurée — même rendu que le flux batch.
+  const spec = buildCopyDialogSpec(
+    [
+      {
+        destName: destDir.split('/').filter(Boolean).pop() || destDir,
+        destCreated: !destExists(destDir),
+        filenames: [filename],
+        destDir,
+      },
+    ],
+    { styleConsent: styleConsentShort(destDir) ?? undefined },
+  );
+  confirmCopyDialog(spec, async () => {
+    try {
+      const res = await api<CopyResponse>('/copy', {
+        method: 'POST',
+        body: JSON.stringify({ source_path: fullSrc, dest_dir: destDir, filename }),
+      });
+      state.journal = await api('/journal');
+      let relPathNew = filename;
+      const sourceDir = Object.keys(state.sourceFiles).find(dir => destDir === dir || destDir.startsWith(`${dir}/`));
+      if (sourceDir && destDir.startsWith(sourceDir)) {
+        const rel = destDir.substring(sourceDir.length).replace(/^\/+/, '');
+        relPathNew = rel ? `${rel}/${filename}` : filename;
+        if (!state.sourceFiles[sourceDir]) state.sourceFiles[sourceDir] = {};
+        state.sourceFiles[sourceDir][filename] = {
           path: relPathNew,
           year: res.year ?? null,
           duration: res.duration ?? null,
           codec: res.codec ?? null,
           genre: res.genre ?? null,
-        });
-        applyCopyStyle(fullSrc, eparDir, filename, res);
-        // Trigger EventEmitter for nested sourceFiles mutations
-        state.sourceFiles = { ...state.sourceFiles };
-        refreshDupMatches(); // l'index droit vient de muter → la Map peut être périmée
-        state.selectedEparsFiles = new Map();
-        // Auto-expansion mémoire : montrer la copie sans re-déplier.
-        revealSourceDir(destDir);
-        requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
-        setStatus(`✓ ${filename} copié vers ${destDir}${styleNoteOf(res)}`);
-      } catch (err) {
-        showError(`Échec de la copie : ${err instanceof Error ? err.message : String(err)}`);
+        };
       }
-    };
-  }
-  if (cancelBtn) cancelBtn.onclick = () => closeAllModals();
+      patchEparsFileAfterCopy(filename, eparDir);
+      patchSourceFileAfterCopy(destDir, filename, {
+        path: relPathNew,
+        year: res.year ?? null,
+        duration: res.duration ?? null,
+        codec: res.codec ?? null,
+        genre: res.genre ?? null,
+      });
+      applyCopyStyle(fullSrc, eparDir, filename, res);
+      // Trigger EventEmitter for nested sourceFiles mutations
+      state.sourceFiles = { ...state.sourceFiles };
+      refreshDupMatches(); // l'index droit vient de muter → la Map peut être périmée
+      state.selectedEparsFiles = new Map();
+      // EPIC-051 : le dossier destination reste plié (dépliage = clic/Enter).
+      requestAnimationFrame(() => requestAnimationFrame(revalidateFocus));
+      setStatus(`✓ ${filename} copié vers ${destDir}${styleNoteOf(res)}`);
+    } catch (err) {
+      showError(`Échec de la copie : ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
 }
 
 // ── Replace (EPIC-028 P1bis) : FLAC gagne, l'ancien part au _trash ────────

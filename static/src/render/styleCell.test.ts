@@ -143,6 +143,40 @@ describe('render/styleCell', () => {
     expect(row.querySelector('.style-chip.suggested')?.textContent).toBe('techno');
   });
 
+  // ── EPIC-051 P3 (D4) : chip NEUTRE — le genre écrit reste visible sans choix ──
+
+  it('P3 : genre écrit sans choix de session → chip neutre (le réel, pas la suggestion)', () => {
+    const fp = `${EPARS}/_techno/a.mp3`;
+    const td = insertStyleCell(makeRow(fp), fp, { year: '1992', genre: 'hardcore' });
+    const chip = td.querySelector('.style-chip') as HTMLElement;
+    expect(chip.classList.contains('written-neutral')).toBe(true);
+    expect(chip.textContent).toBe('hardcore');
+    expect(td.title).toBe('écrit dans le tag : hardcore');
+  });
+
+  it('P3 : après retrait du choix (aperçu e) le chip neutre remplace le « choisi » — le tag ne disparaît plus', () => {
+    const fp = `${EPARS}/_techno/a.mp3`;
+    const row = makeRow(fp);
+    insertStyleCell(row, fp, { year: '1992', genre: null });
+    document.getElementById('tb')!.appendChild(row);
+    state.styleChoices = new Map([[fp, { style: 'techno', tranche: null }]]);
+    refreshStyleCell(fp);
+    expect(row.querySelector('.style-chip.chosen')?.textContent).toBe('techno');
+    // l'aperçu `e` retire le choix au moment où le tag vient d'être écrit :
+    state.styleChoices = new Map();
+    state.eparsFiles[EPARS]['a.mp3'].genre = 'techno';
+    refreshStyleCell(fp);
+    const chip = row.querySelector('.style-chip') as HTMLElement;
+    expect(chip.classList.contains('written-neutral')).toBe(true);
+    expect(chip.textContent).toBe('techno');
+  });
+
+  it('P3 : sans choix ni genre → suggestion (comportement inchangé)', () => {
+    const fp = `${EPARS}/_techno/a.mp3`;
+    const td = insertStyleCell(makeRow(fp), fp, { year: '1992' });
+    expect(td.querySelector('.style-chip.suggested')).not.toBeNull();
+  });
+
   it('clic sur la cellule → ouvre la palette pour ce fichier (souris = même chemin que g)', async () => {
     const fp = `${EPARS}/_techno/a.mp3`;
     const row = makeRow(fp);

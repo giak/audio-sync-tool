@@ -3,17 +3,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DupMatch } from '../dupDetect.js';
 import { state } from '../state.js';
 
-const { copyFilesTo, confirmDialog, showToast, apiMock } = vi.hoisted(() => ({
+const { copyFilesTo, confirmCopyDialog, showToast, apiMock } = vi.hoisted(() => ({
   copyFilesTo: vi.fn(),
-  confirmDialog: vi.fn(),
+  confirmCopyDialog: vi.fn(),
   showToast: vi.fn(),
   apiMock: vi.fn(),
 }));
 vi.mock('../actions.js', () => ({ copyFilesTo }));
-vi.mock('../ui.js', () => ({ confirmDialog, showToast }));
+vi.mock('../ui.js', () => ({ confirmCopyDialog, showToast }));
 vi.mock('../api.js', () => ({ api: apiMock }));
 
-import { applyRangementPlan, buildRangementPlan, formatPlan, openStylePreview } from './stylePreview.js';
+import { type CopyDialogSpec, evidenceLine } from './copyDialog.js';
+import {
+  applyRangementPlan,
+  buildPreviewCopySpec,
+  buildRangementPlan,
+  formatPlan,
+  openStylePreview,
+} from './stylePreview.js';
 
 const ROOT = '/src/style/';
 const EPARS = '/media/epars';
@@ -184,18 +191,18 @@ describe('render/stylePreview', () => {
   describe('openStylePreview', () => {
     it('aucun choix → message, pas de dialog', () => {
       openStylePreview();
-      expect(confirmDialog).not.toHaveBeenCalled();
+      expect(confirmCopyDialog).not.toHaveBeenCalled();
       expect(document.getElementById('status-text')?.textContent).toContain('Aucun style');
     });
 
     it('choix mais rien de copiable → message explicite', () => {
       state.styleChoices = new Map([[C, { style: 'techno', tranche: null }]]);
       openStylePreview();
-      expect(confirmDialog).not.toHaveBeenCalled();
+      expect(confirmCopyDialog).not.toHaveBeenCalled();
       expect(document.getElementById('status-text')?.textContent).toContain('sans année');
     });
 
-    it('plan non vide → confirmDialog(texte, apply, label avec le total) ; confirmation → copies', async () => {
+    it('plan non vide → confirmCopyDialog(spec structurée, apply, label avec le total) ; confirmation → copies', async () => {
       state.styleChoices = new Map([
         [A, { style: 'techno_acid', tranche: null }],
         [D, { style: 'hardcore', tranche: null }],
@@ -205,15 +212,28 @@ describe('render/stylePreview', () => {
         styleNote: '',
       }));
       openStylePreview();
-      expect(confirmDialog).toHaveBeenCalledTimes(1);
-      const [msg, onConfirm, label] = confirmDialog.mock.calls[0] as [string, () => void, string];
-      expect(msg).toContain('→ hardcore_1995 — 1 fichier');
+      expect(confirmCopyDialog).toHaveBeenCalledTimes(1);
+      const [spec, onConfirm, label] = confirmCopyDialog.mock.calls[0] as [CopyDialogSpec, () => void, string];
+      // EPIC-051 : une ligne évidence par dossier cible (l'action), exclusions en discret.
+      // Un seul fichier par groupe ici → chaque ligne porte le nom du fichier.
+      expect(spec.groups.map(g => evidenceLine(g))).toEqual(['d.mp3 → hardcore_1995', 'a.mp3 → techno_acid_1990']);
       expect(label).toBe('Appliquer 2 copies');
       expect(copyFilesTo).not.toHaveBeenCalled(); // rien avant confirmation
       onConfirm();
       await new Promise(r => setTimeout(r, 0));
       expect(copyFilesTo).toHaveBeenCalledTimes(2);
       expect(state.styleChoices.size).toBe(0);
+    });
+
+    it('spec modale (EPIC-051) : badge ➕ sur dossier créé, exclusions en notes discrètes', () => {
+      state.styleChoices = new Map([
+        [C, { style: 'techno', tranche: null }], // sans année → exclu
+        [D, { style: 'techno', tranche: 2020 }], // techno_2020 n'existe pas → ➕
+      ]);
+      const spec = buildPreviewCopySpec(buildRangementPlan());
+      expect(spec.groups).toHaveLength(1);
+      expect(evidenceLine(spec.groups[0])).toBe('d.mp3 → techno_2020 ➕');
+      expect(spec.notes.join('\n')).toContain('sans année');
     });
   });
 });

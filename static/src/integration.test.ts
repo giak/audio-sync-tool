@@ -735,7 +735,9 @@ describe('F5 copy flow', () => {
     await flush();
 
     expect(state.activeModal).toBe('dialog');
-    expect(document.getElementById('dialog-msg')!.textContent).toContain('Copier "new-track.mp3"');
+    // EPIC-051 : la modale structurée montre l'action fichier → destination
+    // en évidence (plus de phrase « Copier "X" vers "Y" ? »).
+    expect(document.getElementById('dialog-msg')!.textContent).toContain('new-track.mp3 → Rock');
   });
 
   it('confirm dialog executes copy and patches DOM', async () => {

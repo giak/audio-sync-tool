@@ -14,6 +14,7 @@ vi.mock('../focus.js', () => ({ focusItemByElement, navigateFocus }));
 const { api } = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../api.js', () => ({ api }));
 
+import type { DupMatch } from '../dupDetect.js';
 import { insertSourceStyleCell, insertStyleCell } from './styleCell.js';
 import {
   alignStyleToFolder,
@@ -33,6 +34,8 @@ const B = `${EPARS}/2008_08/b.mp3`; // sans année
 // Convention de l'app : la racine est jointe TELLE QUELLE (`sourceTree`),
 // slash final inclus → le fullpath porte un double slash.
 const S = `${ROOT}/techno_1990/techno_1990-0.mp3`;
+// Jumeau rangé de A (EPIC-028) — la forme réelle du chemin (double slash).
+const TWIN = S;
 
 function srcFiles() {
   const idx: Record<string, { path: string; year: string | null; duration: number | null; codec: string | null }> = {};
@@ -342,6 +345,76 @@ describe('render/stylePalette', () => {
     expect(chip()?.textContent).toContain('✓ techno');
     expect(document.getElementById('status-text')?.textContent).toContain('apply_styles.py --undo');
     expect(state.styleChoices.size).toBe(0); // rien à planifier : déjà rangé
+  });
+
+  // ── EPIC-051 P3 : `g` écrit la PAIRE complète (épars + jumeau rangé) ─────
+
+  function twinOf(epars: string, source: string): DupMatch {
+    return { eparsFullPath: epars, sourceFullPath: source, eparsFilename: '', sourceFilename: '' } as DupMatch;
+  }
+
+  it('P3 : g sur un épars avec jumeau rangé → le jumeau reçoit le MÊME style (une requête, deux tags)', async () => {
+    state.dupMatches = new Map([[A, twinOf(A, TWIN)]]);
+    openStylePalette([A], rowA);
+    key('h'); // hardcore
+    // les DEUX fullpaths partent dans la même requête (extension client, D3)
+    expect(lastCall('/styles/apply')?.[1]?.body).toBe(JSON.stringify({ targets: [A, TWIN], style: 'hardcore' }));
+    await vi.waitFor(() => expect(palette()).toBeNull());
+    // les deux index portent le genre — le morceau n'a pas deux tags
+    expect(state.eparsFiles[EPARS]['a.mp3'].genre).toBe('hardcore');
+    expect(state.sourceFiles[ROOT]['techno_1990-0.mp3'].genre).toBe('hardcore');
+  });
+
+  it('P3 : la divergence créée chez le jumeau reste VISIBLE (chip ≠, corrigeable par a)', async () => {
+    state.dupMatches = new Map([[A, twinOf(A, TWIN)]]);
+    // le jumeau est affiché avec sa cellule Source dédiée (référence = dossier)
+    const cellRow = row(S, '2024');
+    cellRow.querySelector('.style-cell')?.remove();
+    insertSourceStyleCell(cellRow, S, { year: '2024', genre: null });
+    document.getElementById('tbs')!.append(cellRow);
+    openStylePalette([A], rowA);
+    key('h'); // hardcore ≠ dossier techno_1990
+    await vi.waitFor(() => expect(state.sourceFiles[ROOT]['techno_1990-0.mp3'].genre).toBe('hardcore'));
+    // le chip du jumeau montre la divergence (dossier : techno · tag : hardcore)
+    const chip = cellRow.querySelector('.source-style-cell .style-chip');
+    expect(chip?.textContent).toBe('techno ≠');
+    expect((chip?.parentElement as HTMLElement)?.title).toContain('hardcore');
+  });
+
+  it('P3 : g sur un RANGÉ ne s’étend pas (alignement sur le dossier, pas de propagation inverse)', async () => {
+    state.dupMatches = new Map([[S, twinOf(A, S)]]);
+    openStylePalette([S], rowS);
+    key('t');
+    expect(lastCall('/styles/apply')?.[1]?.body).toBe(JSON.stringify({ targets: [S], style: 'techno' }));
+    await vi.waitFor(() => expect(palette()).toBeNull());
+    expect(state.eparsFiles[EPARS]['a.mp3'].genre).toBeNull(); // l'épars n'est pas touché
+  });
+
+  it('P3 : l’année suit la même extension de paire (un morceau a une année, pas deux)', async () => {
+    state.dupMatches = new Map([[A, twinOf(A, TWIN)]]);
+    openStylePalette([A], rowA);
+    (palette().querySelector('.sp-year[data-year="1991"]') as HTMLButtonElement).click();
+    expect(lastCall('/years/apply')?.[1]?.body).toBe(JSON.stringify({ targets: [A, TWIN], year: '1991' }));
+    await vi.waitFor(() => expect(state.eparsFiles[EPARS]['a.mp3'].year).toBe('1991'));
+    expect(state.sourceFiles[ROOT]['techno_1990-0.mp3'].year).toBe('1991');
+  });
+
+  it('P3 : jumeau absent du disque → signalé, le tag de l’épars reste écrit et le rangement suit', async () => {
+    state.dupMatches = new Map([[A, twinOf(A, '/gone/x.mp3')]]);
+    api.mockResolvedValueOnce({
+      ok: false,
+      written: 1,
+      count: 2,
+      results: [
+        { path: A, ok: true },
+        { path: '/gone/x.mp3', ok: false, error: 'fichier absent' },
+      ],
+    });
+    openStylePalette([A], rowA);
+    key('h');
+    await vi.waitFor(() => expect(document.getElementById('status-text')?.textContent).toContain('fichier absent'));
+    expect(state.eparsFiles[EPARS]['a.mp3'].genre).toBe('hardcore');
+    expect(state.styleChoices.get(A)?.style).toBe('hardcore'); // D3 : l'échec d'un côté n'annule pas l'autre
   });
 
   it('alignStyleToFolder : échec du serveur → rien de marqué, le statut le dit', async () => {

@@ -284,6 +284,85 @@ describe('revalidateFocus', () => {
   });
 });
 
+// ── EPIC-052 : un CLIC ne doit jamais faire bouger le scroll ────────────────
+// Signalement (2026-09-23) : « quand je clique sur un fichier dans la page sync,
+// colonne éparpillé, le scroll ne doit pas bouger. Des fois, ça scroll vers le bas. »
+// Chaîne du scroll parasite : focusItemByElement (scrollIntoView) + twin-hint
+// (scrollIntoView du jumeau) + setActivePanel → focusItemByPath (2e scroll).
+
+describe('EPIC-052 : clic = scroll immobile', () => {
+  let spy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    spy = vi.fn();
+    (Element.prototype as any).scrollIntoView = spy;
+    setupDOM();
+  });
+
+  it('focusItemByElement (clic) : preventScroll:true par défaut', () => {
+    const container = document.getElementById('epars-container') as HTMLElement;
+    const row = container.querySelector('[data-focuspath="/media/usb/song.mp3"]') as HTMLElement;
+    focusItemByElement(container, row);
+    expect(spy).toHaveBeenCalledWith({ block: 'nearest', preventScroll: true });
+  });
+
+  it('clic avec jumeau : le twin-hint ne scrolle PAS la colonne source', () => {
+    state.dupMatches = new Map([
+      [
+        '/media/usb/song.mp3',
+        {
+          eparsFullPath: '/media/usb/song.mp3',
+          sourceFullPath: '/src/Techno/beat.mp3',
+          eparsFilename: 'song.mp3',
+          sourceFilename: 'beat.mp3',
+          sim: 0.9,
+          delta: 0,
+          verdict: 'equal',
+        },
+      ],
+    ]);
+    const container = document.getElementById('epars-container') as HTMLElement;
+    const row = container.querySelector('[data-focuspath="/media/usb/song.mp3"]') as HTMLElement;
+    focusItemByElement(container, row);
+    const nonSilent = spy.mock.calls.filter(
+      (c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === false,
+    );
+    expect(nonSilent).toEqual([]); // AUCUN scroll non-silencieux — le scroll ne bouge pas
+  });
+
+  it('revalidateFocus / focusItemByPath (restaurations) : tout est silencieux', () => {
+    revalidateFocus();
+    expect(
+      spy.mock.calls.every((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === true),
+    ).toBe(true);
+  });
+
+  it('le CLAVIER amène toujours la vue (navigateFocus, navigateColumn)', () => {
+    const container = document.getElementById('epars-container') as HTMLElement;
+    const row = container.querySelector('[data-focuspath="/media/usb/song.mp3"]') as HTMLElement;
+    row.classList.add('focused');
+    navigateFocus(container, 1);
+    navigateColumn(container, 1);
+    expect(
+      spy.mock.calls.some((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === false),
+    ).toBe(true);
+  });
+
+  it('setActivePanel(silentScroll) : restauration silencieuse du panneau activé', () => {
+    setActivePanel('source', { silentScroll: true });
+    expect(
+      spy.mock.calls.every((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === true),
+    ).toBe(true);
+  });
+
+  it('setActivePanel (clavier Tab) : la vue est amenée (comportement inchangé)', () => {
+    setActivePanel('source'); // sans silentScroll : Tab = geste volontaire
+    expect(
+      spy.mock.calls.some((c: unknown[]) => (c[0] as { preventScroll?: boolean })?.preventScroll === false),
+    ).toBe(true);
+  });
+});
+
 // ── Twin-hint (EPIC-028 P1) ───────────────────────────────────────────────
 
 describe('twin-hint', () => {

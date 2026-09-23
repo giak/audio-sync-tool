@@ -96,7 +96,18 @@ function paint(
     td.appendChild(chip);
     return;
   }
-  // Pas de choix utilisateur → suggestion (P2)
+  // Pas de choix utilisateur → EPIC-051 (D4) : le genre ÉCRIT dans le tag
+  // reste visible (chip neutre) — F5 direct ou choix retiré après copie :
+  // la cellule ne dépend plus d'un état de session pour montrer un tag réel.
+  if (entry.genre) {
+    const chip = document.createElement('span');
+    chip.className = 'style-chip written-neutral';
+    chip.textContent = entry.genre;
+    td.title = `écrit dans le tag : ${entry.genre}`; // sur td, comme les autres branches
+    td.appendChild(chip);
+    return;
+  }
+  // Ni choix ni tag → suggestion (P2)
   const sug = computeSuggestion(fullpath, entry);
   if (!sug) return;
   const chip = document.createElement('span');

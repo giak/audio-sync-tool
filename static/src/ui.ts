@@ -1,6 +1,7 @@
 // ─── UI: modals, filter palette, config form, toast/error display ───────────
 
 import { revalidateFocus } from './focus.js';
+import { type CopyDialogSpec, renderCopyDialog } from './render/copyDialog.js';
 import { state } from './state.js';
 
 // ── Modals ─────────────────────────────────────────────────────────────────
@@ -66,6 +67,9 @@ export function closeAllModals(): void {
     el.classList.add('hidden');
     el.removeAttribute('aria-modal');
   }
+  // Gabarit élargi de la modale COPIE retiré à chaque fermeture : les autres
+  // dialogues (prompt, a, e…) gardent leur largeur modal-sm d'origine.
+  document.querySelector('#modal-dialog .modal-content')?.classList.remove('modal-copy');
   revalidateFocus();
 }
 
@@ -82,6 +86,40 @@ export function confirmDialog(msg: string, onConfirm: () => void, confirmLabel =
   if (!msgEl || !confirmBtn || !cancelBtn) return;
   msgEl.textContent = msg;
   inputEl?.classList.add('hidden');
+  confirmBtn.textContent = confirmLabel;
+  confirmBtn.onclick = () => {
+    closeAllModals();
+    onConfirm();
+  };
+  cancelBtn.onclick = () => closeAllModals();
+  openModal('dialog');
+}
+
+/** Confirm custom à contenu STRUCTURÉ (EPIC-051) : la modale de copie montre
+ *  l'action en évidence (fichier → destination) et les conséquences en discret,
+ *  au lieu d'un paragraphe plat. Même contrat que confirmDialog (onConfirm
+ *  exécuté si accepté, retour anticipé si la modale manque — un template
+ *  d'une autre version est SIGNALÉ, jamais silencieux : leçon EPIC-042). */
+export function confirmCopyDialog(spec: CopyDialogSpec, onConfirm: () => void, confirmLabel = 'Copier'): void {
+  const msgEl = document.getElementById('dialog-msg');
+  const confirmBtn = document.getElementById('dialog-confirm');
+  const cancelBtn = document.getElementById('dialog-cancel');
+  const dialogModal = document.getElementById('modal-dialog');
+  if (!msgEl || !confirmBtn || !cancelBtn || !dialogModal) {
+    console.warn("#modal-dialog incomplet (template d'une autre version) : modale copie indisponible");
+    return;
+  }
+  renderCopyDialog(spec);
+  // Gabarit ÉLARGI propre à la copie (régression du 2026-09-23) : la ligne
+  // évidence 17px débordait de modal-sm (480px) et le titre du morceau était
+  // tronqué. Posé ici, retiré à CHAQUE fermeture (closeAllModals) pour ne pas
+  // élargir les dialogues suivants (prompt, a, e…).
+  dialogModal.querySelector('.modal-content')?.classList.add('modal-copy');
+  const inputEl = document.getElementById('dialog-input');
+  inputEl?.classList.add('hidden');
+  const altBtn = document.getElementById('dialog-alt');
+  altBtn?.classList.add('hidden');
+  if (altBtn) altBtn.onclick = null;
   confirmBtn.textContent = confirmLabel;
   confirmBtn.onclick = () => {
     closeAllModals();

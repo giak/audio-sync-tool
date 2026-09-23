@@ -765,7 +765,8 @@ describe('render/sourceTree', () => {
       // focusItemByElement was called with the container and directory element
       expect(focusItemByElement).toHaveBeenCalledWith(c, dir);
       // setActivePanel('source') was called (container is #source-container)
-      expect(setActivePanel).toHaveBeenCalledWith('source');
+      // EPIC-052 : un clic ne fait jamais scroller le panneau activé.
+      expect(setActivePanel).toHaveBeenCalledWith('source', { silentScroll: true });
       c.remove();
     });
 

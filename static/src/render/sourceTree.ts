@@ -154,8 +154,9 @@ function buildSourceChildren(
       ) as HTMLElement | null;
       if (cont) {
         focusItemByElement(cont, dirEl);
-        if (cont.id === 'epars-container') setActivePanel('epars');
-        else if (cont.id !== 'playlist-source-container') setActivePanel('source');
+        // EPIC-052 : un clic ne fait jamais scroller le panneau activé.
+        if (cont.id === 'epars-container') setActivePanel('epars', { silentScroll: true });
+        else if (cont.id !== 'playlist-source-container') setActivePanel('source', { silentScroll: true });
       }
       toggle(subFullPath);
     };
@@ -353,8 +354,9 @@ export function renderDirTree(node: TreeNode, container: HTMLElement, basePath: 
       ) as HTMLElement | null;
       if (cont) {
         focusItemByElement(cont, dirEl);
-        if (cont.id === 'epars-container') setActivePanel('epars');
-        else if (cont.id !== 'playlist-source-container') setActivePanel('source');
+        // EPIC-052 : un clic ne fait jamais scroller le panneau activé.
+        if (cont.id === 'epars-container') setActivePanel('epars', { silentScroll: true });
+        else if (cont.id !== 'playlist-source-container') setActivePanel('source', { silentScroll: true });
       }
       toggle(fullPath);
     };
@@ -453,7 +455,7 @@ function renderFilteredDirNode(
     const cont = dirEl.closest('#source-container') as HTMLElement | null;
     if (cont) {
       focusItemByElement(cont, dirEl);
-      setActivePanel('source');
+      setActivePanel('source', { silentScroll: true }); // EPIC-052 : clic = pas de scroll
     }
     toggleSourceDir(fullPath);
   };
@@ -540,7 +542,8 @@ function renderExtraDirs(container: HTMLElement, allTrees: TreeAndDir[]): void {
       const cont = dirEl.closest('#source-container, #playlist-source-container') as HTMLElement | null;
       if (cont) {
         focusItemByElement(cont, dirEl);
-        if (cont.id !== 'playlist-source-container') setActivePanel('source');
+        // EPIC-052 : un clic ne fait jamais scroller le panneau activé.
+        if (cont.id !== 'playlist-source-container') setActivePanel('source', { silentScroll: true });
       }
     };
     dirEl.oncontextmenu = (e: MouseEvent) => {

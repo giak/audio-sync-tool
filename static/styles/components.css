@@ -133,6 +133,16 @@
   min-width: 360px; max-width: 480px;
   text-align: center;
 }
+/* Modale COPIE (EPIC-051, signalement du 2026-09-23 : « ça doit s'afficher
+   sur une ligne ») : la modale ÉPOUSE la ligne évidence — fit-content jusqu'à
+   96vw — et la ligne est en nowrap SANS ellipsis : fichier → dossier se lit
+   en entier sur UNE ligne, toujours. Gabarit posé/retiré par ui.ts
+   (confirmCopyDialog / closeAllModals). */
+.modal-content.modal-copy {
+  min-width: 520px;
+  width: fit-content;
+  max-width: 96vw;
+}
 .modal-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 14px;
@@ -305,6 +315,52 @@
 
 /* ===== Confirm Dialog ================================================ */
 #dialog-msg { margin-bottom: 16px; font-size: 15px; color: var(--text-primary); white-space: pre-line; } /* pre-line : aperçu multi-ligne EPIC-035 ; messages existants mono-ligne */
+/* Modale de copie structurée (EPIC-051 P1, revue du 2026-09-23) : l'action se
+   LIT au premier coup d'œil — fichier en blanc bold, flèche en accent, dossier
+   en cyan bold (17px, aligné gauche : le sens de lecture porte le transfert).
+   Les conséquences sont une ligne grise chacune, pas un paragraphe qui wrap.
+   La hiérarchie est typographique (taille + couleur + poids), pas un second
+   dialogue — même fenêtre, même focus trap. */
+.copy-evidence { text-align: left; }
+.copy-evidence-line {
+  font-size: 17px;
+  color: var(--text-primary);
+  padding: 4px 0;
+  /* UNE ligne, en entier (signalement du 2026-09-23) : nowrap sans ellipsis —
+     la modale s'élargit à la largeur du texte (fit-content) ; si un nom
+     dépassait même l'écran, la ligne défile (overflow-x) plutôt que de
+     tronquer. */
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.copy-file { font-weight: 700; }
+.copy-arrow { color: var(--accent); font-weight: 700; }
+.copy-dest { color: var(--led-cyan); font-weight: 700; }
+.copy-badge {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--amber);
+  white-space: nowrap;
+}
+.copy-notes { margin-top: 10px; text-align: left; }
+.copy-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 1px 0;
+  /* Rien n'est tronqué dans la modale copie (signalement du 2026-09-23 :
+     « on doit VOIR fichier → dossier sans truncate ») — la note passe à la
+     ligne plutôt que de disparaître derrière une ellipse. Le tooltip
+     (texte intégral) reste posé par copyDialog.ts. */
+  overflow-wrap: anywhere;
+}
+.copy-summary {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: left;
+}
 /* Champ du prompt custom (EPIC-014, remplace prompt()) */
 .dialog-input {
   width: 100%;

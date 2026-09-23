@@ -12,7 +12,8 @@ import { setStatus } from '../core/feedback.js';
 import { plural } from '../core/format.js';
 import { state } from '../state.js';
 import { type Destination, destFor, findEparsEntry, yearOf } from '../styles.js';
-import { confirmDialog, showToast } from '../ui.js';
+import { confirmCopyDialog, showToast } from '../ui.js';
+import { buildCopyDialogSpec, type CopyDialogGroup, type CopyDialogSpec } from './copyDialog.js';
 import { currentTaxonomy, refreshStyleCells, updateStyleRecap } from './styleCell.js';
 
 export interface PlanFile {
@@ -93,6 +94,28 @@ export function formatPlan(plan: RangementPlan): string {
   return lines.join('\n');
 }
 
+/** Spec EPIC-051 (D1) pour l'aperçu `e` : une ligne évidence par dossier cible
+ *  (`n fichiers → dossier ➕`), les exclusions et le consentement en discret.
+ *  La liste complète des dossiers reste au tooltip de chaque ligne. */
+export function buildPreviewCopySpec(plan: RangementPlan): CopyDialogSpec {
+  const groups: CopyDialogGroup[] = plan.groups.map(g => ({
+    destName: g.dest.name,
+    destCreated: !g.dest.exists,
+    filenames: g.files.map(f => f.filename),
+    destDir: g.dest.dir,
+  }));
+  return buildCopyDialogSpec(groups, { exclusions: exclusionLines(plan) });
+}
+
+/** Lignes discrètes de l'aperçu : exclusions déjà formatées par formatPlan
+ *  (sans année, déjà rangé, style inconnu). */
+function exclusionLines(plan: RangementPlan): string[] {
+  const lines: string[] = [];
+  const full = formatPlan({ ...plan, groups: [] });
+  if (full) lines.push(...full.split('\n'));
+  return lines;
+}
+
 /** Enchaîne les copies dossier par dossier (séquentiel : copyFilesTo mute
  *  l'index et recharge le journal), retire des choix les fichiers copiés,
  *  laisse les échecs/exclus en session. Exporte les choix (style →
@@ -154,5 +177,12 @@ export function openStylePreview(): void {
     return;
   }
   const total = plan.groups.reduce((n, g) => n + g.files.length, 0);
-  confirmDialog(formatPlan(plan), () => void applyRangementPlan(plan), `Appliquer ${plural(total, 'copie')}`);
+  // EPIC-051 (D1) : l'aperçu passe à la modale structurée — l'action
+  // (n fichiers → dossier, une ligne par cible) en évidence, les exclusions
+  // en discret. formatPlan reste la source des lignes d'exclusion.
+  confirmCopyDialog(
+    buildPreviewCopySpec(plan),
+    () => void applyRangementPlan(plan),
+    `Appliquer ${plural(total, 'copie')}`,
+  );
 }

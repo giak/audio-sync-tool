@@ -527,7 +527,8 @@ describe('row click', () => {
 
     row.click();
 
-    expect(setActivePanel).toHaveBeenCalledWith('epars');
+    // EPIC-052 : le clic ne fait jamais scroller le panneau activé.
+    expect(setActivePanel).toHaveBeenCalledWith('epars', { silentScroll: true });
   });
 
   it('sets active panel to source when in source-container', () => {
@@ -538,7 +539,8 @@ describe('row click', () => {
 
     row.click();
 
-    expect(setActivePanel).toHaveBeenCalledWith('source');
+    // EPIC-052 : le clic ne fait jamais scroller le panneau activé.
+    expect(setActivePanel).toHaveBeenCalledWith('source', { silentScroll: true });
   });
 
   it('does not set active panel when in playlist-source-container', () => {

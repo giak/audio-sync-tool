@@ -17,6 +17,7 @@ const {
   promptDialog,
   showError,
   confirmDialog,
+  confirmCopyDialog,
   // Références aux éléments config CRÉÉS AVANT l'import d'actions.ts : les
   // constantes module-level de actions.ts (cfgSelect…) y sont liées à l'import.
   // Le describe « actions » vide document.body à chaque test ; pour que ces
@@ -55,6 +56,10 @@ const {
     confirmDialog: vi.fn((_msg: string, onConfirm: () => void, _label?: string) => {
       onConfirm();
     }),
+    // confirmCopyDialog mocké (EPIC-051 P1) : même contrat — onConfirm immédiat
+    confirmCopyDialog: vi.fn((_spec: unknown, onConfirm: () => void, _label?: string) => {
+      onConfirm();
+    }),
     showError: vi.fn(),
     cfgElements: Array.from(
       document.querySelectorAll(
@@ -77,7 +82,14 @@ vi.mock('./render.js', () => ({ getBatchCopy, patchEparsFileAfterCopy, patchSour
 // interrompu pour une raison d'environnement de test, pas de produit.
 vi.mock('./domPatches.js', () => ({ patchEparsFileAfterCopy, patchSourceFileAfterCopy }));
 vi.mock('./ratings.js', () => ({ loadRatings }));
-vi.mock('./ui.js', () => ({ closeAllModals, openModal, promptDialog, showError, confirmDialog }));
+vi.mock('./ui.js', () => ({
+  closeAllModals,
+  openModal,
+  promptDialog,
+  showError,
+  confirmDialog,
+  confirmCopyDialog,
+}));
 
 import {
   configData,
@@ -413,7 +425,7 @@ describe('actions', () => {
       state.eparsFiles = { '/epars': { 'song.mp3': { path: 'song.mp3', year: null, duration: null, codec: null } } };
 
       executeCopy();
-      expect(openModal).toHaveBeenCalledWith('dialog');
+      expect(confirmCopyDialog).toHaveBeenCalledTimes(1); // EPIC-051 : modale structurée
     });
 
     it('opens dialog when right focus is a file row inside a directory', () => {
@@ -434,7 +446,7 @@ describe('actions', () => {
       state.eparsFiles = { '/epars': { 'song.mp3': { path: 'song.mp3', year: null, duration: null, codec: null } } };
 
       executeCopy();
-      expect(openModal).toHaveBeenCalledWith('dialog');
+      expect(confirmCopyDialog).toHaveBeenCalledTimes(1);
     });
 
     it('performs batch copy when batch exists', () => {
@@ -444,34 +456,33 @@ describe('actions', () => {
       api.mockResolvedValue({ ok: true });
 
       executeCopy();
-      expect(openModal).toHaveBeenCalledWith('dialog');
+      expect(confirmCopyDialog).toHaveBeenCalledTimes(1);
     });
 
-    it('confirmation → auto-expansion mémoire du dossier destination (reveal)', async () => {
+    it('confirmation → le dossier destination reste PLIÉ (EPIC-051 : plus d’auto-expansion)', async () => {
       setupEparsFile();
       setupSourceDir(); // dossier /source/music focusé, replié (pas de .children)
       setupDialog();
       state.eparsFiles = { '/epars': { 'song.mp3': { path: 'song.mp3', year: null, duration: null, codec: null } } };
       state.sourceExpanded = new Set();
-      // Le vrai toggleSourceDir lit sourceNodeMap : nœud vide suffit.
-      state.sourceNodeMap.set('/source/music', { node: { __files__: [] } as any, baseDir: '/source' });
       api.mockResolvedValue({ ok: true });
 
       executeCopy();
       document.getElementById('dialog-confirm')!.click();
       await new Promise(r => setTimeout(r, 0)); // draine les awaits du handler
 
+      // EPIC-051 : le dépliage est un geste explicite (clic/Enter) — la copie
+      // n'ouvre plus le dossier, ni le DOM ni la mémoire sourceExpanded.
       const dirEl = document.querySelector('#source-container .directory[data-dirpath="/source/music"]')!;
-      expect(dirEl.classList.contains('expanded')).toBe(true);
-      expect(state.sourceExpanded.has('/source/music')).toBe(true);
-      state.sourceNodeMap.clear();
+      expect(dirEl.classList.contains('expanded')).toBe(false);
+      expect(state.sourceExpanded.has('/source/music')).toBe(false);
     });
   });
 
   // ── Init ───────────────────────────────────────────────────────────
 
   describe('copyFilesTo (EPIC-035 — extrait du batch F5, iso-comportement)', () => {
-    it('copie, patch l’index source sous le sous-dossier cible, révèle la destination, renvoie les fullpaths copiés', async () => {
+    it('copie, patch l’index source sous le sous-dossier cible, renvoie les fullpaths copiés', async () => {
       const c = document.createElement('div');
       c.id = 'source-container';
       const dir = document.createElement('div');
@@ -508,8 +519,8 @@ describe('actions', () => {
         genre: null,
       });
       expect(patchEparsFileAfterCopy).toHaveBeenCalledWith('f.mp3', '/epars');
-      expect(state.sourceExpanded.has('/source/techno_1995')).toBe(true);
-      state.sourceNodeMap.clear();
+      // EPIC-051 : plus d'auto-expansion — le dossier destination reste plié.
+      expect(state.sourceExpanded.has('/source/techno_1995')).toBe(false);
     });
 
     it('/copy KO ou fichier inconnu → liste vide, index source intact', async () => {
@@ -666,16 +677,7 @@ describe('actions', () => {
       expect(styleConsentLine('/source/_trash/2026-09-22')).toBe('');
     });
 
-    it('modale F5 batch : la phrase de consentement est ajoutée au message', () => {
-      const msg = document.createElement('div');
-      msg.id = 'dialog-msg';
-      document.body.appendChild(msg);
-      const confirm = document.createElement('button');
-      confirm.id = 'dialog-confirm';
-      document.body.appendChild(confirm);
-      const cancel = document.createElement('button');
-      cancel.id = 'dialog-cancel';
-      document.body.appendChild(cancel);
+    it('modale F5 batch (EPIC-051) : la spec porte fichier → destination en évidence, consentement en discret', () => {
       state.sourceFiles = { '/source': {} };
       getBatchCopy.mockReturnValue({
         target: '/source/techno_1995',
@@ -684,9 +686,18 @@ describe('actions', () => {
 
       executeCopy();
 
-      expect(msg.textContent).toContain('Copier "f.mp3" vers "/source/techno_1995" ?');
-      expect(msg.textContent).toContain('« techno »');
-      expect(msg.textContent).toContain("l'année n'est pas touchée");
+      expect(confirmCopyDialog).toHaveBeenCalledTimes(1);
+      const [spec] = confirmCopyDialog.mock.calls[0] as [
+        { groups: Array<{ destName: string; destCreated: boolean; filenames: string[] }>; notes: string[] },
+        () => void,
+      ];
+      // Évidence : fichier → dossier (badge ➕ : l'index est vide, /copy créera le dossier).
+      expect(spec.groups).toHaveLength(1);
+      expect(spec.groups[0].destName).toBe('techno_1995');
+      expect(spec.groups[0].filenames).toEqual(['f.mp3']);
+      expect(spec.groups[0].destCreated).toBe(true);
+      // Discret (revue du 2026-09-23) : consentement CONDENSÉ une ligne.
+      expect(spec.notes[0]).toBe('Style « techno » écrit sur l\'épars et la copie · année intacte');
     });
   });
 

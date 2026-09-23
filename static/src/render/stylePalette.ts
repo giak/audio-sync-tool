@@ -26,6 +26,11 @@
 // Choix de SESSION (`state.styleChoices`, consommé par l'aperçu `e`) : réservé
 // aux cibles épars. Un morceau déjà rangé (Source Data) est tagué, jamais
 // re-planifié — il n'a pas de destination à calculer.
+//
+// EPIC-051 (D3) : les écritures (style ET année) vont à la PAIRE complète —
+// un épars et son jumeau rangé (dupMatches) partagent le même tag. Côté
+// affichage (D4), les deux cellules Style se rafraîchissent après l'écriture,
+// et un épars taggé sans choix de session affiche un chip neutre (styleCell).
 
 import { api } from '../api.js';
 import { setStatus } from '../core/feedback.js';
@@ -88,6 +93,24 @@ export function isEparsTarget(fullpath: string): boolean {
   return findEparsEntry(state.eparsFiles, fullpath) !== null;
 }
 
+/** P3 EPIC-051 (D3) : les cibles ÉPARS sont étendues à la PAIRE — le jumeau
+ *  rangé (EPIC-028, state.dupMatches) reçoit la MÊME écriture de tag.
+ *  L'utilisateur vient de décider du style (ou de l'année) du morceau : un
+ *  morceau n'a pas deux tags, même si son dossier de rangement contredit — la
+ *  divergence éventuelle reste visible (chip `≠`) et corrigeable (`a`).
+ *  Une cible déjà RANGÉE ne s'étend pas : son jumeau épars est dans l'autre
+ *  colonne et l'alignement sur le dossier (`alignStyleToFolder`) est une
+ *  décision différente, celle du dossier. */
+function extendToPairs(targets: string[]): string[] {
+  const out = targets.slice();
+  for (const t of targets) {
+    if (!isEparsTarget(t)) continue;
+    const twin = state.dupMatches.get(t)?.sourceFullPath;
+    if (twin && !out.includes(twin)) out.push(twin);
+  }
+  return out;
+}
+
 /** En-tête (année, genre) d'une cible, épars ou source. */
 function entryOf(fullpath: string): TagEntry | null {
   return findEparsEntry(state.eparsFiles, fullpath)?.entry ?? findSourceEntry(fullpath);
@@ -136,6 +159,9 @@ function setGenreLocally(fullpath: string, genre: string): void {
   // EPIC-046 : un `g` sur un fichier RANGÉ n'a pas de cellule côté épars — sans
   // ce rafraîchissement, l'écriture du tag restait invisible (signalement
   // « g ne met toujours pas à jour »).
+  // EPIC-051 (D4) : refresh des DEUX côtés — après un `g` sur une paire, les
+  // deux chips (épars + rangé) lisent le tag à jour, sans re-render.
+  refreshStyleCells([fullpath]);
   refreshSourceStyleCells([fullpath]);
 }
 
@@ -169,7 +195,8 @@ async function writeStyleTagFor(styleId: string, targets: string[]): Promise<boo
 }
 
 function writeStyleTag(styleId: string): Promise<boolean> {
-  return writeStyleTagFor(styleId, _targets);
+  // EPIC-051 (D3) : la paire complète reçoit le style (épars + jumeau rangé).
+  return writeStyleTagFor(styleId, extendToPairs(_targets));
 }
 
 /** Un fichier RANGÉ est DANS sa déclaration de style : quand `g` tombe sur lui,
@@ -188,7 +215,7 @@ async function writeYearTag(year: string): Promise<boolean> {
       written: number;
       count: number;
       results: Array<{ path: string; ok: boolean; error?: string }>;
-    }>('/years/apply', { method: 'POST', body: JSON.stringify({ targets: _targets, year }) });
+    }>('/years/apply', { method: 'POST', body: JSON.stringify({ targets: extendToPairs(_targets), year }) });
     for (const r of res.results ?? []) if (r.ok) setYearLocally(r.path, year);
     const failed = (res.results ?? []).filter(r => !r.ok);
     if (failed.length) {

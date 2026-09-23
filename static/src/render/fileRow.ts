@@ -156,9 +156,11 @@ export function makeFileEl(
       '#epars-container, #source-container, #playlist-source-container',
     ) as HTMLElement | null;
     if (!container) return;
-    focusItemByElement(container, row);
+    focusItemByElement(container, row); // EPIC-052 : preventScroll par défaut — le scroll ne bouge PAS
     if (container.id !== 'playlist-source-container') {
-      setActivePanel(container.id === 'epars-container' ? 'epars' : 'source');
+      // EPIC-052 : le clic ne doit jamais scroller le panneau activé — la
+      // restauration de focus y est silencieuse (le clavier Tab garde la sienne).
+      setActivePanel(container.id === 'epars-container' ? 'epars' : 'source', { silentScroll: true });
     }
     if (row.querySelector('.led-playing')) {
       stopPlayer();
